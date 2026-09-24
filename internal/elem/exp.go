@@ -136,7 +136,11 @@ func integerExponent(b num.Ball) (int, bool) {
 func Pow(base, exponent num.Ball, prec uint) (num.Ball, error) {
 	base, exponent = normalize(base), normalize(exponent)
 	if n, ok := integerExponent(exponent); ok {
-		return base.Pow(n, prec)
+		b, err := base.Pow(n, workPrec(prec))
+		if err != nil {
+			return num.Ball{}, err
+		}
+		return finish(b, prec), nil
 	}
 	if base.Lo().Sign() <= 0 {
 		return num.Ball{}, ErrNonPositivePow

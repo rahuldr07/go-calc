@@ -15,6 +15,7 @@ var (
 	ErrAcosDomain       = errors.New("acos of a value that may be outside [-1, 1]")
 	ErrArgumentTooLarge = errors.New("argument magnitude too large to reduce")
 	ErrOriginAtan2      = errors.New("atan2 of a point that may be the origin")
+	ErrAtan2BranchCut   = errors.New("atan2 of a point that may straddle the negative real axis")
 	ErrNonPositivePow   = errors.New("power of a value that may not be positive")
 )
 
@@ -47,6 +48,10 @@ func down() *big.Float {
 func magOf(x *big.Float) num.Mag { return num.MagFromBigFloat(x) }
 
 func infiniteMag() num.Mag { return magOf(up().SetInf(false)) }
+
+func unitBall(prec uint) num.Ball {
+	return num.NewBall(new(big.Float).SetPrec(prec), magOf(floatOne))
+}
 
 func normalize(b num.Ball) num.Ball {
 	if b.Mid == nil {

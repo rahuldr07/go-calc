@@ -12,6 +12,9 @@ var (
 )
 
 func sinSeries(r num.Ball, radius num.Mag, prec uint) num.Ball {
+	if radius.Cmp(magOf(floatOne)) >= 0 {
+		return unitBall(prec)
+	}
 	square := r.Mul(r, prec)
 	spread := radius.Mul(radius)
 	term := r
@@ -31,6 +34,9 @@ func sinSeries(r num.Ball, radius num.Mag, prec uint) num.Ball {
 }
 
 func cosSeries(r num.Ball, radius num.Mag, prec uint) num.Ball {
+	if radius.Cmp(magOf(floatOne)) >= 0 {
+		return unitBall(prec)
+	}
 	square := r.Mul(r, prec)
 	spread := radius.Mul(radius)
 	term := intBall(1)
@@ -225,7 +231,14 @@ func Atan2(y, x num.Ball, prec uint) (num.Ball, error) {
 		}
 		return finish(base.Sub(atanBall(q, wp), wp), prec), nil
 	}
-	return num.Ball{}, ErrOriginAtan2
+	xs, xok := x.Sign()
+	if !xok || xs >= 0 {
+		return num.Ball{}, ErrOriginAtan2
+	}
+	if ys, yok := y.Sign(); yok && ys == 0 {
+		return finish(piBall(wp), prec), nil
+	}
+	return num.Ball{}, ErrAtan2BranchCut
 }
 
 func oneMinusSquare(a *big.Float, prec uint) num.Ball {

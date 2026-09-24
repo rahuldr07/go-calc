@@ -95,8 +95,6 @@ pow_10_0.25        1.77827941003892280122542119519268484473579052640225535801183
 sqrt_2             1.41421356237309504880168872420969807856967187537694807317667973799073247846210703885038753432764e+0
 sqrt_0.5           7.07106781186547524400844362104849039284835937688474036588339868995366239231053519425193767163821e-1
 sqrt_1000000       1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e+3
-halfpi             1.57079632679489661923132169163975144209858469968755291048747229615390820314310449931401741267106e+0
-threequarterpi     2.35619449019234492884698253745962716314787704953132936573120844423086230471465674897102611900659e+0
 `
 
 func refs(t *testing.T) map[string]*big.Float {
@@ -220,10 +218,6 @@ func samplePoint(b num.Ball, theta float64, prec uint) *big.Float {
 	return new(big.Float).SetPrec(prec).Add(b.Mid, off)
 }
 
-func overlap(a, b num.Ball) bool {
-	return a.Lo().Cmp(b.Hi()) <= 0 && b.Lo().Cmp(a.Hi()) <= 0
-}
-
 var unaryFuncs = []struct {
 	name string
 	f    func(num.Ball, uint) (num.Ball, error)
@@ -237,7 +231,7 @@ func TestWideBallsEncloseEveryPointValue(t *testing.T) {
 	const prec = 120
 	const refPrec = 300
 	rnd := rand.New(rand.NewSource(977))
-	thetas := []float64{-0.98, -0.5, 0, 0.31, 0.98}
+	thetas := []float64{-1, -0.98, -0.5, 0, 0.31, 0.98, 1}
 	for i := 0; i < 600; i++ {
 		x := randWideBall(rnd, prec)
 		if i%2 == 0 {
@@ -254,7 +248,7 @@ func TestWideBallsEncloseEveryPointValue(t *testing.T) {
 				if err != nil {
 					continue
 				}
-				if !overlap(outer, inner) {
+				if !outer.Contains(inner.Mid) {
 					t.Fatalf("%s: ball %s misses the value at %s inside x=%s",
 						fn.name, outer, p.Text('g', 20), x)
 				}
@@ -334,6 +328,9 @@ func TestDomainErrors(t *testing.T) {
 		{"atan2 at origin", func() (num.Ball, error) {
 			return Atan2(pointBall(0, prec), pointBall(0, prec), prec)
 		}, ErrOriginAtan2},
+		{"atan2 across the branch cut", func() (num.Ball, error) {
+			return Atan2(num.NewBall(big.NewFloat(0.5), num.MagFromFloat(1)), pointBall(-2, prec), prec)
+		}, ErrAtan2BranchCut},
 	}
 	for _, c := range cases {
 		_, err := c.run()
@@ -556,6 +553,79 @@ func TestReferenceValues(t *testing.T) {
 		}
 		if !c.got.Contains(w) {
 			t.Errorf("%s: ball %s does not contain %s", c.name, c.got, w.Text('g', 30))
+		}
+	}
+}
+
+func TestAtan2NegativeRealAxis(t *testing.T) {
+	const prec = 200
+	want := refs(t)
+	for _, x := range []float64{-1, -5, -1e8, -1e-8} {
+		got, err := Atan2(pointBall(0, prec), pointBall(x, prec), prec)
+		if err != nil {
+			t.Fatalf("atan2(0, %v): %v", x, err)
+		}
+		if !got.Contains(want["pi"]) {
+			t.Errorf("atan2(0, %v) = %s, want a ball containing pi", x, got)
+		}
+	}
+	for _, x := range []float64{1, 5, 1e8, 1e-8} {
+		got, err := Atan2(pointBall(0, prec), pointBall(x, prec), prec)
+		if err != nil {
+			t.Fatalf("atan2(0, %v): %v", x, err)
+		}
+		if !got.Contains(new(big.Float)) {
+			t.Errorf("atan2(0, %v) = %s, want a ball containing zero", x, got)
+		}
+	}
+}
+
+func TestAtan2RefusalsAreDistinct(t *testing.T) {
+	const prec = 120
+	straddlingZero := num.NewBall(big.NewFloat(0.25), num.MagFromFloat(1))
+	cases := []struct {
+		name string
+		y, x num.Ball
+		want error
+	}{
+		{"origin", pointBall(0, prec), pointBall(0, prec), ErrOriginAtan2},
+		{"x may be zero, y is zero", pointBall(0, prec), straddlingZero, ErrOriginAtan2},
+		{"branch cut", straddlingZero, pointBall(-1, prec), ErrAtan2BranchCut},
+		{"branch cut, wide x", straddlingZero, num.NewBall(big.NewFloat(-4), num.MagFromFloat(1)), ErrAtan2BranchCut},
+	}
+	for _, c := range cases {
+		if _, err := Atan2(c.y, c.x, prec); !errors.Is(err, c.want) {
+			t.Errorf("%s: got %v, want %v", c.name, err, c.want)
+		}
+	}
+}
+
+func TestPowIntegerFastPathKeepsPrecision(t *testing.T) {
+	const prec = 64
+	base := num.NewBall(new(big.Float).SetPrec(prec).SetFloat64(1.0000001), num.Mag{})
+	reference, err := Pow(base, pointBall(0.5, prec), prec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	budget := reference.Rad.Mul(num.MagFromFloat(16))
+	for _, n := range []float64{2, 1000, 1 << 20} {
+		got, err := Pow(base, pointBall(n, prec), prec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Rad.Cmp(budget) > 0 {
+			t.Errorf("pow(base, %v) radius %s exceeds the fractional-exponent budget %s",
+				n, got.Rad, budget)
+		}
+	}
+}
+
+func TestUnitSeriesGuardIsSound(t *testing.T) {
+	const prec = 120
+	wide := num.NewBall(new(big.Float).SetPrec(prec).SetFloat64(0.5), num.MagFromFloat(4))
+	for _, got := range []num.Ball{sinSeries(wide, num.MagFromFloat(4.5), prec), cosSeries(wide, num.MagFromFloat(4.5), prec)} {
+		if got.Lo().Cmp(big.NewFloat(-1)) > 0 || got.Hi().Cmp(big.NewFloat(1)) < 0 {
+			t.Errorf("guarded series returned %s, which does not cover [-1, 1]", got)
 		}
 	}
 }
