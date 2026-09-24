@@ -37,15 +37,13 @@ func JSON(input string, v value.Value, notes []parse.Note) ([]byte, error) {
 	for _, n := range notes {
 		msgs = append(msgs, n.Msg)
 	}
-	out := valueOut{Decimal: Default.Number(v), Digits: Digits}
+	decimal, _ := Default.Decimal(v)
+	out := valueOut{Decimal: decimal, Digits: significantDigits(decimal)}
 	if v.Num.IsExact() {
 		out.Exact = v.Num.Exact().String()
 	} else {
-		_, proven, capped := Default.NumberBall(v.Num.Ball(BallPrec))
-		out.Ball, out.Capped = v.Num.String(), capped
-		if proven < out.Digits {
-			out.Digits = proven
-		}
+		_, _, out.Capped = Default.NumberBall(v.Num.Ball(ballPrec))
+		out.Ball = v.Num.String()
 	}
 	r := result{Schema: Schema, Input: input, Value: out, Notes: msgs}
 	if v.Unit != "" {

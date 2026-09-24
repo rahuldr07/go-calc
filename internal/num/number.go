@@ -146,22 +146,3 @@ func (n Number) Abs() Number {
 	}
 	return n
 }
-
-func (n Number) Sign() (int, bool) {
-	switch n.kind {
-	case KindBall:
-		return n.ball.Sign()
-	case KindInterval:
-		if n.lo.Sign() > 0 {
-			return 1, true
-		}
-		if n.hi.Sign() < 0 {
-			return -1, true
-		}
-		if n.lo.Sign() == 0 && n.hi.Sign() == 0 {
-			return 0, true
-		}
-		return 0, false
-	}
-	return n.ex.Sign(), true
-}

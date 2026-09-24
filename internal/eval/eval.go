@@ -3,6 +3,7 @@ package eval
 import (
 	"errors"
 	"math/big"
+	"strconv"
 
 	"github.com/rahuldr07/go-calc/internal/consts"
 	"github.com/rahuldr07/go-calc/internal/elem"
@@ -93,6 +94,8 @@ func (e *Env) evalCall(t *parse.Call, p *pass) (value.Value, error) {
 	return value.Value{}, &lex.Error{Pos: t.P, Msg: "unknown function " + t.Fn}
 }
 
+const maxDegree = 100000
+
 var radianIn = map[string]func(num.Ball, uint) (num.Ball, error){
 	"sin": elem.Sin,
 	"cos": elem.Cos,
@@ -164,10 +167,11 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		if len(args) != 2 || !isWhole(args[1]) {
 			return fail("root takes a value and a whole degree")
 		}
-		degree := int(args[1].Num.Exact().Rat().Num().Int64())
-		if degree <= 0 {
-			return fail("root needs a degree above zero")
+		whole := args[1].Num.Exact().Rat().Num()
+		if !whole.IsInt64() || whole.Int64() <= 0 || whole.Int64() > maxDegree {
+			return fail("root needs a degree between 1 and " + strconv.Itoa(maxDegree))
 		}
+		degree := int(whole.Int64())
 		if args[0].Num.IsExact() {
 			if r, ok := num.Root(args[0].Num.Exact(), degree); ok {
 				return value.Scalar(r), nil, true

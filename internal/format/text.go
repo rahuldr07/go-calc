@@ -37,20 +37,28 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 }
 
 func (s Style) Number(v value.Value) string {
+	text, complete := s.Decimal(v)
+	if complete {
+		return text
+	}
+	return v.Num.Exact().Rat().RatString() + "  ≈ " + text
+}
+
+func (s Style) Decimal(v value.Value) (string, bool) {
 	if !v.Num.IsExact() {
-		text, _ := provenDecimal(v.Num.Ball(BallPrec), s.digitBudget())
-		return s.groupDecimal(text)
+		text, _ := provenDecimal(v.Num.Ball(ballPrec), s.digitBudget())
+		return s.groupDecimal(text), true
 	}
 	r := v.Num.Exact().Rat()
 	if r.IsInt() {
-		return s.group(r.Num().String())
+		return s.group(r.Num().String()), true
 	}
 	if places, ok := terminatingPlaces(r); ok {
 		if full := trimDecimal(r.FloatString(places)); significantDigits(full) <= s.digitBudget() {
-			return s.groupDecimal(full)
+			return s.groupDecimal(full), true
 		}
 	}
-	return r.RatString() + "  ≈ " + s.groupDecimal(significantRat(r, s.digitBudget()))
+	return s.groupDecimal(significantRat(r, s.digitBudget())), false
 }
 
 func trimDecimal(s string) string {
@@ -62,10 +70,31 @@ func trimDecimal(s string) string {
 }
 
 func (s Style) groupDecimal(dec string) string {
+	if !plainDecimal(dec) {
+		return dec
+	}
 	if i := strings.IndexByte(dec, '.'); i >= 0 {
 		return s.group(dec[:i]) + dec[i:]
 	}
 	return s.group(dec)
+}
+
+func plainDecimal(dec string) bool {
+	body := strings.TrimPrefix(dec, "-")
+	if body == "" {
+		return false
+	}
+	dots := 0
+	for _, r := range body {
+		switch {
+		case r >= '0' && r <= '9':
+		case r == '.':
+			dots++
+		default:
+			return false
+		}
+	}
+	return dots <= 1
 }
 
 func (s Style) group(digits string) string {

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/value"
@@ -113,7 +114,6 @@ func TestTextNamesWhyTheDigitsRanOut(t *testing.T) {
 		want string
 	}{
 		{value.StopPrecisionCap, "3 digits guaranteed (precision cap reached)"},
-		{value.StopNoProgress, "3 digits guaranteed (more precision did not help)"},
 		{value.StopUncertainInput, "3 digits guaranteed (an input carries uncertainty)"},
 		{value.StopNone, "3 digits guaranteed"},
 	}
@@ -132,7 +132,7 @@ func TestTextNamesWhyTheDigitsRanOut(t *testing.T) {
 
 func TestProvablyZeroPrintsZeroAndSaysHowFar(t *testing.T) {
 	v := value.ScalarNum(num.NumBall(num.NewBall(new(big.Float), num.MagFromFloat(1e-30))))
-	v.Stopped = value.StopNoProgress
+	v.Stopped = value.StopPrecisionCap
 	got := Text(v, nil)
 	if !strings.HasPrefix(got, "0\n  ") {
 		t.Fatalf("Text = %q, want a bare 0 and a note", got)
@@ -223,8 +223,93 @@ func TestDefaultBudgetIsTwelveSignificantDigitsInBothTiers(t *testing.T) {
 	if got := significantDigits(exact); got != Digits {
 		t.Errorf("exact tier printed %d significant digits (%s), want %d", got, exact, Digits)
 	}
-	b := num.NewBall(big.NewFloat(154166.666666666666), num.MagFromFloat(1e-30))
+	b := num.BallFromExact(r, 256)
 	if got := significantDigits(Default.Number(value.ScalarNum(num.NumBall(b)))); got != Digits {
 		t.Errorf("ball tier printed %d significant digits, want %d", got, Digits)
+	}
+}
+
+func TestWideBallsStraddlingZeroAreNotCollapsedToZero(t *testing.T) {
+	cases := []struct {
+		mid    float64
+		radius float64
+		want   string
+	}{
+		{0.5, 1, "0.5 ± 1"},
+		{0.05, 0.25, "0.05 ± 0.25"},
+		{0, 0.4, "0 ± 0.4"},
+		{-0.5, 1, "-0.5 ± 1"},
+	}
+	for _, c := range cases {
+		b := num.NewBall(big.NewFloat(c.mid), num.MagFromFloat(c.radius))
+		text, digits, _ := Default.NumberBall(b)
+		if text == "0" {
+			t.Errorf("ball %g ± %g printed as 0, but the true value is anywhere in [%s .. %s]",
+				c.mid, c.radius, b.Lo().Text('g', 4), b.Hi().Text('g', 4))
+		}
+		if text != c.want {
+			t.Errorf("ball %g ± %g printed %q, want %q", c.mid, c.radius, text, c.want)
+		}
+		if digits != 0 {
+			t.Errorf("ball %g ± %g claimed %d digits", c.mid, c.radius, digits)
+		}
+	}
+}
+
+func TestZeroIsCollapsedOnlyWhenItIsProven(t *testing.T) {
+	proven := num.NewBall(new(big.Float), num.MagFromFloat(0.004))
+	if text, _, _ := Default.NumberBall(proven); text != "0" {
+		t.Errorf("0 ± 0.004 printed %q, want 0", text)
+	}
+	unproven := num.NewBall(new(big.Float), num.MagFromFloat(0.4))
+	if text, _, _ := Default.NumberBall(unproven); text == "0" {
+		t.Errorf("0 ± 0.4 printed as 0, but no decimal place is settled")
+	}
+}
+
+func TestGroupingLeavesNonDecimalTextAlone(t *testing.T) {
+	styles := []Style{{Digits: 12, Grouped: true}, {Digits: 12, Grouped: true, Indian: true}}
+	balls := []num.Ball{
+		num.NewBall(big.NewFloat(2e20), num.MagFromFloat(1e20)),
+		num.NewBall(big.NewFloat(2e21), num.MagFromFloat(1e5)),
+		num.NewBall(big.NewFloat(0.5), num.MagFromFloat(1)),
+	}
+	for _, s := range styles {
+		for _, b := range balls {
+			plain, _, _ := Style{Digits: 12}.NumberBall(b)
+			grouped, _, _ := s.NumberBall(b)
+			if plainDecimal(plain) {
+				continue
+			}
+			if grouped != plain {
+				t.Errorf("grouping rewrote %q as %q", plain, grouped)
+			}
+			if !utf8.ValidString(grouped) {
+				t.Errorf("grouping produced invalid UTF-8: %q", grouped)
+			}
+		}
+	}
+}
+
+func TestGroupingStillGroupsRealDecimals(t *testing.T) {
+	b := num.NewBall(big.NewFloat(1850000.5), num.MagFromFloat(1e-9))
+	if got, _, _ := (Style{Digits: 12, Grouped: true}).NumberBall(b); got != "1,850,000.5" {
+		t.Errorf("grouped ball = %q, want 1,850,000.5", got)
+	}
+	if got, _, _ := (Style{Digits: 12, Grouped: true, Indian: true}).NumberBall(b); got != "18,50,000.5" {
+		t.Errorf("Indian grouped ball = %q, want 18,50,000.5", got)
+	}
+}
+
+func TestOneDigitReadsAsSingular(t *testing.T) {
+	v := value.ScalarNum(num.NumBall(num.NewBall(big.NewFloat(2), num.MagFromFloat(0.15))))
+	v.Stopped = value.StopPrecisionCap
+	got := Text(v, nil)
+	if !strings.Contains(got, "1 digit guaranteed") || strings.Contains(got, "1 digits") {
+		t.Errorf("Text = %q, want the singular form", got)
+	}
+	zero := value.ScalarNum(num.NumBall(num.NewBall(new(big.Float), num.MagFromFloat(0.04))))
+	if got := Text(zero, nil); !strings.Contains(got, "zero to 1 decimal place,") {
+		t.Errorf("Text = %q, want the singular decimal place", got)
 	}
 }

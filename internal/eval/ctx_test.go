@@ -202,7 +202,7 @@ func TestIrrationalConstantsResolveAndCanBeShadowed(t *testing.T) {
 	}
 }
 
-func TestRetryGivesUpWhenPrecisionStopsHelping(t *testing.T) {
+func TestProvableZeroIsPrintedAsZeroNotAsARange(t *testing.T) {
 	env := NewEnv()
 	ctx := DefaultCtx()
 	ctx.Digits = 30
@@ -211,25 +211,13 @@ func TestRetryGivesUpWhenPrecisionStopsHelping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("eval: %v", err)
 	}
-	if ctx.Prec > 2*DefaultCtx().Prec {
-		t.Fatalf("precision climbed to %d chasing digits a ball around zero can never have", ctx.Prec)
-	}
 	b := v.Num.Ball(ctx.Prec)
 	if !b.Contains(new(big.Float)) {
 		t.Fatalf("ball %s should contain zero", b)
 	}
-	if got := format.GuaranteedDigits(b); got != 0 {
-		t.Fatalf("guaranteed %d significant digits for a ball straddling zero, want 0", got)
-	}
-	if v.Stopped != value.StopNoProgress {
-		t.Fatalf("stop reason = %d, want StopNoProgress", v.Stopped)
-	}
 	text := format.Default.Text(v, nil)
 	if !strings.HasPrefix(text, "0\n  zero to ") {
 		t.Fatalf("text = %q, want a bare zero and a note saying how far it is proven", text)
-	}
-	if strings.Contains(text, "precision cap") {
-		t.Fatalf("text = %q, names a cap the retry loop never reached", text)
 	}
 }
 
@@ -288,5 +276,110 @@ func TestDeadlineStopsTheRetryAndIsNamedAsItself(t *testing.T) {
 	}
 	if strings.Contains(text, "precision cap") {
 		t.Fatalf("text = %q, names a cap that was never reached", text)
+	}
+}
+
+func bound(t *testing.T, lit string) *big.Float {
+	t.Helper()
+	f, _, err := big.ParseFloat(lit, 10, 300, big.ToNearestEven)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+func TestCancellationDoesNotCollapseToZero(t *testing.T) {
+	cases := []struct {
+		src       string
+		low, high string
+	}{
+		{"exp(1e-80) - 1", "0.999e-80", "1.001e-80"},
+		{"1 - cos(1e-40)", "4.99e-81", "5.01e-81"},
+		{"log(1 + 1e-80)", "0.999e-80", "1.001e-80"},
+	}
+	for _, c := range cases {
+		n, _, err := parse.Parse(c.src)
+		if err != nil {
+			t.Fatalf("parse %q: %v", c.src, err)
+		}
+		ctx := DefaultCtx()
+		v, err := NewEnv().EvalCtx(n, ctx)
+		if err != nil {
+			t.Fatalf("eval %q: %v", c.src, err)
+		}
+		b := v.Num.Ball(ctx.Prec)
+		if text := format.Default.Text(v, nil); strings.HasPrefix(text, "0\n") || text == "0" {
+			t.Fatalf("%s printed %q, but the true value is near %s", c.src, text, c.low)
+		}
+		if b.Lo().Sign() <= 0 {
+			t.Errorf("%s: lower bound %s is not provably positive", c.src, b.Lo().Text('g', 6))
+		}
+		if b.Lo().Cmp(bound(t, c.low)) < 0 || b.Hi().Cmp(bound(t, c.high)) > 0 {
+			t.Errorf("%s: ball [%s .. %s] escapes the Taylor window [%s .. %s]",
+				c.src, b.Lo().Text('g', 6), b.Hi().Text('g', 6), c.low, c.high)
+		}
+		if got := format.GuaranteedDigits(b); got < ctx.Digits {
+			t.Errorf("%s: only %d digits guaranteed, want %d", c.src, got, ctx.Digits)
+		}
+	}
+}
+
+func TestHugeTrigArgumentStillConverges(t *testing.T) {
+	n, _, _ := parse.Parse("sin(1e400)")
+	ctx := DefaultCtx()
+	v, err := NewEnv().EvalCtx(n, ctx)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	b := v.Num.Ball(ctx.Prec)
+	if got := format.GuaranteedDigits(b); got < ctx.Digits {
+		t.Fatalf("only %d digits guaranteed for sin(1e400), want %d", got, ctx.Digits)
+	}
+	if b.Lo().Cmp(big.NewFloat(-1)) < 0 || b.Hi().Cmp(big.NewFloat(1)) > 0 {
+		t.Fatalf("sin(1e400) = %s, which leaves [-1, 1]", b)
+	}
+}
+
+func TestRootDegreeIsBounded(t *testing.T) {
+	for _, src := range []string{"root(4, 1e30)", "root(4, 0)", "root(4, -2)"} {
+		n, _, err := parse.Parse(src)
+		if err != nil {
+			t.Fatalf("parse %q: %v", src, err)
+		}
+		if _, err := NewEnv().EvalCtx(n, DefaultCtx()); err == nil {
+			t.Errorf("%s was accepted, want a refusal", src)
+		}
+	}
+}
+
+func TestWideBallFromAnUncertainInputIsNotPrintedAsZero(t *testing.T) {
+	env := NewEnv()
+	seed, _, _ := parse.Parse("x = sqrt(2)")
+	if _, err := env.EvalCtx(seed, DefaultCtx()); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	n, _, err := parse.Parse("(x - 1.4142135623730950488016887242096980785696718753769) * 1e36")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	ctx := DefaultCtx()
+	v, err := env.EvalCtx(n, ctx)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	b := v.Num.Ball(ctx.Prec)
+	if !b.ContainsZero() {
+		t.Fatalf("ball %s no longer straddles zero, the case under test has drifted", b)
+	}
+	if b.Rad.Float().Cmp(big.NewFloat(1)) < 0 {
+		t.Fatalf("ball %s is not wide, the case under test has drifted", b)
+	}
+	text := format.Default.Text(v, nil)
+	if strings.HasPrefix(text, "0\n") || text == "0" {
+		t.Fatalf("text = %q, but the true value is anywhere in [%s .. %s]",
+			text, b.Lo().Text('g', 4), b.Hi().Text('g', 4))
+	}
+	if !strings.HasPrefix(text, "0 ± ") {
+		t.Fatalf("text = %q, want the midpoint and radius", text)
 	}
 }

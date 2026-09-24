@@ -118,7 +118,7 @@ func TestBallNegAbsAndBounds(t *testing.T) {
 	}
 }
 
-func TestNumberNegAbsAndSignAcrossKinds(t *testing.T) {
+func TestNumberNegAndAbsAcrossKinds(t *testing.T) {
 	exact := NumExact(FromInt(-3))
 	if got := exact.Neg().String(); got != "3" {
 		t.Errorf("exact Neg = %s, want 3", got)
@@ -126,17 +126,7 @@ func TestNumberNegAbsAndSignAcrossKinds(t *testing.T) {
 	if got := exact.Abs().String(); got != "3" {
 		t.Errorf("exact Abs = %s, want 3", got)
 	}
-	if s, ok := exact.Sign(); !ok || s != -1 {
-		t.Errorf("exact Sign = (%d, %v), want (-1, true)", s, ok)
-	}
-	straddling := NumBall(NewBall(big.NewFloat(0.25), MagFromFloat(1)))
-	if _, ok := straddling.Sign(); ok {
-		t.Error("a ball straddling zero must not claim a sign")
-	}
 	spanning := NumInterval(FromInt(-2), FromInt(5))
-	if _, ok := spanning.Sign(); ok {
-		t.Error("an interval spanning zero must not claim a sign")
-	}
 	if got := spanning.Abs().String(); got != "[0 .. 5]" {
 		t.Errorf("interval Abs = %s, want [0 .. 5]", got)
 	}

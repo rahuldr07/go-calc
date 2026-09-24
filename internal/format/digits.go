@@ -9,7 +9,7 @@ import (
 	"github.com/rahuldr07/go-calc/internal/value"
 )
 
-const BallPrec = 256
+const ballPrec = 256
 
 func GuaranteedDigits(b num.Ball) int { return b.GuaranteedDigits() }
 
@@ -38,7 +38,7 @@ func provenDecimal(b num.Ball, limit int) (string, int) {
 		}
 		return text, digits
 	}
-	if b.ContainsZero() {
+	if provablyZero(b) {
 		return "0", 0
 	}
 	return b.String(), 0
@@ -69,27 +69,36 @@ func (s Style) precisionNote(v value.Value) string {
 	if v.Num.IsExact() {
 		return ""
 	}
-	b := v.Num.Ball(BallPrec)
+	b := v.Num.Ball(ballPrec)
 	_, digits, capped := s.NumberBall(b)
 	if !capped {
 		return ""
 	}
-	if digits == 0 && b.ContainsZero() {
-		return "zero to " + strconv.Itoa(b.GuaranteedPlaces()) + " decimal places, the precision available"
+	if digits == 0 && provablyZero(b) {
+		return "zero to " + places(b.GuaranteedPlaces()) + ", the precision available"
 	}
-	return strconv.Itoa(digits) + " digits guaranteed" + becauseOf(v.Stopped)
+	return plural(digits, "digit") + " guaranteed" + becauseOf(v.Stopped)
 }
 
 func becauseOf(stop value.Stop) string {
 	switch stop {
 	case value.StopPrecisionCap:
 		return " (precision cap reached)"
-	case value.StopNoProgress:
-		return " (more precision did not help)"
 	case value.StopUncertainInput:
 		return " (an input carries uncertainty)"
 	case value.StopDeadline:
 		return " (time limit reached)"
 	}
 	return ""
+}
+
+func provablyZero(b num.Ball) bool { return b.ContainsZero() && b.GuaranteedPlaces() >= 1 }
+
+func places(n int) string { return plural(n, "decimal place") }
+
+func plural(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return strconv.Itoa(n) + " " + noun + "s"
 }

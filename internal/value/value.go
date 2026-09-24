@@ -50,7 +50,6 @@ type Stop int
 const (
 	StopNone Stop = iota
 	StopPrecisionCap
-	StopNoProgress
 	StopUncertainInput
 	StopDeadline
 )
