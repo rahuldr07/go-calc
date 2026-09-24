@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -61,7 +63,7 @@ func TestRunFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out, code := runFile(path, plain, false)
+	out, code := runFile(path, plain)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
@@ -87,7 +89,7 @@ func TestRunFileRejectsAForwardReference(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out, code := runFile(path, plain, false)
+	out, code := runFile(path, plain)
 	if code == 0 {
 		t.Fatalf("want non-zero exit, got %q", out)
 	}
@@ -106,7 +108,7 @@ func TestRunFileReportsACycle(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out, code := runFile(path, plain, false)
+	out, code := runFile(path, plain)
 	if code == 0 {
 		t.Fatalf("want non-zero exit, got %q", out)
 	}
@@ -125,7 +127,7 @@ func TestRunFileExplainsADependentOfAFailedLine(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out, code := runFile(path, plain, false)
+	out, code := runFile(path, plain)
 	if code == 0 {
 		t.Fatalf("want non-zero exit, got %q", out)
 	}
@@ -141,7 +143,7 @@ func TestRunFileExplainsADependentOfAFailedLine(t *testing.T) {
 }
 
 func TestSheetShowsWhichReadingItTook(t *testing.T) {
-	out, code := runFile(writeSheet(t, "h = 12.3 ± 0.2 m\n2 h\n"), plain, false)
+	out, code := runFile(writeSheet(t, "h = 12.3 ± 0.2 m\n2 h\n"), plain)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
@@ -149,7 +151,7 @@ func TestSheetShowsWhichReadingItTook(t *testing.T) {
 	if !strings.Contains(out, want) {
 		t.Errorf("out = %q, want %q", out, want)
 	}
-	out, code = runFile(writeSheet(t, "h = 3\n5 h\n"), plain, false)
+	out, code = runFile(writeSheet(t, "h = 3\n5 h\n"), plain)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
@@ -258,7 +260,7 @@ func TestJSONCarriesProvenanceAndWarning(t *testing.T) {
 }
 
 func TestSheetWarnsOnTheLineThatLosesDigits(t *testing.T) {
-	out, code := runFile(writeSheet(t, "fine = 2 + 2\nlost = (1e16 + 1) - 1e16\n"), plain, false)
+	out, code := runFile(writeSheet(t, "fine = 2 + 2\nlost = (1e16 + 1) - 1e16\n"), plain)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
@@ -387,5 +389,129 @@ func TestRunKeepsTheRuledReadings(t *testing.T) {
 		if strings.TrimSpace(head) != want {
 			t.Errorf("line %q = %q, want %q", lines[i].Src, head, want)
 		}
+	}
+}
+
+func TestALeadingMinusBeginsAnExpression(t *testing.T) {
+	for _, argv := range [][]string{{"-2^2"}, {"-1"}, {"-5", "+", "3"}, {"-h"}, {"-.5"}} {
+		opts, args, err := options(argv)
+		if err != nil {
+			t.Fatalf("options(%v): %v", argv, err)
+		}
+		if opts.json || opts.indian || opts.grouped {
+			t.Errorf("options(%v) read a flag: %+v", argv, opts)
+		}
+		if !reflect.DeepEqual(args, argv) {
+			t.Errorf("options(%v) kept %v", argv, args)
+		}
+	}
+}
+
+func TestNegativeExpressionsAnswer(t *testing.T) {
+	want := map[string]string{"-2^2": "-4", "-1": "-1", "-5 + 3": "-2", "-(2+3)": "-5"}
+	for src, answer := range want {
+		out, code := run(strings.Fields(src), plain, false)
+		if code != 0 {
+			t.Fatalf("%s: exit %d: %s", src, code, out)
+		}
+		if strings.TrimSpace(out) != answer {
+			t.Errorf("%s = %q, want %q", src, out, answer)
+		}
+	}
+}
+
+func TestOptionsReadOnlyDoubleDashedNames(t *testing.T) {
+	opts, args, err := options([]string{"--json", "--indian", "run", "sheet.calc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !opts.json || !opts.indian {
+		t.Errorf("options = %+v", opts)
+	}
+	if !reflect.DeepEqual(args, []string{"run", "sheet.calc"}) {
+		t.Errorf("args = %v", args)
+	}
+	if _, _, err := options([]string{"--bogus", "1+1"}); err == nil {
+		t.Error("an unknown option was accepted")
+	}
+	if _, _, err := options([]string{"--help"}); err == nil {
+		t.Error("--help should report the usage")
+	}
+	if _, args, _ := options([]string{"--", "-2^2"}); !reflect.DeepEqual(args, []string{"-2^2"}) {
+		t.Errorf("after --, args = %v", args)
+	}
+}
+
+func TestJSONRunEmitsTheSheetDocument(t *testing.T) {
+	path := writeSheet(t, "1+1\n2+2\n3 +\nq = (1e16+1)-1e16\n")
+	out, code := runFileJSON(path, plain)
+	if code == 0 {
+		t.Errorf("exit 0 with a failing line: %s", out)
+	}
+	var sheet struct {
+		Schema string `json:"schema"`
+		Lines  []struct {
+			N      int    `json:"n"`
+			Text   string `json:"text"`
+			Status string `json:"status"`
+			Error  string `json:"error"`
+		} `json:"lines"`
+	}
+	if err := json.Unmarshal([]byte(out), &sheet); err != nil {
+		t.Fatalf("--json run is not parseable JSON: %v\n%s", err, out)
+	}
+	if sheet.Schema != doc.SheetSchema {
+		t.Errorf("schema = %q, want %q", sheet.Schema, doc.SheetSchema)
+	}
+	if len(sheet.Lines) != 4 {
+		t.Fatalf("got %d lines", len(sheet.Lines))
+	}
+	if sheet.Lines[0].Text != "2" || sheet.Lines[1].Text != "4" {
+		t.Errorf("lines = %+v", sheet.Lines)
+	}
+	if sheet.Lines[2].Status != doc.StatusError {
+		t.Errorf("line 3 = %+v, want an error", sheet.Lines[2])
+	}
+}
+
+func TestJSONRunOnACleanSheetExitsZero(t *testing.T) {
+	out, code := runFileJSON(writeSheet(t, "1+1\n2+2\n"), plain)
+	if code != 0 {
+		t.Errorf("exit %d on a clean sheet: %s", code, out)
+	}
+}
+
+func TestJSONIsRefusedWhereItIsNotProduced(t *testing.T) {
+	for _, args := range [][]string{{"trace", "1+1"}, {"why", "1+1"}, {"repl"}} {
+		out, code := dispatch(settings{json: true}, args, plain)
+		if code != 2 {
+			t.Errorf("--json %v: exit %d, want 2", args, code)
+		}
+		if !strings.Contains(out, "--json") || !strings.Contains(out, args[0]) {
+			t.Errorf("--json %v said %q, which does not explain itself", args, out)
+		}
+	}
+	for _, args := range [][]string{{"trace", "1+1"}, {"why", "1+1"}} {
+		if out, code := dispatch(settings{}, args, plain); code != 0 {
+			t.Errorf("%v without --json: exit %d: %s", args, code, out)
+		}
+	}
+	if out, code := dispatch(settings{}, []string{"repl"}, plain); code != startREPL {
+		t.Errorf("repl dispatched to %d: %s", code, out)
+	}
+}
+
+func TestDispatchSendsJSONRunToTheSheetDocument(t *testing.T) {
+	path := writeSheet(t, "1+1\n")
+	out, code := dispatch(settings{json: true}, []string{"run", path}, plain)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(out), `{"schema":"`+doc.SheetSchema+`"`) {
+		t.Errorf("--json run emitted %q, want the sheet document", out)
+	}
+	plainOut, code := dispatch(settings{}, []string{"run", path}, plain)
+	if code != 0 || !strings.Contains(plainOut, "= 2") {
+		t.Errorf("run without --json = %q (exit %d)", plainOut, code)
 	}
 }

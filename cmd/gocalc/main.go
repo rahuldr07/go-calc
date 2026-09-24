@@ -2,7 +2,8 @@ package main
 
 import (
 	"bufio"
-	"flag"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -12,36 +13,100 @@ import (
 	"github.com/rahuldr07/go-calc/internal/doc"
 	"github.com/rahuldr07/go-calc/internal/eval"
 	"github.com/rahuldr07/go-calc/internal/format"
+	"github.com/rahuldr07/go-calc/internal/lex"
 	"github.com/rahuldr07/go-calc/internal/parse"
 	"github.com/rahuldr07/go-calc/internal/prov"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
 
 func main() {
-	asJSON := flag.Bool("json", false, "print machine-readable output")
-	indian := flag.Bool("indian", false, "group digits the Indian way")
-	grouped := flag.Bool("group", false, "group digits")
-	flag.Parse()
-	style := format.Style{Digits: format.Digits, Grouped: *grouped || *indian, Indian: *indian}
-	args := flag.Args()
-	if len(args) == 1 && args[0] == "repl" {
+	opts, args, err := options(os.Args[1:])
+	if err != nil {
+		emit(err.Error(), 2)
+	}
+	style := styleFor(opts)
+	out, code := dispatch(opts, args, style)
+	if code == startREPL {
 		os.Exit(repl(os.Stdin, os.Stdout, style))
+	}
+	emit(out, code)
+}
+
+const startREPL = -1
+
+func styleFor(opts settings) format.Style {
+	return format.Style{Digits: format.Digits, Grouped: opts.grouped || opts.indian, Indian: opts.indian}
+}
+
+func dispatch(opts settings, args []string, style format.Style) (string, int) {
+	if len(args) == 1 && args[0] == "repl" {
+		if opts.json {
+			return noJSONFor("repl"), 2
+		}
+		return "", startREPL
 	}
 	if len(args) > 1 {
 		switch args[0] {
 		case "run":
-			out, code := runFile(args[1], style, *asJSON)
-			emit(out, code)
-		case "trace":
-			out, code := explain(strings.Join(args[1:], " "), false, style)
-			emit(out, code)
-		case "why":
-			out, code := explain(strings.Join(args[1:], " "), true, style)
-			emit(out, code)
+			if opts.json {
+				return runFileJSON(args[1], style)
+			}
+			return runFile(args[1], style)
+		case "trace", "why":
+			if opts.json {
+				return noJSONFor(args[0]), 2
+			}
+			return explain(strings.Join(args[1:], " "), args[0] == "why", style)
 		}
 	}
-	out, code := run(args, style, *asJSON)
-	emit(out, code)
+	return run(args, style, opts.json)
+}
+
+type settings struct {
+	json    bool
+	indian  bool
+	grouped bool
+}
+
+const usage = "usage: gocalc [--json] [--indian] [--group] \"expression\"\n" +
+	"       gocalc repl\n" +
+	"       gocalc [--json] run sheet.calc\n" +
+	"       gocalc trace \"expression\"\n" +
+	"       gocalc why \"expression\"\n" +
+	"options start with two dashes, so a leading - begins an expression: gocalc \"-2^2\""
+
+var errHelp = errors.New(usage)
+
+func options(argv []string) (settings, []string, error) {
+	var out settings
+	for len(argv) > 0 {
+		arg := argv[0]
+		if arg == "--" {
+			return out, argv[1:], nil
+		}
+		name, ok := strings.CutPrefix(arg, "--")
+		if !ok {
+			break
+		}
+		switch name {
+		case "json":
+			out.json = true
+		case "indian":
+			out.indian = true
+		case "group":
+			out.grouped = true
+		case "help":
+			return out, nil, errHelp
+		default:
+			return out, nil, errors.New("unknown option " + arg + "\n" + usage)
+		}
+		argv = argv[1:]
+	}
+	return out, argv, nil
+}
+
+func noJSONFor(command string) string {
+	return "--json is not available for " + command + "; gocalc --json \"expression\" carries the same answer, warning and provenance graph as machine-readable " + format.Schema
 }
 
 func emit(out string, code int) {
@@ -55,7 +120,7 @@ func emit(out string, code int) {
 
 func run(args []string, style format.Style, asJSON bool) (string, int) {
 	if len(args) == 0 {
-		return "usage: gocalc [--json] [--indian] \"expression\"\n       gocalc repl\n       gocalc run sheet.calc\n       gocalc trace \"expression\"\n       gocalc why \"expression\"", 2
+		return usage, 2
 	}
 	src := strings.Join(args, " ")
 	return evalLine(eval.NewEnv(), src, style, asJSON)
@@ -176,10 +241,10 @@ func render(l doc.Line, style format.Style, asJSON bool, arena *prov.Arena) (str
 	return out, 0
 }
 
-func runFile(path string, style format.Style, asJSON bool) (string, int) {
+func sheetLines(path string) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return err.Error(), 1
+		return nil, err
 	}
 	defer f.Close()
 	var src []string
@@ -187,7 +252,12 @@ func runFile(path string, style format.Style, asJSON bool) (string, int) {
 	for sc.Scan() {
 		src = append(src, strings.TrimSpace(sc.Text()))
 	}
-	if err := sc.Err(); err != nil {
+	return src, sc.Err()
+}
+
+func runFile(path string, style format.Style) (string, int) {
+	src, err := sheetLines(path)
+	if err != nil {
 		return err.Error(), 1
 	}
 	var out []string
@@ -197,12 +267,48 @@ func runFile(path string, style format.Style, asJSON bool) (string, int) {
 		if doc.Blank(l.Src) {
 			continue
 		}
-		text, c := render(l, style, asJSON, sheet.Arena())
+		text, c := render(l, style, false, sheet.Arena())
 		if c != 0 {
 			code = c
-			text = fmt.Sprintf("line %d: %s", l.N+1, text)
+			if !located(l.Err) {
+				text = fmt.Sprintf("line %d: %s", l.N+1, text)
+			}
 		}
 		out = append(out, l.Src+"\n  = "+strings.ReplaceAll(text, "\n", "\n  "))
 	}
 	return strings.Join(out, "\n"), code
+}
+
+func located(err error) bool {
+	var pointed *lex.Error
+	return errors.As(err, &pointed)
+}
+
+func runFileJSON(path string, style format.Style) (string, int) {
+	src, err := sheetLines(path)
+	if err != nil {
+		return err.Error(), 1
+	}
+	req, err := json.Marshal(struct {
+		Lines  []string `json:"lines"`
+		Digits int      `json:"digits"`
+	}{Lines: src, Digits: style.Digits})
+	if err != nil {
+		return err.Error(), 1
+	}
+	answer := doc.EvalRequest(req)
+	var read struct {
+		Lines []struct {
+			Status string `json:"status"`
+		} `json:"lines"`
+	}
+	if err := json.Unmarshal(answer, &read); err != nil {
+		return err.Error(), 1
+	}
+	for _, l := range read.Lines {
+		if l.Status == doc.StatusError {
+			return string(answer), 1
+		}
+	}
+	return string(answer), 0
 }

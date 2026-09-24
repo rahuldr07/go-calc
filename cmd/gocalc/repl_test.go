@@ -591,7 +591,7 @@ func TestDefinitionReportsItselfInASheet(t *testing.T) {
 	if err := os.WriteFile(path, []byte("h(x) = x^2\nh(3)\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out, code := runFile(path, plain, false)
+	out, code := runFile(path, plain)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
