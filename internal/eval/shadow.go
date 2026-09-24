@@ -54,16 +54,21 @@ type shadowPass struct {
 }
 
 type shown struct {
-	num    float64
-	factor float64
+	num     float64
+	factor  float64
+	dimless bool
 }
 
-func plain(x float64) shown { return shown{num: x, factor: 1} }
+func plain(x float64) shown { return shown{num: x, factor: 1, dimless: true} }
+
+func wearing(x, factor float64, dim units.Dim) shown {
+	return shown{num: x, factor: factor, dimless: dim.IsNone()}
+}
 
 func (v shown) si() float64 { return v.num * v.factor }
 
-func (v shown) whole() bool {
-	return !math.IsInf(v.num, 0) && !math.IsNaN(v.num) && v.num == math.Trunc(v.num)
+func (v shown) rescaled(num, factor float64) shown {
+	return shown{num: num, factor: factor, dimless: v.dimless}
 }
 
 type scope map[string]shown
@@ -104,14 +109,14 @@ func (s *shadowPass) name(t *parse.Name, sc scope) (shown, bool) {
 		if v.IsAffine() {
 			return shown{}, false
 		}
-		return shown{numFloat(v.Num, s.prec), exactFloat(v.FactorOrOne())}, true
+		return wearing(numFloat(v.Num, s.prec), exactFloat(v.FactorOrOne()), v.Dim), true
 	}
 	if c, ok := consts.Lookup(t.Text); ok {
 		if u, ok := units.Lookup(c.Unit); ok && c.Unit != "" {
 			if u.Offset.Sign() != 0 {
 				return shown{}, false
 			}
-			return shown{exactFloat(c.Value), exactFloat(u.Factor)}, true
+			return wearing(exactFloat(c.Value), exactFloat(u.Factor), u.Dim), true
 		}
 		return plain(exactFloat(c.Value)), true
 	}
@@ -125,7 +130,7 @@ func (s *shadowPass) name(t *parse.Name, sc scope) (shown, bool) {
 		if u.Offset.Sign() != 0 {
 			return shown{}, false
 		}
-		return shown{1, exactFloat(u.Factor)}, true
+		return wearing(1, exactFloat(u.Factor), u.Dim), true
 	}
 	return shown{}, false
 }
@@ -137,7 +142,7 @@ func (s *shadowPass) unary(t *parse.Unary, sc scope, depth int) (shown, bool) {
 	}
 	switch t.Op {
 	case "-":
-		return shown{-x.num, x.factor}, true
+		return x.rescaled(-x.num, x.factor), true
 	case "%":
 		return plain(x.si() / 100), true
 	case "!":
@@ -182,7 +187,7 @@ func (s *shadowPass) binary(t *parse.Binary, sc scope, depth int) (shown, bool) 
 	switch t.Op {
 	case "+", "-":
 		if isPercentNode(t.R) {
-			return shown{l.num * (1 + signOf(t.Op)*r.si()), l.factor}, true
+			return l.rescaled(l.num*(1+signOf(t.Op)*r.si()), l.factor), true
 		}
 		return s.sum(t, l, r)
 	case "*", "×", "·":
@@ -190,7 +195,7 @@ func (s *shadowPass) binary(t *parse.Binary, sc scope, depth int) (shown, bool) 
 	case "/", "÷":
 		return plain(l.si() / r.si()), true
 	case "^":
-		return plain(math.Pow(l.si(), r.si())), true
+		return raised(l, r.si()), true
 	case "mod":
 		if r.si() == 0 {
 			return shown{}, false
@@ -204,6 +209,18 @@ func (s *shadowPass) binary(t *parse.Binary, sc scope, depth int) (shown, bool) 
 	return shown{}, false
 }
 
+func raised(base shown, exponent float64) shown {
+	out := shown{
+		num:     math.Pow(base.num, exponent),
+		factor:  math.Pow(base.factor, exponent),
+		dimless: base.dimless,
+	}
+	if out.dimless {
+		return plain(out.si())
+	}
+	return out
+}
+
 func (s *shadowPass) sum(t *parse.Binary, l, r shown) (shown, bool) {
 	addend := r.si() / l.factor
 	out := l.num + addend
@@ -211,7 +228,7 @@ func (s *shadowPass) sum(t *parse.Binary, l, r shown) (shown, bool) {
 		out = l.num - addend
 	}
 	s.note(t.Op, t.P, bitsLost(l.num, addend, out))
-	return shown{out, l.factor}, true
+	return l.rescaled(out, l.factor), true
 }
 
 func (s *shadowPass) implicit(t *parse.Binary, sc scope, depth int) (shown, bool, bool) {
@@ -237,7 +254,7 @@ func (s *shadowPass) implicit(t *parse.Binary, sc scope, depth int) (shown, bool
 	if u.Dim.IsNone() {
 		return plain(l.num * factor), true, true
 	}
-	return shown{l.num, factor}, true, true
+	return wearing(l.num, factor, u.Dim), true, true
 }
 
 func (s *shadowPass) conversion(t *parse.Binary, sc scope, depth int) (shown, bool) {
@@ -257,7 +274,7 @@ func (s *shadowPass) conversion(t *parse.Binary, sc scope, depth int) (shown, bo
 	if factor == 0 {
 		return shown{}, false
 	}
-	return shown{l.si() / factor, factor}, true
+	return wearing(l.si()/factor, factor, to.Dim), true
 }
 
 func (s *shadowPass) call(t *parse.Call, sc scope, depth int) (shown, bool) {
@@ -275,7 +292,7 @@ func (s *shadowPass) call(t *parse.Call, sc scope, depth int) (shown, bool) {
 		}
 		return s.walk(f.body, inner, depth+1)
 	}
-	wearing := shown{}
+	first := shown{}
 	args := make([]float64, len(t.Args))
 	for i, a := range t.Args {
 		x, ok := s.walk(a, sc, depth+1)
@@ -283,16 +300,16 @@ func (s *shadowPass) call(t *parse.Call, sc scope, depth int) (shown, bool) {
 			return shown{}, false
 		}
 		if i == 0 {
-			wearing = x
+			first = x
 		}
 		args[i] = x.si()
 	}
 	if len(args) == 1 {
 		switch t.Fn {
 		case "abs":
-			return shown{math.Abs(wearing.num), wearing.factor}, true
+			return first.rescaled(math.Abs(first.num), first.factor), true
 		case "floor", "ceil", "round":
-			return shown{keepsItsUnit[t.Fn](wearing.num), wearing.factor}, true
+			return first.rescaled(keepsItsUnit[t.Fn](first.num), first.factor), true
 		}
 	}
 	if f, ok := shadowUnary[t.Fn]; ok && len(args) == 1 {
@@ -309,7 +326,7 @@ func (s *shadowPass) call(t *parse.Call, sc scope, depth int) (shown, bool) {
 		}
 	case "expand":
 		if len(args) == 2 {
-			return wearing, true
+			return first, true
 		}
 	}
 	return shown{}, false
@@ -322,7 +339,6 @@ var keepsItsUnit = map[string]func(float64) float64{
 }
 
 var shadowUnary = map[string]func(float64) float64{
-	"abs":   math.Abs,
 	"sqrt":  math.Sqrt,
 	"exp":   math.Exp,
 	"ln":    math.Log,
@@ -465,9 +481,8 @@ func worstClause(sh Shadow) string {
 }
 
 type integerGap struct {
-	Float   string
-	Printed string
-	Wrong   int
+	Float string
+	Wrong int
 }
 
 func integerCheck(sh Shadow, proven value.Value) (integerGap, bool) {
@@ -479,7 +494,7 @@ func integerCheck(sh Shadow, proven value.Value) (integerGap, bool) {
 		return integerGap{}, false
 	}
 	f, _ := new(big.Float).SetPrec(mantissaBits).SetFloat64(sh.Value).Int(nil)
-	gap := integerGap{Printed: printed.String(), Float: f.String()}
+	gap := integerGap{Float: f.String()}
 	if f.Cmp(printed) == 0 {
 		return gap, true
 	}

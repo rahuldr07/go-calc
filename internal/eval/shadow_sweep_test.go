@@ -441,6 +441,15 @@ func TestTheShadowTracksTheProvenValueInSI(t *testing.T) {
 		"sqrt(%[1]s m * %[2]s m)",
 		"abs(%[1]s km - %[2]s km)",
 		"floor(%[1]s m)",
+		"(%[1]s km) ^ 2",
+		"(%[1]s cm) ^ 3",
+		"(%[1]s h) ^ 2",
+		"(%[1]s ft) ^ 2 * %[2]s",
+		"(%[1]s g) ^ -1",
+		"(%[1]s min) ^ 1",
+		"(%[1]s km) ^ 2 / (%[2]s h) ^ 2",
+		"(%[1]s lakh) ^ 2",
+		"sqrt((%[1]s m) ^ 2)",
 	}
 	checked := 0
 	for _, shape := range shapes {
@@ -474,7 +483,68 @@ func TestTheShadowTracksTheProvenValueInSI(t *testing.T) {
 			}
 		}
 	}
-	if checked < 100 {
+	if checked < 250 {
 		t.Fatalf("only %d expressions were checked", checked)
+	}
+}
+
+func TestPowerKeepsTheUnitTheCalculatorPrints(t *testing.T) {
+	cases := []struct {
+		src   string
+		shown float64
+	}{
+		{"3 km ^ 2", 9},
+		{"3 cm ^ 2", 9},
+		{"2 ft ^ 3", 8},
+		{"5 h ^ 1", 5},
+		{"4 g ^ 2", 16},
+		{"2 inch ^ 2", 4},
+		{"10 min ^ 2", 100},
+		{"3 m ^ 2", 9},
+		{"3 km ^ 0", 1},
+		{"lakh ^ 2", 1e10},
+		{"2 lakh ^ 2", 4e10},
+		{"crore ^ 2", 1e14},
+		{"(lakh + 1) ^ 2", 10000200001},
+		{"2 ^ 10", 1024},
+	}
+	for _, c := range cases {
+		env := NewEnv()
+		n := mustParse(t, c.src)
+		sh := env.Shadow(n)
+		if !sh.modelled {
+			t.Errorf("%s: unmodelled", c.src)
+			continue
+		}
+		if math.Abs(sh.Value-c.shown) > math.Abs(c.shown)*1e-12+1e-12 {
+			t.Errorf("%s: shadow shows %v, calculator shows %v", c.src, sh.Value, c.shown)
+		}
+		v := mustEval(t, env, c.src)
+		if w := env.Warning(n, v); w != "" {
+			t.Errorf("%s: warned %q about an answer float64 gets right", c.src, w)
+		}
+	}
+}
+
+func TestPowerThroughAVariableInASheet(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "side = 3 km")
+	src := "area = side ^ 2"
+	n := mustParse(t, src)
+	v := mustEval(t, env, src)
+	if w := env.Warning(n, v); w != "" {
+		t.Errorf("warned %q on the simplest two-line sheet", w)
+	}
+	if sh := env.Shadow(n); math.Abs(sh.Value-9) > 1e-12 || math.Abs(sh.si-9e6) > 1 {
+		t.Errorf("shadow = %+v, want 9 shown and 9e6 in SI", sh)
+	}
+}
+
+func TestPowerStillCatchesAWideExactInteger(t *testing.T) {
+	env := NewEnv()
+	src := "3 ^ 200"
+	n := mustParse(t, src)
+	if w := env.Warning(n, mustEval(t, env, src)); !strings.Contains(w, "the last 80 digits are wrong") {
+		t.Errorf("warning = %q, want the 80 wrong digits", w)
 	}
 }
