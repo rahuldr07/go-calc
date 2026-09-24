@@ -8,7 +8,7 @@ import (
 	"github.com/rahuldr07/go-calc/internal/prov"
 )
 
-var benignOperands = []string{"2", "7.5", "0.125", "3/4", "1e6", "1e-6", "123456789", "0.1", "12.25", "1000"}
+var benignOperands = []string{"2", "7.5", "0.125", "3/4", "1e6", "1e-6", "12345", "0.1", "12.25", "1000"}
 
 var benignShapes = []string{
 	"%[1]s + %[2]s",
@@ -89,6 +89,59 @@ func TestShadowWarnsAboutEveryKnownCancellation(t *testing.T) {
 		}
 		if w := env.Warning(n, v); w == "" {
 			t.Errorf("%s: no warning; shadow = %+v, proven = %s", src, env.Shadow(n), v.Num.String())
+		}
+	}
+}
+
+func TestShadowWarnsWhenAPrintedIntegerDigitIsWrong(t *testing.T) {
+	cases := []struct {
+		src   string
+		wrong string
+		gives string
+	}{
+		{"25!", "the last 10 digits are wrong", "15511210043330986055303168"},
+		{"3 ^ 200", "the last 80 digits are wrong", ""},
+		{"12345678901234567890 + 1", "the last 3 digits are wrong", "12345678901234567168"},
+		{"123456789 * 123456789", "the last digit is wrong", "15241578750190520"},
+		{"9007199254740992 + 1", "the last digit is wrong", "9007199254740992"},
+	}
+	for _, c := range cases {
+		env := NewEnv()
+		n := mustParse(t, c.src)
+		v := mustEval(t, env, c.src)
+		w := env.Warning(n, v)
+		if w == "" {
+			t.Errorf("%s: no warning although float64 prints wrong digits", c.src)
+			continue
+		}
+		if !strings.Contains(w, c.wrong) {
+			t.Errorf("%s: warning %q does not say %q", c.src, w, c.wrong)
+		}
+		if c.gives != "" && !strings.Contains(w, "float64 gives "+c.gives) {
+			t.Errorf("%s: warning %q does not name the float64 answer %s", c.src, w, c.gives)
+		}
+	}
+}
+
+func TestExactIntegersInsideFloat64StaySilent(t *testing.T) {
+	for _, src := range []string{
+		"2 + 2",
+		"2 ^ 100",
+		"20!",
+		"12345 * 12345",
+		"1e15 + 1",
+		"9007199254740992",
+		"1000000 * 1000000",
+		"-5 * 7",
+		"7 - 7",
+		"3 km to m",
+		"1 lakh * 3",
+	} {
+		env := NewEnv()
+		n := mustParse(t, src)
+		v := mustEval(t, env, src)
+		if w := env.Warning(n, v); w != "" {
+			t.Errorf("%s: warned %q", src, w)
 		}
 	}
 }

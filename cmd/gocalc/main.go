@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"math"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/rahuldr07/go-calc/internal/doc"
@@ -12,6 +14,7 @@ import (
 	"github.com/rahuldr07/go-calc/internal/format"
 	"github.com/rahuldr07/go-calc/internal/parse"
 	"github.com/rahuldr07/go-calc/internal/prov"
+	"github.com/rahuldr07/go-calc/internal/value"
 )
 
 func main() {
@@ -27,10 +30,10 @@ func main() {
 			out, code := runFile(args[1], style, *asJSON)
 			emit(out, code)
 		case "trace":
-			out, code := explain(strings.Join(args[1:], " "), false)
+			out, code := explain(strings.Join(args[1:], " "), false, style)
 			emit(out, code)
 		case "why":
-			out, code := explain(strings.Join(args[1:], " "), true)
+			out, code := explain(strings.Join(args[1:], " "), true, style)
 			emit(out, code)
 		}
 	}
@@ -68,7 +71,7 @@ func evalLine(env *eval.Env, src string, style format.Style, asJSON bool) (strin
 	return render(line, style, asJSON, env.Arena())
 }
 
-func explain(src string, why bool) (string, int) {
+func explain(src string, why bool, style format.Style) (string, int) {
 	env := eval.NewEnv()
 	node, _, err := parse.Parse(src)
 	if err != nil {
@@ -79,13 +82,72 @@ func explain(src string, why bool) (string, int) {
 		return err.Error(), 1
 	}
 	if why {
-		return env.Why(node, v), 0
+		return comparison(env.Why(node, v), style), 0
 	}
 	tree := strings.TrimRight(env.Arena().Tree(v.Prov), "\n")
 	if tree == "" {
 		return "no provenance was recorded for this expression", 1
 	}
 	return tree, 0
+}
+
+func comparison(x eval.Explanation, style format.Style) string {
+	if !x.Modelled {
+		return "this expression has no float64 shadow, so there is nothing to compare"
+	}
+	var b strings.Builder
+	b.WriteString("proven:  " + provenText(x.Proven, style) + "\n")
+	b.WriteString("float64: " + strconv.FormatFloat(x.Shadow, 'g', -1, 64) + "\n")
+	b.WriteString("they agree to " + agreement(x.Digits))
+	if x.WrongDigits > 0 {
+		b.WriteString("\nprinted in full, float64 gives " + x.ShadowExact + ", wrong in its last " + plural(x.WrongDigits, "digit"))
+	}
+	if len(x.Lost) == 0 {
+		b.WriteString("\nno step loses a significant number of bits")
+		return b.String()
+	}
+	b.WriteString("\nwhere the digits went:")
+	for _, site := range x.Lost {
+		b.WriteString("\n  " + bits(site.BitsLost) + " at the " + site.Op + " at " + site.Pos.String())
+	}
+	return b.String()
+}
+
+func provenText(v value.Value, style format.Style) string {
+	out := style.Number(v)
+	if v.Unit != "" {
+		out += " " + v.Unit
+	}
+	return out
+}
+
+func agreement(digits float64) string {
+	if math.IsInf(digits, 1) {
+		return "every digit it has"
+	}
+	whole := int(digits)
+	switch whole {
+	case 0:
+		return "no significant digits"
+	case 1:
+		return "1 significant digit"
+	}
+	return strconv.Itoa(whole) + " significant digits"
+}
+
+func plural(n int, word string) string {
+	if n == 1 {
+		return word
+	}
+	return strconv.Itoa(n) + " " + word + "s"
+}
+
+func bits(lost float64) string {
+	rounded := int(math.Round(lost))
+	if rounded == 1 {
+		return "1 bit"
+	}
+	return strconv.Itoa(rounded) + " bits"
 }
 
 func render(l doc.Line, style format.Style, asJSON bool, arena *prov.Arena) (string, int) {

@@ -5,10 +5,8 @@ import (
 	"math/big"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/rahuldr07/go-calc/internal/consts"
-	"github.com/rahuldr07/go-calc/internal/format"
 	"github.com/rahuldr07/go-calc/internal/lex"
 	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/parse"
@@ -42,6 +40,9 @@ func (e *Env) Shadow(n parse.Node) Shadow {
 		return Shadow{Value: math.NaN()}
 	}
 	sort.SliceStable(s.lost, func(i, j int) bool { return s.lost[i].BitsLost > s.lost[j].BitsLost })
+	for i := range s.lost {
+		s.lost[i].Pos = e.at(s.lost[i].Pos)
+	}
 	return Shadow{Value: v, Lost: s.lost, modelled: true}
 }
 
@@ -367,38 +368,102 @@ func provenFloat(v value.Value, prec uint) *big.Float {
 	return new(big.Float).SetPrec(prec).Set(mid)
 }
 
-func (e *Env) Warning(n parse.Node, proven value.Value) string {
-	sh := e.Shadow(n)
-	digits, ok := digitsAgreed(sh, proven)
-	if !ok || digits >= trustedDigits {
-		return ""
-	}
-	out := "float64 would answer " + shortFloat(sh.Value) + " here, agreeing with the proven value to " + digitWord(digits)
-	if len(sh.Lost) > 0 {
-		out += "; the worst loss is " + bitWord(sh.Lost[0].BitsLost) + " at the " + sh.Lost[0].Op + " at " + e.at(sh.Lost[0].Pos).String()
-	}
-	return out
+type Explanation struct {
+	Shadow      float64
+	ShadowExact string
+	Proven      value.Value
+	Digits      float64
+	WrongDigits int
+	Modelled    bool
+	Lost        []LossSite
+	Warning     string
 }
 
-func (e *Env) Why(n parse.Node, proven value.Value) string {
+func (x Explanation) Worst() (LossSite, bool) {
+	if len(x.Lost) == 0 {
+		return LossSite{}, false
+	}
+	return x.Lost[0], true
+}
+
+func (e *Env) Why(n parse.Node, proven value.Value) Explanation {
 	sh := e.Shadow(n)
 	digits, ok := digitsAgreed(sh, proven)
-	if !ok {
-		return "this expression has no float64 shadow, so there is nothing to compare"
+	exact, wrong, _ := integerCheck(sh, proven)
+	return Explanation{
+		Shadow:      sh.Value,
+		ShadowExact: exact,
+		Proven:      proven,
+		Digits:      digits,
+		WrongDigits: wrong,
+		Modelled:    ok,
+		Lost:        sh.Lost,
+		Warning:     warn(sh, proven),
 	}
-	var b strings.Builder
-	b.WriteString("proven:  " + provenWord(proven) + "\n")
-	b.WriteString("float64: " + shortFloat(sh.Value) + "\n")
-	b.WriteString("they agree to " + digitWord(digits) + "\n")
+}
+
+func (e *Env) Warning(n parse.Node, proven value.Value) string {
+	return warn(e.Shadow(n), proven)
+}
+
+func warn(sh Shadow, proven value.Value) string {
+	if !sh.modelled {
+		return ""
+	}
+	if digits, ok := digitsAgreed(sh, proven); ok && digits < trustedDigits {
+		return "float64 would answer " + shortFloat(sh.Value) + " here, agreeing with the proven value to " + digitWord(digits) + worstClause(sh)
+	}
+	if exact, wrong, ok := integerCheck(sh, proven); ok && wrong > 0 {
+		return "float64 gives " + exact + " here; " + wrongDigits(wrong) + worstClause(sh)
+	}
+	return ""
+}
+
+func worstClause(sh Shadow) string {
 	if len(sh.Lost) == 0 {
-		b.WriteString("no step loses a significant number of bits")
-		return b.String()
+		return ""
 	}
-	b.WriteString("where the digits went:")
-	for _, site := range sh.Lost {
-		b.WriteString("\n  " + bitWord(site.BitsLost) + " at the " + site.Op + " at " + e.at(site.Pos).String())
+	return "; the worst loss is " + bitWord(sh.Lost[0].BitsLost) + " at the " + sh.Lost[0].Op + " at " + sh.Lost[0].Pos.String()
+}
+
+func integerCheck(sh Shadow, proven value.Value) (string, int, bool) {
+	p, ok := printedInteger(proven)
+	if !sh.modelled || !ok || math.IsInf(sh.Value, 0) || math.IsNaN(sh.Value) {
+		return "", 0, false
 	}
-	return b.String()
+	f, _ := new(big.Float).SetPrec(mantissaBits).SetFloat64(sh.Value).Int(nil)
+	return f.String(), trailingWrong(f, p), true
+}
+
+func printedInteger(v value.Value) (*big.Int, bool) {
+	if !v.Num.IsExact() || !v.Num.Exact().IsInt() {
+		return nil, false
+	}
+	if v.Offset.Sign() != 0 || v.FactorOrOne().Cmp(num.FromInt(1)) != 0 {
+		return nil, false
+	}
+	return new(big.Int).Set(v.Num.Exact().Rat().Num()), true
+}
+
+func wrongDigits(n int) string {
+	if n == 1 {
+		return "the last digit is wrong"
+	}
+	return "the last " + strconv.Itoa(n) + " digits are wrong"
+}
+
+func trailingWrong(f, p *big.Int) int {
+	fs := new(big.Int).Abs(f).String()
+	ps := new(big.Int).Abs(p).String()
+	if f.Sign() != p.Sign() || len(fs) != len(ps) {
+		return len(ps)
+	}
+	for i := range ps {
+		if fs[i] != ps[i] {
+			return len(ps) - i
+		}
+	}
+	return 0
 }
 
 func (e *Env) at(p lex.Pos) lex.Pos {
@@ -406,14 +471,6 @@ func (e *Env) at(p lex.Pos) lex.Pos {
 		p.Line = e.line
 	}
 	return p
-}
-
-func provenWord(v value.Value) string {
-	out := format.Default.Number(v)
-	if v.Unit != "" {
-		out += " " + v.Unit
-	}
-	return out
 }
 
 func digitWord(digits float64) string {

@@ -97,15 +97,29 @@ func TestWarningNamesTheWorstSite(t *testing.T) {
 	}
 }
 
-func TestWhyExplainsBothAnswers(t *testing.T) {
+func TestWhyReportsTheFactsWithoutFormattingThem(t *testing.T) {
 	env := NewEnv()
 	src := "1 - cos(1e-8)"
 	n := mustParse(t, src)
 	why := env.Why(n, mustEval(t, env, src))
-	for _, want := range []string{"float64", "proven", "bits"} {
-		if !strings.Contains(why, want) {
-			t.Errorf("why %q missing %q:\n%s", src, want, why)
-		}
+	if !why.Modelled {
+		t.Fatal("the shadow refused to model a plain subtraction")
+	}
+	if why.Shadow != 0 {
+		t.Errorf("Shadow = %v, want 0", why.Shadow)
+	}
+	if why.Digits >= trustedDigits {
+		t.Errorf("Digits = %v, want fewer than %d", why.Digits, trustedDigits)
+	}
+	if why.Warning == "" {
+		t.Error("Warning is empty on a total cancellation")
+	}
+	worst, ok := why.Worst()
+	if !ok || worst.Op != "-" || worst.BitsLost < 50 {
+		t.Errorf("Worst() = %+v, %v", worst, ok)
+	}
+	if got := why.Proven.Num.String(); got == "" {
+		t.Error("Proven did not travel with the explanation")
 	}
 }
 
@@ -114,11 +128,27 @@ func TestWhyStaysQuietlyHonestOnBenignArithmetic(t *testing.T) {
 	src := "2 + 3 * 4"
 	n := mustParse(t, src)
 	why := env.Why(n, mustEval(t, env, src))
-	if !strings.Contains(why, "14") {
-		t.Errorf("why = %q, want it to name the shared answer", why)
+	if !why.Modelled || why.Shadow != 14 {
+		t.Errorf("why = %+v, want a modelled 14", why)
 	}
-	if strings.Contains(why, "bits at") {
-		t.Errorf("why = %q, want no loss site", why)
+	if why.Warning != "" {
+		t.Errorf("Warning = %q, want none", why.Warning)
+	}
+	if _, ok := why.Worst(); ok {
+		t.Errorf("Lost = %+v, want no loss site", why.Lost)
+	}
+}
+
+func TestWhyOnAnUnmodelledExpressionSaysSo(t *testing.T) {
+	env := NewEnv()
+	src := "20 degC to K"
+	n := mustParse(t, src)
+	why := env.Why(n, mustEval(t, env, src))
+	if why.Modelled {
+		t.Errorf("why = %+v, want an unmodelled explanation", why)
+	}
+	if why.Warning != "" {
+		t.Errorf("Warning = %q, want none", why.Warning)
 	}
 }
 

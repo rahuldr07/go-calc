@@ -186,7 +186,7 @@ func writeSheet(t *testing.T, body string) string {
 }
 
 func TestTracePrintsTheTree(t *testing.T) {
-	out, code := explain("sqrt(2 m / g0)", false)
+	out, code := explain("sqrt(2 m / g0)", false, plain)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
@@ -198,7 +198,7 @@ func TestTracePrintsTheTree(t *testing.T) {
 }
 
 func TestWhyNamesBothAnswers(t *testing.T) {
-	out, code := explain("(1e16 + 1) - 1e16", true)
+	out, code := explain("(1e16 + 1) - 1e16", true, plain)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
@@ -210,10 +210,10 @@ func TestWhyNamesBothAnswers(t *testing.T) {
 }
 
 func TestTraceReportsAFailedExpression(t *testing.T) {
-	if out, code := explain("5 m + 3 s", false); code == 0 {
+	if out, code := explain("5 m + 3 s", false, plain); code == 0 {
 		t.Errorf("want non-zero exit, got %q", out)
 	}
-	if out, code := explain("5 m + 3 s", true); code == 0 {
+	if out, code := explain("5 m + 3 s", true, plain); code == 0 {
 		t.Errorf("want non-zero exit, got %q", out)
 	}
 }
@@ -278,5 +278,50 @@ func TestSheetTraceReachesAcrossLines(t *testing.T) {
 		if !strings.Contains(tree, want) {
 			t.Errorf("trace missing %q:\n%s", want, tree)
 		}
+	}
+}
+
+func TestWhyPrintsTheWrongPrintedDigits(t *testing.T) {
+	out, code := explain("12345678901234567890 + 1", true, plain)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	for _, want := range []string{"proven:  12345678901234567891", "printed in full, float64 gives 12345678901234567168", "wrong in its last 3 digits"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("why missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Count(out, "float64 gives") != 1 {
+		t.Errorf("why repeats itself:\n%s", out)
+	}
+}
+
+func TestWhyOnAnUnmodelledExpressionSaysSo(t *testing.T) {
+	out, code := explain("20 degC to K", true, plain)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if !strings.Contains(out, "no float64 shadow") {
+		t.Errorf("out = %q", out)
+	}
+}
+
+func TestOneShotWarnsAboutAWrongPrintedInteger(t *testing.T) {
+	out, code := run([]string{"123456789 * 123456789"}, plain, false)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if !strings.Contains(out, "15241578750190521") {
+		t.Errorf("out = %q, want the proven product", out)
+	}
+	if !strings.Contains(out, "float64 gives 15241578750190520 here; the last digit is wrong") {
+		t.Errorf("out = %q, want the specific integer warning", out)
+	}
+	quiet, code := run([]string{"12345 * 12345"}, plain, false)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, quiet)
+	}
+	if strings.Contains(quiet, "float64") {
+		t.Errorf("out = %q, want a small exact product to stay silent", quiet)
 	}
 }
