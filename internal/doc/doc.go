@@ -5,6 +5,7 @@ import (
 
 	"github.com/rahuldr07/go-calc/internal/eval"
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
 
@@ -26,7 +27,9 @@ type entry struct {
 	parseErr error
 	def      string
 	params   []string
+	corr     []string
 	refs     []string
+	units    []string
 	deps     []int
 	fwd      []string
 	cyclic   bool
@@ -38,11 +41,12 @@ type entry struct {
 type Doc struct {
 	lines     []*entry
 	defs      map[string][]int
+	table     *unc.Table
 	evaluator func(*eval.Env, parse.Node) (value.Value, error)
 }
 
 func New() *Doc {
-	return &Doc{defs: map[string][]int{}, evaluator: evalNode}
+	return &Doc{defs: map[string][]int{}, table: unc.NewTable(), evaluator: evalNode}
 }
 
 func evalNode(env *eval.Env, n parse.Node) (value.Value, error) { return env.Eval(n) }
@@ -127,9 +131,14 @@ func read(src string) *entry {
 	}
 	e.node, e.notes = node, notes
 	if a, ok := node.(*parse.Assign); ok {
-		e.def, e.params = a.Name, a.Params
+		if a.Name == "corr" && len(a.Params) == 2 {
+			e.corr = a.Params
+		} else {
+			e.def, e.params = a.Name, a.Params
+		}
 	}
-	e.refs = freeNames(node, nil, nil)
+	e.refs = append(freeNames(node, nil, nil), e.corr...)
+	e.units = unitNames(node, nil, nil)
 	return e
 }
 
@@ -165,7 +174,8 @@ func (d *Doc) brokenInputs(i int) error {
 }
 
 func (d *Doc) env(i int) *eval.Env {
-	env := eval.NewEnv()
+	env := eval.NewEnvWith(d.table)
+	env.SetLine(i + 1)
 	for _, j := range d.lines[i].deps {
 		bind(env, d.lines[j])
 	}
@@ -176,7 +186,7 @@ func bind(env *eval.Env, e *entry) {
 	if e.node == nil || e.err != nil {
 		return
 	}
-	if len(e.params) > 0 {
+	if len(e.params) > 0 || len(e.corr) == 2 {
 		_, _ = env.Eval(e.node)
 		return
 	}

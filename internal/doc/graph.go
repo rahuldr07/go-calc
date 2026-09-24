@@ -134,6 +134,19 @@ func (d *Doc) depsOf(from int) ([]int, []string) {
 		}
 	}
 	expand(d.lines[from].refs)
+	for _, name := range d.lines[from].units {
+		if at, ok := d.resolve(name, from); ok && at < from {
+			expand([]string{name})
+		}
+	}
+	if len(d.lines[from].corr) == 0 {
+		for j := 0; j < from; j++ {
+			c := d.lines[j].corr
+			if len(c) == 2 && (settled[c[0]] || settled[c[1]]) {
+				reached[j] = true
+			}
+		}
+	}
 	deps := make([]int, 0, len(reached))
 	for i := range reached {
 		deps = append(deps, i)
@@ -229,4 +242,27 @@ func joinInts(xs []int) string {
 		parts[i] = strconv.Itoa(x)
 	}
 	return strings.Join(parts, ", ")
+}
+
+func unitNames(n parse.Node, bound map[string]bool, out []string) []string {
+	switch t := n.(type) {
+	case *parse.Unary:
+		out = unitNames(t.X, bound, out)
+	case *parse.Binary:
+		out = unitNames(t.L, bound, out)
+		if !unitOperand(t) {
+			out = unitNames(t.R, bound, out)
+			break
+		}
+		if name, ok := t.R.(*parse.Name); ok && t.Implicit && !bound[name.Text] {
+			out = append(out, name.Text)
+		}
+	case *parse.Call:
+		for _, a := range t.Args {
+			out = unitNames(a, bound, out)
+		}
+	case *parse.Assign:
+		out = unitNames(t.Body, withParams(bound, t.Params), out)
+	}
+	return out
 }

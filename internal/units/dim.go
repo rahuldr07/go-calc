@@ -72,3 +72,14 @@ const (
 	Absolute Kind = iota
 	Difference
 )
+
+func (d Dim) Half() (Dim, bool) {
+	var out Dim
+	for i, e := range d {
+		if e%2 != 0 {
+			return Dim{}, false
+		}
+		out[i] = e / 2
+	}
+	return out, true
+}

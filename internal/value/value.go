@@ -2,6 +2,7 @@ package value
 
 import (
 	"github.com/rahuldr07/go-calc/internal/num"
+	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/units"
 )
 
@@ -12,7 +13,19 @@ type Value struct {
 	Factor  num.Exact
 	Offset  num.Exact
 	Stopped Stop
+	Sens    unc.Sens
+	Curv    unc.Curv
+	Unc     unc.Report
 }
+
+func (v Value) Jet() unc.Jet { return unc.Jet{Grad: v.Sens, Hess: v.Curv} }
+
+func (v Value) WithJet(j unc.Jet) Value {
+	v.Sens, v.Curv, v.Unc = j.Grad, j.Hess, unc.Report{}
+	return v
+}
+
+func (v Value) IsMeasured() bool { return len(v.Sens) > 0 }
 
 func Scalar(n num.Exact) Value { return ScalarNum(num.NumExact(n)) }
 

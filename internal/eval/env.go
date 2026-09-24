@@ -2,6 +2,7 @@ package eval
 
 import (
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
 
@@ -13,10 +14,27 @@ type fn struct {
 type Env struct {
 	vars  map[string]value.Value
 	funcs map[string]fn
+	table *unc.Table
+	line  int
 }
 
-func NewEnv() *Env {
-	return &Env{vars: map[string]value.Value{}, funcs: map[string]fn{}}
+func NewEnv() *Env { return NewEnvWith(unc.NewTable()) }
+
+func NewEnvWith(t *unc.Table) *Env {
+	if t == nil {
+		t = unc.NewTable()
+	}
+	return &Env{vars: map[string]value.Value{}, funcs: map[string]fn{}, table: t}
+}
+
+func (e *Env) Table() *unc.Table { return e.table }
+
+func (e *Env) SetLine(n int) { e.line = n }
+
+func (e *Env) Uncertainty(v value.Value) float64 { return e.table.Combined(v.Sens) }
+
+func (e *Env) Contributions(v value.Value) []unc.Contribution {
+	return e.table.Contributions(v.Sens)
 }
 
 func (e *Env) Set(name string, v value.Value) { e.vars[name] = v }
@@ -27,7 +45,8 @@ func (e *Env) Get(name string) (value.Value, bool) {
 }
 
 func (e *Env) child() *Env {
-	c := NewEnv()
+	c := NewEnvWith(e.table)
+	c.line = e.line
 	for k, v := range e.vars {
 		c.vars[k] = v
 	}

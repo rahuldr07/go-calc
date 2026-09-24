@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
 
@@ -22,12 +23,13 @@ func DefaultCtx() *Ctx {
 type pass struct {
 	ctx       *Ctx
 	uncertain bool
+	naming    string
 }
 
 func (p *pass) prec() uint { return p.ctx.Prec }
 
 func (p *pass) note(v value.Value) value.Value {
-	if !v.Num.IsExact() {
+	if !v.Num.IsExact() || v.IsMeasured() {
 		p.uncertain = true
 	}
 	return v
@@ -36,6 +38,29 @@ func (p *pass) note(v value.Value) value.Value {
 func (e *Env) Eval(n parse.Node) (value.Value, error) { return e.EvalCtx(n, DefaultCtx()) }
 
 func (e *Env) EvalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
+	v, err := e.evalCtx(n, ctx)
+	if err != nil {
+		return value.Value{}, err
+	}
+	return e.report(v)
+}
+
+func (e *Env) report(v value.Value) (value.Value, error) {
+	if !v.IsMeasured() {
+		return v, nil
+	}
+	if err := e.table.Check(v.Sens); err != nil {
+		return value.Value{}, err
+	}
+	v.Unc.Sigma = e.table.Combined(v.Sens)
+	v.Unc.Budget = e.table.Contributions(v.Sens)
+	if e.table.Nonlinear(v.Sens, v.Curv) {
+		v.Unc.Warning = unc.NonlinearWarning
+	}
+	return v, nil
+}
+
+func (e *Env) evalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
 	if ctx == nil {
 		ctx = DefaultCtx()
 	}

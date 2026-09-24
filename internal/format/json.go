@@ -2,6 +2,7 @@ package format
 
 import (
 	"encoding/json"
+	"math"
 	"math/big"
 
 	"github.com/rahuldr07/go-calc/internal/num"
@@ -25,12 +26,30 @@ type valueOut struct {
 	Capped  bool   `json:"capped,omitempty"`
 }
 
+type contributionOut struct {
+	Name        string  `json:"name"`
+	Share       float64 `json:"share"`
+	Sigma       float64 `json:"sigma"`
+	Sensitivity float64 `json:"sensitivity"`
+}
+
+type uncertaintyOut struct {
+	Value    string            `json:"value"`
+	Reported string            `json:"reported"`
+	Standard float64           `json:"standard"`
+	Coverage string            `json:"coverage,omitempty"`
+	Factor   float64           `json:"factor,omitempty"`
+	Budget   []contributionOut `json:"budget,omitempty"`
+	Warning  string            `json:"warning,omitempty"`
+}
+
 type result struct {
-	Schema string   `json:"schema"`
-	Input  string   `json:"input"`
-	Value  valueOut `json:"value"`
-	Unit   *unitOut `json:"unit,omitempty"`
-	Notes  []string `json:"notes,omitempty"`
+	Schema      string          `json:"schema"`
+	Input       string          `json:"input"`
+	Value       valueOut        `json:"value"`
+	Unit        *unitOut        `json:"unit,omitempty"`
+	Uncertainty *uncertaintyOut `json:"uncertainty,omitempty"`
+	Notes       []string        `json:"notes,omitempty"`
 }
 
 var dimKeys = [8]string{"L", "M", "T", "I", "Θ", "N", "J", "B"}
@@ -50,7 +69,7 @@ func JSON(input string, v value.Value, notes []parse.Note) ([]byte, error) {
 		out.Ball = v.Num.String()
 		out.Decimal, out.Digits = Default.provenBall(b)
 	}
-	r := result{Schema: Schema, Input: input, Value: out, Notes: msgs}
+	r := result{Schema: Schema, Input: input, Value: out, Notes: msgs, Uncertainty: uncertainty(v)}
 	if v.Unit != "" {
 		dims := map[string]int{}
 		for i, e := range v.Dim {
@@ -84,4 +103,32 @@ func (s Style) provenExact(r *big.Rat) (string, int) {
 		return text, exactSignificantDigits(r)
 	}
 	return text, s.digitBudget()
+}
+
+func uncertainty(v value.Value) *uncertaintyOut {
+	mid, reported, ok := Default.Uncertain(v)
+	if !ok {
+		return nil
+	}
+	scale := 1.0
+	if f, _ := v.FactorOrOne().Rat().Float64(); f != 0 {
+		scale = math.Abs(f)
+	}
+	out := &uncertaintyOut{
+		Value:    mid,
+		Reported: reported,
+		Standard: v.Unc.Sigma / scale,
+		Coverage: v.Unc.Cover.Label,
+		Factor:   v.Unc.Cover.K,
+		Warning:  v.Unc.Warning,
+	}
+	for _, c := range v.Unc.Budget {
+		out.Budget = append(out.Budget, contributionOut{
+			Name:        c.Name,
+			Share:       c.Share,
+			Sigma:       c.Sigma,
+			Sensitivity: c.Sensitivity,
+		})
+	}
+	return out
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rahuldr07/go-calc/internal/num"
+	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/units"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
@@ -178,5 +179,67 @@ func TestJSONBallCarriesTheFractionSeparately(t *testing.T) {
 	}
 	if strings.Contains(string(b), "≈") {
 		t.Errorf("JSON = %s, the approximation marker belongs in text output only", b)
+	}
+}
+
+func measuredValue(t *testing.T, mid string, sigma float64) value.Value {
+	t.Helper()
+	v := value.Scalar(mustRat(t, mid))
+	v.Sens = unc.Sens{0: 1}
+	v.Unc = unc.Report{Sigma: sigma, Budget: []unc.Contribution{{Name: "h", Share: 1, Sigma: sigma, Sensitivity: 1}}}
+	return v
+}
+
+func TestUncertaintyRoundsToTwoSignificantDigits(t *testing.T) {
+	cases := []struct {
+		mid   string
+		sigma float64
+		want  string
+	}{
+		{"1.58382507996", 0.0012, "1.5838 ± 0.0012"},
+		{"1.58382507996", 0.0128765, "1.584 ± 0.013"},
+		{"1234.5678", 13, "1235 ± 13"},
+		{"1234.5678", 130, "1230 ± 130"},
+	}
+	for _, c := range cases {
+		if got := Text(measuredValue(t, c.mid, c.sigma), nil); got != c.want {
+			t.Errorf("%s ± %g = %q, want %q", c.mid, c.sigma, got, c.want)
+		}
+	}
+}
+
+func TestJSONCarriesTheBudget(t *testing.T) {
+	v := measuredValue(t, "1.584", 0.0128765)
+	b, err := JSON("t", v, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	u, ok := out["uncertainty"].(map[string]any)
+	if !ok {
+		t.Fatal("no uncertainty block")
+	}
+	if u["reported"] != "0.013" || u["value"] != "1.584" {
+		t.Errorf("uncertainty = %v", u)
+	}
+	budget, ok := u["budget"].([]any)
+	if !ok || len(budget) != 1 {
+		t.Fatalf("budget = %v", u["budget"])
+	}
+	if budget[0].(map[string]any)["name"] != "h" {
+		t.Errorf("budget entry = %v", budget[0])
+	}
+}
+
+func TestJSONOmitsUncertaintyWhenThereIsNone(t *testing.T) {
+	b, err := JSON("2", value.Scalar(mustRat(t, "2")), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "uncertainty") {
+		t.Errorf("uncertainty block appeared for an exact value: %s", b)
 	}
 }

@@ -2,6 +2,7 @@ package units
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/rahuldr07/go-calc/internal/num"
@@ -87,6 +88,13 @@ var binaryPrefixes = map[string]string{
 }
 
 func Lookup(sym string) (Unit, bool) {
+	if u, ok := simple(sym); ok {
+		return u, true
+	}
+	return composite(sym)
+}
+
+func simple(sym string) (Unit, bool) {
 	if u, ok := base[sym]; ok {
 		return u, true
 	}
@@ -115,6 +123,51 @@ func Lookup(sym string) (Unit, bool) {
 	return Unit{}, false
 }
 
+func composite(sym string) (Unit, bool) {
+	if !strings.ContainsAny(sym, "/·^") {
+		return Unit{}, false
+	}
+	out := Unit{Symbol: sym, Factor: num.FromInt(1), Offset: num.FromInt(0)}
+	for i, group := range strings.Split(sym, "/") {
+		sign := 1
+		if i > 0 {
+			sign = -1
+		}
+		group = strings.TrimSuffix(strings.TrimPrefix(group, "("), ")")
+		for _, term := range strings.Split(group, "·") {
+			if term == "1" {
+				continue
+			}
+			name, power, ok := splitPower(term)
+			if !ok {
+				return Unit{}, false
+			}
+			u, ok := simple(name)
+			if !ok || u.Offset.Sign() != 0 {
+				return Unit{}, false
+			}
+			out.Dim = out.Dim.Add(u.Dim.Scale(sign * power))
+			out.Factor = out.Factor.Mul(u.Factor.Pow(sign * power))
+		}
+	}
+	return out, true
+}
+
+func splitPower(term string) (string, int, bool) {
+	name, exp, found := strings.Cut(term, "^")
+	if name == "" {
+		return "", 0, false
+	}
+	if !found {
+		return name, 1, true
+	}
+	n, err := strconv.Atoi(exp)
+	if err != nil || n <= 0 {
+		return "", 0, false
+	}
+	return name, n, true
+}
+
 func Convert(v num.Exact, from, to Unit) (num.Exact, error) {
 	out, err := ConvertNumber(num.NumExact(v), from, to, 0)
 	if err != nil {
@@ -133,4 +186,41 @@ func ConvertNumber(v num.Number, from, to Unit, prec uint) (num.Number, error) {
 		return num.Number{}, err
 	}
 	return out, nil
+}
+
+var siSymbols = [8]string{"m", "kg", "s", "A", "K", "mol", "cd", "bit"}
+
+func SIUnit(d Dim) Unit {
+	return Unit{Symbol: SISymbol(d), Dim: d, Factor: num.FromInt(1), Offset: num.FromInt(0)}
+}
+
+func SISymbol(d Dim) string {
+	var pos, neg []string
+	for i, e := range d {
+		if e == 0 {
+			continue
+		}
+		mag := e
+		if mag < 0 {
+			mag = -mag
+		}
+		sym := siSymbols[i]
+		if mag > 1 {
+			sym += "^" + strconv.Itoa(mag)
+		}
+		if e > 0 {
+			pos = append(pos, sym)
+		} else {
+			neg = append(neg, sym)
+		}
+	}
+	switch {
+	case len(pos) == 0 && len(neg) == 0:
+		return ""
+	case len(pos) == 0:
+		return "1/" + strings.Join(neg, "·")
+	case len(neg) == 0:
+		return strings.Join(pos, "·")
+	}
+	return strings.Join(pos, "·") + "/" + strings.Join(neg, "·")
 }

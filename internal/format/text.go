@@ -23,12 +23,25 @@ func Text(v value.Value, notes []parse.Note) string { return Default.Text(v, not
 
 func (s Style) Text(v value.Value, notes []parse.Note) string {
 	var b strings.Builder
-	b.WriteString(s.Number(v))
-	if v.Unit != "" {
-		b.WriteString(" " + v.Unit)
+	if mid, u, ok := s.Uncertain(v); ok {
+		b.WriteString(mid + " ± " + u)
+		if v.Unit != "" {
+			b.WriteString(" " + v.Unit)
+		}
+		if label := v.Unc.Cover.Label; label != "" {
+			b.WriteString(" (" + label + ")")
+		}
+	} else {
+		b.WriteString(s.Number(v))
+		if v.Unit != "" {
+			b.WriteString(" " + v.Unit)
+		}
+		if note := s.precisionNote(v); note != "" {
+			b.WriteString("\n  " + note)
+		}
 	}
-	if note := s.precisionNote(v); note != "" {
-		b.WriteString("\n  " + note)
+	if v.Unc.Warning != "" {
+		b.WriteString("\n  " + v.Unc.Warning)
 	}
 	for _, n := range notes {
 		b.WriteString("\n  read as " + strings.TrimPrefix(n.Msg, "read as "))

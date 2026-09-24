@@ -450,3 +450,53 @@ func TestEditOutOfRangeChangesNothing(t *testing.T) {
 		t.Errorf("line 0 = %q, want 1", got)
 	}
 }
+
+func TestCorrelationDeclaredOnOneLineReachesALaterLine(t *testing.T) {
+	d := New()
+	lines := d.SetLines([]string{
+		"a = 10 ± 1",
+		"b = 10 ± 1",
+		"corr(a, b) = 1",
+		"a + b",
+	})
+	if got := numbers(lines)[3]; got != "20.0 ± 2.0" {
+		t.Errorf("a + b = %q, want 20.0 ± 2.0", got)
+	}
+}
+
+func TestEditingTheCorrelationReevaluatesWhatUsesIt(t *testing.T) {
+	d := New()
+	d.SetLines([]string{
+		"a = 10 ± 1",
+		"b = 10 ± 1",
+		"corr(a, b) = 1",
+		"a + b",
+	})
+	changed := d.Edit(2, "corr(a, b) = 0")
+	if !reflect.DeepEqual(indices(changed), []int{2, 3}) {
+		t.Errorf("changed lines = %v, want [2 3]", indices(changed))
+	}
+	if got := numbers(d.Lines())[3]; got != "20.0 ± 1.4" {
+		t.Errorf("a + b = %q, want 20.0 ± 1.4", got)
+	}
+}
+
+func TestMeasuredVariableBeatsAUnitName(t *testing.T) {
+	d := New()
+	lines := d.SetLines([]string{
+		"h = 12.3 ± 0.2 m",
+		"g = g0",
+		"t = sqrt(2h / g)",
+	})
+	if got := numbers(lines)[2]; got != "1.584 ± 0.013 s" {
+		t.Errorf("t = %q, want 1.584 ± 0.013 s", got)
+	}
+}
+
+func TestPlainVariableStillLosesToAUnitName(t *testing.T) {
+	d := New()
+	lines := d.SetLines([]string{"h = 3", "5 h"})
+	if got := numbers(lines)[1]; got != "5 h" {
+		t.Errorf("5 h = %q, want 5 h", got)
+	}
+}

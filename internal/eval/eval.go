@@ -2,6 +2,7 @@ package eval
 
 import (
 	"errors"
+	"math"
 	"math/big"
 	"strconv"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/rahuldr07/go-calc/internal/lex"
 	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/units"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
@@ -61,11 +63,19 @@ func (e *Env) evalName(t *parse.Name, p *pass) (value.Value, error) {
 }
 
 func (e *Env) evalAssign(t *parse.Assign, p *pass) (value.Value, error) {
+	if t.Name == "corr" && len(t.Params) == 2 {
+		return e.declareCorr(t, p)
+	}
 	if len(t.Params) > 0 {
 		e.funcs[t.Name] = fn{params: t.Params, body: t.Body}
 		return value.Scalar(num.FromInt(0)), nil
 	}
+	outer := p.naming
+	if countMeasurements(t.Body) == 1 {
+		p.naming = t.Name
+	}
 	v, err := e.eval(t.Body, p)
+	p.naming = outer
 	if err != nil {
 		return value.Value{}, err
 	}
@@ -145,36 +155,74 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		}
 		v := args[0]
 		v.Num = v.Num.Abs()
-		return v, nil, true
+		if !v.IsMeasured() {
+			return v, nil, true
+		}
+		x := siFloat(args[0], prec)
+		if x == 0 {
+			return fail("abs has no derivative at zero, so no uncertainty can be propagated")
+		}
+		return v.WithJet(unc.Unary(args[0].Jet(), math.Copysign(1, x), 0)), nil, true
 	case "sqrt":
 		if len(args) != 1 {
 			return fail("sqrt takes one argument")
 		}
-		if !args[0].IsScalar() {
-			return fail("sqrt needs a plain number")
+		arg := args[0]
+		inner := arg.Num
+		var half units.Dim
+		if !arg.IsScalar() {
+			h, even := arg.Dim.Half()
+			if !even || arg.IsAffine() {
+				return fail("sqrt needs a plain number or a value whose dimensions are all even")
+			}
+			half, inner = h, arg.SI(prec)
 		}
-		if args[0].Num.IsExact() {
-			if r, ok := num.Root(args[0].Num.Exact(), 2); ok {
-				return value.Scalar(r), nil, true
+		wrap := func(n num.Number, j unc.Jet) value.Value {
+			if half.IsNone() {
+				return value.ScalarNum(n).WithJet(j)
+			}
+			return value.WithUnitNum(n, units.SIUnit(half)).WithJet(j)
+		}
+		if inner.IsExact() {
+			if r, ok := num.Root(inner.Exact(), 2); ok {
+				j, err := elemJet("sqrt", arg.Jet(), siFloat(arg, prec), exactFloat(r))
+				if err != nil {
+					return fail("sqrt: " + err.Error())
+				}
+				return wrap(num.NumExact(r), j), nil, true
 			}
 		}
-		b, err := elem.Sqrt(args[0].Num.Ball(prec), prec)
+		b, err := elem.Sqrt(inner.Ball(prec), prec)
 		if err != nil {
 			return fail("sqrt: " + err.Error())
 		}
-		return value.ScalarNum(num.NumBall(b)), nil, true
+		j, err := elemJet("sqrt", arg.Jet(), siFloat(arg, prec), numFloat(num.NumBall(b), prec))
+		if err != nil {
+			return fail("sqrt: " + err.Error())
+		}
+		return wrap(num.NumBall(b), j), nil, true
 	case "root":
 		if len(args) != 2 || !isWhole(args[1]) {
 			return fail("root takes a value and a whole degree")
+		}
+		if args[1].IsMeasured() {
+			return fail("the degree of a root must be an exact whole number")
 		}
 		whole := args[1].Num.Exact().Rat().Num()
 		if !whole.IsInt64() || whole.Int64() <= 0 || whole.Int64() > maxDegree {
 			return fail("root needs a degree between 1 and " + strconv.Itoa(maxDegree))
 		}
 		degree := int(whole.Int64())
+		rootJet := func() (unc.Jet, error) {
+			return powerJet(args[0].Jet(), unc.Jet{}, siFloat(args[0], prec), 1/float64(degree))
+		}
 		if args[0].Num.IsExact() {
 			if r, ok := num.Root(args[0].Num.Exact(), degree); ok {
-				return value.Scalar(r), nil, true
+				j, err := rootJet()
+				if err != nil {
+					return fail("root: " + err.Error())
+				}
+				return value.Scalar(r).WithJet(j), nil, true
 			}
 		}
 		if !args[0].IsScalar() {
@@ -184,7 +232,11 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		if err != nil {
 			return fail("root: " + err.Error())
 		}
-		return value.ScalarNum(num.NumBall(b)), nil, true
+		j, err := rootJet()
+		if err != nil {
+			return fail("root: " + err.Error())
+		}
+		return value.ScalarNum(num.NumBall(b)).WithJet(j), nil, true
 	case "atan2":
 		if len(args) != 2 || !args[0].IsScalar() || !args[1].IsScalar() {
 			return fail("atan2 takes two plain numbers")
@@ -193,16 +245,29 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		if err != nil {
 			return fail("atan2: " + err.Error())
 		}
-		return angleOut(b, p, fail)
+		j, err := atan2Jet(args[0].Jet(), args[1].Jet(), siFloat(args[0], prec), siFloat(args[1], prec))
+		if err != nil {
+			return fail("atan2: " + err.Error())
+		}
+		return angleOut(b, j, p, fail)
+	case "expand":
+		v, err := e.expand(t, args, p)
+		return v, err, true
 	case "floor", "ceil", "round":
 		if len(args) != 1 {
 			return fail(t.Fn + " takes one argument")
+		}
+		if args[0].IsMeasured() {
+			return value.Value{}, cannotPropagate(t.P, t.Fn), true
 		}
 		if !args[0].Num.IsExact() {
 			return fail(t.Fn + " needs an exact value")
 		}
 		return value.Scalar(roundTo(args[0].Num.Exact(), t.Fn)), nil, true
 	case "gcd", "lcm":
+		if measured(args...) {
+			return value.Value{}, cannotPropagate(t.P, t.Fn), true
+		}
 		if len(args) != 2 || !isWhole(args[0]) || !isWhole(args[1]) {
 			return fail(t.Fn + " takes two whole numbers")
 		}
@@ -218,6 +283,9 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		l := new(big.Int).Div(new(big.Int).Abs(new(big.Int).Mul(a, b)), g)
 		return value.Scalar(num.FromRat(new(big.Rat).SetInt(l))), nil, true
 	case "isprime":
+		if measured(args...) {
+			return value.Value{}, cannotPropagate(t.P, t.Fn), true
+		}
 		if len(args) != 1 || !isWhole(args[0]) {
 			return fail("isprime takes a whole number")
 		}
@@ -238,7 +306,11 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		if err != nil {
 			return fail(t.Fn + ": " + err.Error())
 		}
-		return value.ScalarNum(num.NumBall(b)), nil, true
+		j, err := elemJet(t.Fn, args[0].Jet(), siFloat(args[0], prec), numFloat(num.NumBall(b), prec))
+		if err != nil {
+			return fail(t.Fn + ": " + err.Error())
+		}
+		return value.ScalarNum(num.NumBall(b)).WithJet(j), nil, true
 	}
 	if f, ok := radianIn[t.Fn]; ok {
 		if len(args) != 1 {
@@ -248,17 +320,25 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		if err != nil {
 			return fail(err.Error())
 		}
+		jet := args[0].Jet()
+		angle := siFloat(args[0], prec)
 		if p.ctx.Degrees {
 			x, err = degreesToRadians(x, prec)
 			if err != nil {
 				return fail(t.Fn + ": " + err.Error())
 			}
+			jet = unc.Unary(jet, math.Pi/180, 0)
+			angle = angle * math.Pi / 180
 		}
 		b, err := f(x, prec)
 		if err != nil {
 			return fail(t.Fn + ": " + err.Error())
 		}
-		return value.ScalarNum(num.NumBall(b)), nil, true
+		j, err := elemJet(t.Fn, jet, angle, numFloat(num.NumBall(b), prec))
+		if err != nil {
+			return fail(t.Fn + ": " + err.Error())
+		}
+		return value.ScalarNum(num.NumBall(b)).WithJet(j), nil, true
 	}
 	if f, ok := radianOut[t.Fn]; ok {
 		if len(args) != 1 {
@@ -272,20 +352,25 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		if err != nil {
 			return fail(t.Fn + ": " + err.Error())
 		}
-		return angleOut(b, p, fail)
+		j, err := elemJet(t.Fn, args[0].Jet(), siFloat(args[0], prec), numFloat(num.NumBall(b), prec))
+		if err != nil {
+			return fail(t.Fn + ": " + err.Error())
+		}
+		return angleOut(b, j, p, fail)
 	}
 	return value.Value{}, nil, false
 }
 
-func angleOut(b num.Ball, p *pass, fail func(string) (value.Value, error, bool)) (value.Value, error, bool) {
+func angleOut(b num.Ball, j unc.Jet, p *pass, fail func(string) (value.Value, error, bool)) (value.Value, error, bool) {
 	if p.ctx.Degrees {
 		converted, err := radiansToDegrees(b, p.prec())
 		if err != nil {
 			return fail(err.Error())
 		}
 		b = converted
+		j = unc.Unary(j, 180/math.Pi, 0)
 	}
-	return value.ScalarNum(num.NumBall(b)), nil, true
+	return value.ScalarNum(num.NumBall(b)).WithJet(j), nil, true
 }
 
 func isWhole(v value.Value) bool {
@@ -344,7 +429,7 @@ func (e *Env) evalUnary(t *parse.Unary, p *pass) (value.Value, error) {
 	switch t.Op {
 	case "-":
 		x.Num = x.Num.Neg()
-		return x, nil
+		return x.WithJet(unc.Unary(x.Jet(), -1, 0)), nil
 	case "%":
 		if !x.IsScalar() {
 			return value.Value{}, &lex.Error{Pos: t.P, Msg: "percent needs a plain number"}
@@ -353,8 +438,11 @@ func (e *Env) evalUnary(t *parse.Unary, p *pass) (value.Value, error) {
 		if err != nil {
 			return value.Value{}, err
 		}
-		return value.ScalarNum(q), nil
+		return value.ScalarNum(q).WithJet(unc.Unary(x.Jet(), 0.01, 0)), nil
 	case "!":
+		if x.IsMeasured() {
+			return value.Value{}, cannotPropagate(t.P, "factorial")
+		}
 		if !x.IsScalar() || !isWhole(x) || x.Num.Exact().Sign() < 0 {
 			return value.Value{}, &lex.Error{Pos: t.P, Msg: "factorial needs a whole number that is not negative"}
 		}
@@ -380,6 +468,9 @@ func (e *Env) evalBinary(t *parse.Binary, p *pass) (value.Value, error) {
 	if t.Op == "to" || t.Op == "in" {
 		return e.convert(t, p)
 	}
+	if t.Op == "±" || t.Op == "+-" {
+		return e.measure(t, p)
+	}
 	l, err := e.eval(t.L, p)
 	if err != nil {
 		return value.Value{}, err
@@ -396,14 +487,22 @@ func (e *Env) evalBinary(t *parse.Binary, p *pass) (value.Value, error) {
 		}
 		return addSub(t, l, r, prec)
 	case "*", "×", "·":
-		return combine(l, r, l.SI(prec).Mul(r.SI(prec), prec), l.Dim.Add(r.Dim), "·"), nil
+		out := combine(l, r, l.SI(prec).Mul(r.SI(prec), prec), l.Dim.Add(r.Dim), "·")
+		return out.WithJet(productJet(l, r, prec)), nil
 	case "/", "÷":
 		q, err := l.SI(prec).Div(r.SI(prec), prec)
 		if err != nil {
 			return value.Value{}, &lex.Error{Pos: t.P, Msg: divisionMessage(err)}
 		}
-		return combine(l, r, q, l.Dim.Sub(r.Dim), "/"), nil
+		j, err := quotientJet(l, r, prec)
+		if err != nil {
+			return value.Value{}, &lex.Error{Pos: t.P, Msg: "the divisor may be zero, so no uncertainty can be propagated"}
+		}
+		return combine(l, r, q, l.Dim.Sub(r.Dim), "/").WithJet(j), nil
 	case "mod":
+		if measured(l, r) {
+			return value.Value{}, cannotPropagate(t.P, "mod")
+		}
 		if !l.IsScalar() || !r.IsScalar() || !isWhole(l) || !isWhole(r) {
 			return value.Value{}, &lex.Error{Pos: t.P, Msg: "mod needs whole numbers"}
 		}
@@ -436,6 +535,10 @@ func power(t *parse.Binary, l, r value.Value, prec uint) (value.Value, error) {
 		if err != nil {
 			return value.Value{}, &lex.Error{Pos: t.P, Msg: err.Error()}
 		}
+		j, err := powerJet(l.Jet(), r.Jet(), siFloat(l, prec), float64(exp))
+		if err != nil {
+			return value.Value{}, &lex.Error{Pos: t.P, Msg: "power: " + err.Error()}
+		}
 		out := l
 		out.Num = raised
 		out.Dim = l.Dim.Scale(exp)
@@ -443,7 +546,7 @@ func power(t *parse.Binary, l, r value.Value, prec uint) (value.Value, error) {
 		if exp != 1 && l.Unit != "" {
 			out.Unit = l.Unit + "^" + r.Num.String()
 		}
-		return out, nil
+		return out.WithJet(j), nil
 	}
 	if !l.IsScalar() || !r.IsScalar() {
 		return value.Value{}, &lex.Error{Pos: t.P, Msg: "a value with units needs a whole exponent"}
@@ -452,12 +555,19 @@ func power(t *parse.Binary, l, r value.Value, prec uint) (value.Value, error) {
 	if err != nil {
 		return value.Value{}, &lex.Error{Pos: t.P, Msg: "power: " + err.Error()}
 	}
-	return value.ScalarNum(num.NumBall(b)), nil
+	j, err := powerJet(l.Jet(), r.Jet(), siFloat(l, prec), siFloat(r, prec))
+	if err != nil {
+		return value.Value{}, &lex.Error{Pos: t.P, Msg: "power: " + err.Error()}
+	}
+	return value.ScalarNum(num.NumBall(b)).WithJet(j), nil
 }
 
 func (e *Env) implicitUnit(t *parse.Binary, p *pass) (value.Value, error, bool) {
 	name, ok := t.R.(*parse.Name)
 	if !ok {
+		return value.Value{}, nil, false
+	}
+	if bound, ok := e.vars[name.Text]; ok && (!bound.IsScalar() || bound.IsMeasured()) {
 		return value.Value{}, nil, false
 	}
 	u, ok := units.Lookup(name.Text)
@@ -471,10 +581,11 @@ func (e *Env) implicitUnit(t *parse.Binary, p *pass) (value.Value, error, bool) 
 	if !l.IsScalar() {
 		return value.Value{}, &lex.Error{Pos: t.P, Msg: "cannot attach " + name.Text + " to a value that already has a unit"}, true
 	}
+	scaled := unc.Unary(l.Jet(), exactFloat(u.Factor), 0)
 	if u.Dim.IsNone() {
-		return value.ScalarNum(l.Num.Mul(num.NumExact(u.Factor), p.prec())), nil, true
+		return value.ScalarNum(l.Num.Mul(num.NumExact(u.Factor), p.prec())).WithJet(scaled), nil, true
 	}
-	return value.WithUnitNum(l.Num, u), nil, true
+	return value.WithUnitNum(l.Num, u).WithJet(scaled), nil, true
 }
 
 func addSub(t *parse.Binary, l, r value.Value, prec uint) (value.Value, error) {
@@ -486,7 +597,7 @@ func addSub(t *parse.Binary, l, r value.Value, prec uint) (value.Value, error) {
 		}
 		out := l
 		out.Num = l.Num.Mul(scale, prec)
-		return out, nil
+		return out.WithJet(percentJet(l, r, t.Op, prec)), nil
 	}
 	if l.Dim != r.Dim {
 		return value.Value{}, errors.New("cannot " + verbFor(t.Op) + " " + l.Dim.Words() + " (" + unitOrNone(l) + ") and " + r.Dim.Words() + " (" + unitOrNone(r) + ")")
@@ -501,7 +612,7 @@ func addSub(t *parse.Binary, l, r value.Value, prec uint) (value.Value, error) {
 	} else {
 		out.Num = l.Num.Add(rInL, prec)
 	}
-	return out, nil
+	return out.WithJet(sumJet(l, r, t.Op)), nil
 }
 
 func affineAddSub(t *parse.Binary, l, r value.Value, prec uint) (value.Value, error) {
@@ -521,7 +632,7 @@ func affineAddSub(t *parse.Binary, l, r value.Value, prec uint) (value.Value, er
 	} else {
 		out.Num = l.Num.Add(shift, prec)
 	}
-	return out, nil
+	return out.WithJet(sumJet(l, r, t.Op)), nil
 }
 
 func verbFor(op string) string {
@@ -581,5 +692,5 @@ func (e *Env) convert(t *parse.Binary, p *pass) (value.Value, error) {
 	if err != nil {
 		return value.Value{}, err
 	}
-	return value.WithUnitNum(out, to), nil
+	return value.WithUnitNum(out, to).WithJet(l.Jet()), nil
 }

@@ -1,6 +1,9 @@
 package parse
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/rahuldr07/go-calc/internal/lex"
 )
 
@@ -200,6 +203,9 @@ func (p *parser) parsePrimary() (Node, error) {
 	p.next()
 	switch t.Kind {
 	case lex.Num:
+		if n, ok := concise(t); ok {
+			return n, nil
+		}
 		return &NumLit{Text: t.Text, P: t.Pos}, nil
 	case lex.Ident:
 		if p.peek().Kind == lex.LParen {
@@ -238,4 +244,30 @@ func (p *parser) parsePrimary() (Node, error) {
 		return n, nil
 	}
 	return nil, p.errorAt(t, "unexpected "+t.Kind.String())
+}
+
+func concise(t lex.Token) (Node, bool) {
+	open := strings.IndexByte(t.Text, '(')
+	if open < 0 {
+		return nil, false
+	}
+	end := strings.IndexByte(t.Text, ')')
+	if end < open {
+		return nil, false
+	}
+	mantissa, spread, tail := t.Text[:open], t.Text[open+1:end], t.Text[end+1:]
+	scale := 0
+	if dot := strings.IndexByte(mantissa, '.'); dot >= 0 {
+		scale = -len(strings.ReplaceAll(mantissa[dot+1:], "_", ""))
+	}
+	if tail != "" {
+		n, err := strconv.Atoi(strings.TrimPrefix(tail[1:], "+"))
+		if err != nil {
+			return nil, false
+		}
+		scale += n
+	}
+	value := &NumLit{Text: mantissa + tail, P: t.Pos}
+	sigma := &NumLit{Text: spread + "e" + strconv.Itoa(scale), P: t.Pos}
+	return &Binary{Op: "±", L: value, R: sigma, P: t.Pos}, true
 }
