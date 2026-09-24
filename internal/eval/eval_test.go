@@ -2,10 +2,13 @@ package eval
 
 import (
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/rahuldr07/go-calc/internal/format"
+	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/value"
 )
 
 func run(t *testing.T, env *Env, src string) string {
@@ -206,5 +209,115 @@ func TestUnderscoresAndCommaGroupingCompose(t *testing.T) {
 		if got := run(t, env, c.src); got != c.want {
 			t.Errorf("%s = %s, want %s", c.src, got, c.want)
 		}
+	}
+}
+
+func TestRoundingKeepsTheUnitItRoundedIn(t *testing.T) {
+	env := NewEnv()
+	for _, c := range []struct {
+		src  string
+		want string
+		unit string
+	}{
+		{"floor(1.5 km)", "1 km", "km"},
+		{"ceil(1.5 km)", "2 km", "km"},
+		{"round(1.5 km)", "2 km", "km"},
+		{"floor(1500 m)", "1500 m", "m"},
+		{"floor(2.5 m/s)", "2 m/s", "m/s"},
+		{"floor(2 lakh in crore)", "0 crore", "crore"},
+		{"ceil(2 lakh in crore)", "1 crore", "crore"},
+		{"floor(3.7 degC)", "3 degC", "degC"},
+		{"ceil(3.2 degC)", "4 degC", "degC"},
+		{"round(3.5 degC)", "4 degC", "degC"},
+		{"floor(7/2)", "3", ""},
+		{"floor(1.5 lakh)", "150000", ""},
+	} {
+		v := mustEval(t, env, c.src)
+		if got := format.Text(v, nil); got != c.want {
+			t.Errorf("%s = %q, want %q", c.src, got, c.want)
+		}
+		if v.Unit != c.unit {
+			t.Errorf("%s kept unit %q, want %q", c.src, v.Unit, c.unit)
+		}
+		if c.unit == "" {
+			continue
+		}
+		operand := mustEval(t, env, strings.TrimSuffix(strings.SplitN(c.src, "(", 2)[1], ")"))
+		if v.Dim != operand.Dim || v.FactorOrOne().Cmp(operand.FactorOrOne()) != 0 || v.Offset.Cmp(operand.Offset) != 0 {
+			t.Errorf("%s changed the unit it rounded in: %v %v %v, want %v %v %v",
+				c.src, v.Dim, v.FactorOrOne(), v.Offset, operand.Dim, operand.FactorOrOne(), operand.Offset)
+		}
+	}
+}
+
+func TestRoundingCarriesItsUnitOneOperationFurtherOut(t *testing.T) {
+	env := NewEnv()
+	for _, c := range [][2]string{
+		{"floor(1.5 km) + (500 m)", "1.5 km"},
+		{"floor(1.5 km) in m", "1000 m"},
+		{"(floor(1.5 km)) ^ 2", "1 km^2"},
+		{"floor(floor(1.5 km))", "1 km"},
+		{"floor(1.5 km) - (1 km)", "0 km"},
+		{"(floor(1.5 km)) * 2", "2000 m"},
+		{"(floor(2 lakh in crore)) * 1", "0"},
+		{"(ceil(2 lakh in crore)) * 1", "10000000"},
+		{"ceil(2 lakh in crore) in lakh", "100 lakh"},
+		{"(floor(3.7 degC)) ^ 2", "76258.8225 K^2"},
+		{"floor(3.7 degC) + (1 K)", "4 degC"},
+		{"sqrt((floor(2 m)) ^ 2)", "2 m"},
+	} {
+		if got := format.Text(mustEval(t, env, c[0]), nil); got != c[1] {
+			t.Errorf("%s = %q, want %q", c[0], got, c[1])
+		}
+	}
+}
+
+func TestIntegerFunctionsRefuseAUnitCarryingOperand(t *testing.T) {
+	env := NewEnv()
+	for _, src := range []string{
+		"gcd(6 km, 4 km)", "gcd(4, 6 km)", "lcm(6 km, 4)", "lcm(4, 6 km)",
+		"isprime(7 m)", "isprime(3 degC)", "(6 km) mod 4", "4 mod (6 km)",
+		"isprime(2 lakh in crore)", "(2 lakh in crore) mod 3", "gcd(2 lakh in crore, 4)",
+		"gcd(3 degC, 4)", "(3 degC) mod 2",
+	} {
+		n, _, err := parse.Parse(src)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", src, err)
+		}
+		v, err := env.Eval(n)
+		if err == nil {
+			t.Errorf("%s was accepted and answered %s, want a refusal", src, format.Text(v, nil))
+			continue
+		}
+		if !strings.Contains(err.Error(), "plain") {
+			t.Errorf("%s was refused with %q, which does not say a plain number is needed", src, err)
+		}
+	}
+	for _, c := range [][2]string{
+		{"gcd(48, 18)", "6"},
+		{"lcm(4, 6)", "12"},
+		{"isprime(7)", "1"},
+		{"200000 mod 7", "3"},
+		{"gcd(2 lakh, 4)", "4"},
+		{"isprime(2 lakh)", "0"},
+		{"(2 lakh) mod 7", "3"},
+	} {
+		if got := format.Text(mustEval(t, env, c[0]), nil); got != c[1] {
+			t.Errorf("%s = %q, want %q", c[0], got, c[1])
+		}
+	}
+}
+
+func TestPlainNumberRejectsAScaleNoSymbolCarries(t *testing.T) {
+	scaled := value.Value{Num: num.NumExact(num.FromInt(3)), Factor: num.FromInt(1000)}
+	if plainNumber(scaled) {
+		t.Error("a value with no symbol but a scale of 1000 passed as a plain number")
+	}
+	shifted := value.Value{Num: num.NumExact(num.FromInt(3)), Factor: num.FromInt(1), Offset: num.FromInt(273)}
+	if plainNumber(shifted) {
+		t.Error("a value with no symbol but an offset passed as a plain number")
+	}
+	if !plainNumber(value.Scalar(num.FromInt(3))) {
+		t.Error("a plain 3 was refused as a plain number")
 	}
 }

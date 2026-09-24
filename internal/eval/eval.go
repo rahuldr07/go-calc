@@ -264,12 +264,20 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		if !args[0].Num.IsExact() {
 			return fail(t.Fn + " needs an exact value")
 		}
-		return value.Scalar(roundTo(args[0].Num.Exact(), t.Fn)), nil, true
+		out := args[0]
+		out.Num = num.NumExact(roundTo(args[0].Num.Exact(), t.Fn))
+		return out.WithJet(unc.Jet{}), nil, true
 	case "gcd", "lcm":
 		if measured(args...) {
 			return value.Value{}, cannotPropagate(t.P, t.Fn), true
 		}
-		if len(args) != 2 || !isWhole(args[0]) || !isWhole(args[1]) {
+		if len(args) != 2 {
+			return fail(t.Fn + " takes two whole numbers")
+		}
+		if !plainNumber(args[0]) || !plainNumber(args[1]) {
+			return fail(t.Fn + " needs plain numbers")
+		}
+		if !isWhole(args[0]) || !isWhole(args[1]) {
 			return fail(t.Fn + " takes two whole numbers")
 		}
 		a := args[0].Num.Exact().Rat().Num()
@@ -287,7 +295,13 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		if measured(args...) {
 			return value.Value{}, cannotPropagate(t.P, t.Fn), true
 		}
-		if len(args) != 1 || !isWhole(args[0]) {
+		if len(args) != 1 {
+			return fail("isprime takes a whole number")
+		}
+		if !plainNumber(args[0]) {
+			return fail("isprime needs a plain number")
+		}
+		if !isWhole(args[0]) {
 			return fail("isprime takes a whole number")
 		}
 		if args[0].Num.Exact().Rat().Num().ProbablyPrime(40) {
@@ -376,6 +390,10 @@ func angleOut(b num.Ball, j unc.Jet, p *pass, fail func(string) (value.Value, er
 
 func isWhole(v value.Value) bool {
 	return v.Num.IsExact() && v.Num.Exact().IsInt()
+}
+
+func plainNumber(v value.Value) bool {
+	return v.IsScalar() && v.FactorOrOne().Cmp(num.FromInt(1)) == 0 && v.Offset.Sign() == 0
 }
 
 func reciprocalBall(degree int, prec uint) num.Ball {
@@ -504,7 +522,10 @@ func (e *Env) evalBinary(t *parse.Binary, p *pass) (value.Value, error) {
 		if measured(l, r) {
 			return value.Value{}, cannotPropagate(t.P, "mod")
 		}
-		if !l.IsScalar() || !r.IsScalar() || !isWhole(l) || !isWhole(r) {
+		if !plainNumber(l) || !plainNumber(r) {
+			return value.Value{}, &lex.Error{Pos: t.P, Msg: "mod needs plain numbers"}
+		}
+		if !isWhole(l) || !isWhole(r) {
 			return value.Value{}, &lex.Error{Pos: t.P, Msg: "mod needs whole numbers"}
 		}
 		if r.Num.Exact().Sign() == 0 {
