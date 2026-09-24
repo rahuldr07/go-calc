@@ -95,9 +95,6 @@ func (e *Env) unitInPosition(t *parse.Name, p *pass) (value.Value, bool) {
 	if !asUnit {
 		return value.Value{}, false
 	}
-	if c, ok := consts.Lookup(t.Text); ok && !shadowed {
-		p.notes = append(p.notes, constantReadingNote(t, u, c))
-	}
 	e.record(t, p, prov.Node{Kind: prov.Unit, Label: t.Text, Detail: unitDetail(u)})
 	return value.WithUnit(num.FromInt(1), u), true
 }

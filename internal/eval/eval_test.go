@@ -348,23 +348,55 @@ func TestANameInUnitPositionIsAUnit(t *testing.T) {
 	}
 }
 
-func TestAUnitPositionReadingSaysWhichWayItWent(t *testing.T) {
-	env := NewEnv()
-	run(t, env, "60 km/h")
+func TestAnUnambiguousUnitPositionSaysNothing(t *testing.T) {
+	for _, src := range []string{
+		"60 km/h", "9.8 m/s^2", "1 J/(mol·K)", "60 km/hour", "100 km/h * 2 h",
+		"(60 km/h) / (2 h)", "h/km", "3 kW·h", "60 km/h to m/s",
+	} {
+		env := NewEnv()
+		run(t, env, src)
+		if notes := env.Notes(); len(notes) != 0 {
+			t.Errorf("%s left notes %v, want none: no reasonable reader meant the constant", src, notes)
+		}
+	}
+}
+
+func TestABoundNameInUnitPositionSaysWhichWayItWent(t *testing.T) {
+	plain := NewEnv()
+	run(t, plain, "h = 3")
+	run(t, plain, "5 h")
+	assertOneNote(t, plain, "5 h after h = 3", "read as the unit h (time), not the variable h; the variable is a plain number")
+
+	measured := NewEnv()
+	run(t, measured, "h = 12.3 ± 0.2 m")
+	run(t, measured, "2h")
+	assertOneNote(t, measured, "2h after a measured h", "read as the variable h, not the unit h (time); the variable carries a measured uncertainty")
+
+	carrying := NewEnv()
+	run(t, carrying, "h = 3 m")
+	run(t, carrying, "60 km/h")
+	assertOneNote(t, carrying, "60 km/h after h = 3 m", "read as the variable h, not the unit h (time); the variable already carries a unit")
+
+	divided := NewEnv()
+	run(t, divided, "h = 3")
+	run(t, divided, "60 km/h")
+	assertOneNote(t, divided, "60 km/h after h = 3", "read as the unit h (time), not the variable h; the variable is a plain number")
+
+	param := NewEnv()
+	run(t, param, "g(h) = 2 m / h")
+	run(t, param, "g(4)")
+	assertOneNote(t, param, "a parameter named like a unit", "read as the unit h (time), not the variable h; the variable is a plain number")
+}
+
+func assertOneNote(t *testing.T, env *Env, what, want string) {
+	t.Helper()
 	notes := env.Notes()
 	if len(notes) != 1 {
-		t.Fatalf("60 km/h left %d notes, want one saying how h was read", len(notes))
+		t.Errorf("%s left %d notes %v, want one", what, len(notes), notes)
+		return
 	}
-	if !strings.Contains(notes[0].Msg, "the unit h") || !strings.Contains(notes[0].Msg, "not the constant h") {
-		t.Errorf("note = %q, want it to say h was read as the unit, not the constant", notes[0].Msg)
-	}
-	if quiet := NewEnv(); len(quiet.Notes()) != 0 {
-		t.Error("a fresh environment already carries notes")
-	}
-	plain := NewEnv()
-	run(t, plain, "60 km/min")
-	if len(plain.Notes()) != 0 {
-		t.Errorf("60 km/min left notes %v, want none: min is only a unit", plain.Notes())
+	if notes[0].Msg != want {
+		t.Errorf("%s says %q, want %q", what, notes[0].Msg, want)
 	}
 }
 

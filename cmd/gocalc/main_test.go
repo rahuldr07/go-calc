@@ -348,16 +348,30 @@ func TestRunAnswersASpeedWithASpeed(t *testing.T) {
 	}
 }
 
-func TestRunSaysHowItReadAUnitItCouldHaveReadAsAConstant(t *testing.T) {
-	out, code := run([]string{"60 km/h"}, plain, false)
+func TestRunSaysNothingAboutAnUnambiguousUnit(t *testing.T) {
+	for _, src := range []string{"60 km/h", "9.8 m/s^2", "1 J/(mol·K)"} {
+		out, code := run([]string{src}, plain, false)
+		if code != 0 {
+			t.Fatalf("%s: exit %d: %s", src, code, out)
+		}
+		if strings.Contains(out, "read as") {
+			t.Errorf("%s = %q, want the answer alone", src, out)
+		}
+		if strings.Count(strings.TrimSpace(out), "\n") != 0 {
+			t.Errorf("%s = %q, want one line", src, out)
+		}
+	}
+}
+
+func TestRunStillSaysHowItReadABoundName(t *testing.T) {
+	sheet := doc.New()
+	lines := sheet.SetLines([]string{"h = 3", "5 h"})
+	out, code := render(lines[1], plain, false, sheet.Arena())
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
-	if !strings.Contains(out, "read as the unit h (time), not the constant h") {
+	if !strings.Contains(out, "read as the unit h (time), not the variable h") {
 		t.Errorf("out = %q, want the interpretation note", out)
-	}
-	if !strings.Contains(out, "m/s") {
-		t.Errorf("out = %q, want a speed", out)
 	}
 }
 
