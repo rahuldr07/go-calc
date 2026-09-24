@@ -545,7 +545,10 @@ func (e *Env) evalBinary(t *parse.Binary, p *pass) (value.Value, error) {
 			return affineAddSub(t, l, r, prec)
 		}
 		return addSub(t, l, r, prec)
-	case "*", "×", "·":
+	case "*", "×", "·", "of":
+		if v, ok := wearUnit(l, r); ok {
+			return v, nil
+		}
 		out := combine(l, r, l.SI(prec).Mul(r.SI(prec), prec), l.Dim.Add(r.Dim), "·")
 		return out.WithJet(productJet(l, r, prec)), nil
 	case "/", "÷":
@@ -683,6 +686,9 @@ func leftUnitPosition(t *parse.Binary, inherited bool) bool {
 }
 
 func rightUnitPosition(t *parse.Binary, inherited, leftWearsAUnit bool) bool {
+	if t.Implicit {
+		return true
+	}
 	return isProduct(t.Op) && (inherited || leftWearsAUnit || namesAUnit(t.L))
 }
 
@@ -743,6 +749,18 @@ func (e *Env) attachUnit(t *parse.Binary, l value.Value, p *pass) (value.Value, 
 		return value.ScalarNum(l.Num.Mul(num.NumExact(u.Factor), p.prec())).WithJet(scaled), nil, true
 	}
 	return value.WithUnitNum(l.Num, u).WithJet(scaled), nil, true
+}
+
+func wearUnit(l, r value.Value) (value.Value, bool) {
+	if !l.IsScalar() || l.IsMeasured() || r.IsMeasured() {
+		return value.Value{}, false
+	}
+	if r.Unit == "" || r.IsAffine() || !r.Num.IsExact() || r.Num.Exact().Cmp(num.FromInt(1)) != 0 {
+		return value.Value{}, false
+	}
+	out := r
+	out.Num = l.Num
+	return out.WithJet(unc.Unary(l.Jet(), exactFloat(r.FactorOrOne()), 0)), true
 }
 
 func addSub(t *parse.Binary, l, r value.Value, prec uint) (value.Value, error) {

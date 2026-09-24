@@ -234,7 +234,10 @@ func (s *shadowPass) binary(t *parse.Binary, sc scope, depth int) (shown, bool) 
 			return l.rescaled(l.num*(1+signOf(t.Op)*r.si()), l.factor), true
 		}
 		return s.sum(t, l, r)
-	case "*", "×", "·":
+	case "*", "×", "·", "of":
+		if x, ok := worn(l, r); ok {
+			return x, true
+		}
 		return joined(l.si()*r.si(), l.dim.Add(r.dim)), true
 	case "/", "÷":
 		return joined(l.si()/r.si(), l.dim.Sub(r.dim)), true
@@ -251,6 +254,13 @@ func (s *shadowPass) binary(t *parse.Binary, sc scope, depth int) (shown, bool) 
 		return plain(m), true
 	}
 	return shown{}, false
+}
+
+func worn(l, r shown) (shown, bool) {
+	if !l.dimless() || l.factor != 1 || r.dimless() || r.num != 1 {
+		return shown{}, false
+	}
+	return wearing(l.num, r.factor, r.dim), true
 }
 
 func joined(x float64, dim units.Dim) shown {

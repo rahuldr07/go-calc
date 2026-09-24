@@ -13,16 +13,25 @@ func parseOK(t *testing.T, src string) Node {
 
 func TestPrecedence(t *testing.T) {
 	cases := map[string]string{
-		"1 + 2 * 3": "(1 + (2 * 3))",
-		"2 ^ 3 ^ 2": "(2 ^ (3 ^ 2))",
-		"-2 ^ 2":    "(-(2 ^ 2))",
-		"2x":        "(2 * x)",
-		"2(x + 1)":  "(2 * (x + 1))",
-		"1/2x":      "((1 / 2) * x)",
-		"5 m + 3 s": "((5 * m) + (3 * s))",
-		"17 mod 5":  "(17 mod 5)",
-		"500 + 10%": "(500 + (10 %))",
-		"3 km to m": "((3 * km) to m)",
+		"1 + 2 * 3":       "(1 + (2 * 3))",
+		"2 ^ 3 ^ 2":       "(2 ^ (3 ^ 2))",
+		"-2 ^ 2":          "(-(2 ^ 2))",
+		"2x":              "(2 * x)",
+		"2(x + 1)":        "(2 * (x + 1))",
+		"1/2x":            "(1 / (2 * x))",
+		"2 m^2":           "(2 * (m ^ 2))",
+		"2 pi^2":          "(2 * (pi ^ 2))",
+		"2 (3)^2":         "(2 * (3 ^ 2))",
+		"2^2 m":           "((2 ^ 2) * m)",
+		"100 km / 2 h":    "((100 * km) / (2 * h))",
+		"60 km/h":         "((60 * km) / h)",
+		"9.8 m/s^2":       "((9.8 * m) / (s ^ 2))",
+		"3 m / 2 s / 4 s": "(((3 * m) / (2 * s)) / (4 * s))",
+		"18% of 500":      "((18 %) of 500)",
+		"5 m + 3 s":       "((5 * m) + (3 * s))",
+		"17 mod 5":        "(17 mod 5)",
+		"500 + 10%":       "(500 + (10 %))",
+		"3 km to m":       "((3 * km) to m)",
 	}
 	for src, want := range cases {
 		if got := parseOK(t, src).String(); got != want {
@@ -39,7 +48,7 @@ func TestImplicitOverDivisionEmitsNote(t *testing.T) {
 	if len(notes) != 1 {
 		t.Fatalf("got %d notes, want 1", len(notes))
 	}
-	if notes[0].Msg != "read as (1/2)·x" {
+	if notes[0].Msg != "read as 1/(2·x)" {
 		t.Errorf("note = %q", notes[0].Msg)
 	}
 }
@@ -92,4 +101,67 @@ func FuzzParse(f *testing.F) {
 			t.Fatalf("round trip: %q then %q", printed, again.String())
 		}
 	})
+}
+
+var implicitOperands = []string{"m", "km", "pi", "x", "(x + 1)", "sqrt(x)", "(2)"}
+
+var implicitNumerals = []string{"2", "0.5", "1e3", "100"}
+
+var implicitExponents = []string{"2", "3", "-1", "0"}
+
+func TestPowerBindsTighterThanImplicitMultiplication(t *testing.T) {
+	for _, n := range implicitNumerals {
+		for _, operand := range implicitOperands {
+			for _, k := range implicitExponents {
+				src := n + " " + operand + "^" + k
+				want := parseOK(t, n+" * ("+operand+"^"+k+")").String()
+				if got := parseOK(t, src).String(); got != want {
+					t.Errorf("Parse(%q) = %s, want %s", src, got, want)
+				}
+			}
+		}
+	}
+}
+
+func TestANumeralTermAfterDivisionStaysInTheDenominator(t *testing.T) {
+	for _, n := range implicitNumerals {
+		for _, operand := range implicitOperands {
+			for _, tail := range []string{"", "^2", "^-1"} {
+				src := "100 W / " + n + " " + operand + tail
+				want := parseOK(t, "100 W / ("+n+" * ("+operand+tail+"))").String()
+				if got := parseOK(t, src).String(); got != want {
+					t.Errorf("Parse(%q) = %s, want %s", src, got, want)
+				}
+			}
+		}
+	}
+}
+
+func TestEveryRegroupingIsAnnounced(t *testing.T) {
+	quiet := []string{"2 m", "60 km/h", "9.8 m/s^2", "1 J/(mol K)", "2 (m^2)", "3 m/(2 s)", "2^2 m", "1 + 2 * 3"}
+	for _, src := range quiet {
+		_, notes, err := Parse(src)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", src, err)
+		}
+		if len(notes) != 0 {
+			t.Errorf("Parse(%q) announced %v, want silence", src, notes)
+		}
+	}
+	loud := map[string]string{
+		"2 m^2":           "read as 2·(m^2)",
+		"100 km / 2 h":    "read as (100·km)/(2·h)",
+		"100 W / 2 m^2":   "read as (100·W)/(2·(m^2))",
+		"3 m / 2 s / 4 s": "read as ((3·m)/(2·s))/(4·s)",
+		"1/2x":            "read as 1/(2·x)",
+	}
+	for src, want := range loud {
+		_, notes, err := Parse(src)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", src, err)
+		}
+		if len(notes) != 1 || notes[0].Msg != want {
+			t.Errorf("Parse(%q) announced %v, want %q", src, notes, want)
+		}
+	}
 }

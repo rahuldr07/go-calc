@@ -1,6 +1,7 @@
 package doc
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -435,7 +436,7 @@ func TestNotesTravelWithTheLine(t *testing.T) {
 	if len(lines[0].Notes) == 0 {
 		t.Fatal("want an interpretation note")
 	}
-	if !strings.Contains(format.Default.Text(lines[0].Value, lines[0].Notes), "read as (1/2)·m") {
+	if !strings.Contains(format.Default.Text(lines[0].Value, lines[0].Notes), "read as 1/(2·m)") {
 		t.Errorf("notes = %v", lines[0].Notes)
 	}
 }
@@ -646,4 +647,80 @@ func TestAUnitNameDefinedAboveStillLinksTheLine(t *testing.T) {
 	if got := numbers(d.Lines())[1]; !strings.Contains(got, "±") {
 		t.Errorf("after h became a measurement, 60 km/h = %q, want the variable reading", got)
 	}
+}
+
+var implicitShapes = []struct{ src, same string }{
+	{"2 m^2", "2 * (m^2)"},
+	{"2 km^2", "2 * (km^2)"},
+	{"0.5 s^-1", "0.5 * (s^-1)"},
+	{"2 pi^2", "2 * (pi^2)"},
+	{"3 x^2", "3 * (x^2)"},
+	{"2 (x + 1)^2", "2 * ((x + 1)^2)"},
+	{"2 sqrt(x)^2", "2 * (sqrt(x)^2)"},
+	{"100 km / 2 h", "(100 * km) / (2 * h)"},
+	{"3 m / 2 s / 4 s", "((3 * m) / (2 * s)) / (4 * s)"},
+	{"100 W / 2 m^2", "(100 * W) / (2 * (m^2))"},
+	{"1 / 2 x", "1 / (2 * x)"},
+	{"60 km/h", "(60 * km) / h"},
+	{"9.8 m/s^2", "(9.8 * m) / (s^2)"},
+	{"3 m^2 + 1 m^2", "(3 * (m^2)) + (1 * (m^2))"},
+}
+
+func TestImplicitProductsReadAsTheirExplicitGrouping(t *testing.T) {
+	for _, c := range implicitShapes {
+		got := numbers(New().SetLines([]string{"x = 3", c.src}))[1]
+		want := numbers(New().SetLines([]string{"x = 3", c.same}))[1]
+		if got != want {
+			t.Errorf("%q = %q, want %q (the reading of %q)", c.src, got, want, c.same)
+		}
+	}
+}
+
+func TestImplicitProductsReadTheSameThroughAVariable(t *testing.T) {
+	for _, c := range implicitShapes {
+		got := numbers(New().SetLines([]string{"x = 3", "q = " + c.src, "q"}))[2]
+		want := numbers(New().SetLines([]string{"x = 3", "q = " + c.same, "q"}))[2]
+		if got != want {
+			t.Errorf("q = %q gives %q, want %q", c.src, got, want)
+		}
+	}
+}
+
+func TestADeclaredMeasurementIsNotSilentlyRaisedToAPower(t *testing.T) {
+	lines := New().SetLines([]string{"v = 2 m^3 ± 0.01 m^3", "v"})
+	if got := numbers(lines)[1]; got != "2.000 ± 0.010 m^3" {
+		t.Errorf("v = %q, want 2.000 ± 0.010 m^3", got)
+	}
+}
+
+func TestImplicitProductsReadTheSameThroughTheSheetAPI(t *testing.T) {
+	for _, c := range implicitShapes {
+		got := sheetTexts(t, []string{"x = 3", c.src})[1]
+		want := sheetTexts(t, []string{"x = 3", c.same})[1]
+		if got != want {
+			t.Errorf("sheet %q = %q, want %q", c.src, got, want)
+		}
+	}
+}
+
+func sheetTexts(t *testing.T, lines []string) []string {
+	t.Helper()
+	req, err := json.Marshal(map[string]any{"lines": lines})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Lines []struct {
+			Text  string `json:"text"`
+			Error string `json:"error"`
+		} `json:"lines"`
+	}
+	if err := json.Unmarshal(EvalRequest(req), &out); err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, len(out.Lines))
+	for i, l := range out.Lines {
+		got[i] = l.Text + l.Error
+	}
+	return got
 }

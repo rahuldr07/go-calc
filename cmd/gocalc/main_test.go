@@ -29,7 +29,7 @@ func TestRunShowsInterpretation(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
-	if !strings.Contains(out, "read as (1/2)·m") {
+	if !strings.Contains(out, "read as 1/(2·m)") {
 		t.Errorf("out = %q, want the interpretation note", out)
 	}
 }

@@ -14,7 +14,7 @@ var functionNames = map[string]bool{
 	"root": true, "binomial": true, "integrate": true, "diff": true, "plot": true, "expand": true,
 }
 
-var keywords = map[string]bool{"mod": true, "to": true, "in": true}
+var keywords = map[string]bool{"mod": true, "to": true, "in": true, "of": true}
 
 type parser struct {
 	toks  []lex.Token
@@ -41,7 +41,7 @@ func Parse(src string) (Node, []Note, error) {
 	if p.peek().Kind != lex.EOF {
 		return nil, nil, p.errorAt(p.peek(), "unexpected "+p.peek().Kind.String())
 	}
-	return n, p.notes, nil
+	return n, regroupings(n, p.notes), nil
 }
 
 func (p *parser) peek() lex.Token { return p.toks[p.i] }
@@ -101,11 +101,14 @@ func (p *parser) parseStatement() (Node, error) {
 var binPower = map[string]int{
 	"to": 5, "in": 5,
 	"+": 10, "-": 10, "±": 10, "+-": 10,
-	"*": 20, "/": 20, "×": 20, "÷": 20, "·": 20, "mod": 20,
+	"*": 20, "/": 20, "×": 20, "÷": 20, "·": 20, "mod": 20, "of": 20,
 	"^": 30,
 }
 
-const implicitPower = 20
+const (
+	implicitPower = 25
+	powerPower    = 30
+)
 
 func (p *parser) parseExpr(min int) (Node, error) {
 	left, err := p.parseUnary()
@@ -123,12 +126,9 @@ func (p *parser) parseExpr(min int) (Node, error) {
 			if name, ok := left.(*Name); ok && functionNames[name.Text] {
 				return nil, p.errorAt(t, "function call needs parentheses: did you mean "+name.Text+"(…)?")
 			}
-			right, err := p.parseUnary()
+			right, err := p.parseExpr(powerPower)
 			if err != nil {
 				return nil, err
-			}
-			if div, ok := left.(*Binary); ok && div.Op == "/" {
-				p.notes = append(p.notes, Note{Pos: t.Pos, Msg: "read as (" + div.L.String() + "/" + div.R.String() + ")·" + right.String()})
 			}
 			left = &Binary{Op: "*", L: left, R: right, P: t.Pos, Implicit: true}
 			continue
@@ -167,7 +167,7 @@ func (p *parser) parseUnary() (Node, error) {
 	t := p.peek()
 	if t.Kind == lex.Op && (t.Text == "-" || t.Text == "+") {
 		p.next()
-		x, err := p.parseExpr(25)
+		x, err := p.parseExpr(implicitPower)
 		if err != nil {
 			return nil, err
 		}
@@ -241,6 +241,9 @@ func (p *parser) parsePrimary() (Node, error) {
 			return nil, p.errorAt(p.peek(), "expected )")
 		}
 		p.next()
+		if b, ok := n.(*Binary); ok {
+			b.Grouped = true
+		}
 		return n, nil
 	}
 	return nil, p.errorAt(t, "unexpected "+t.Kind.String())

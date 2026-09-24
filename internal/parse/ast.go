@@ -46,6 +46,7 @@ type Binary struct {
 	L, R     Node
 	P        lex.Pos
 	Implicit bool
+	Grouped  bool
 }
 
 func (n *Binary) Pos() lex.Pos   { return n.P }
@@ -84,4 +85,69 @@ func (n *Assign) String() string {
 type Note struct {
 	Pos lex.Pos
 	Msg string
+}
+
+func regroupings(n Node, notes []Note) []Note {
+	return append(notes, collectRegroupings(n, nil)...)
+}
+
+func collectRegroupings(n Node, out []Note) []Note {
+	switch t := n.(type) {
+	case *Unary:
+		return collectRegroupings(t.X, out)
+	case *Call:
+		for _, a := range t.Args {
+			out = collectRegroupings(a, out)
+		}
+		return out
+	case *Assign:
+		return collectRegroupings(t.Body, out)
+	case *Binary:
+		if regrouped(t) {
+			return append(out, Note{Pos: t.P, Msg: "read as " + reading(t)})
+		}
+		out = collectRegroupings(t.L, out)
+		return collectRegroupings(t.R, out)
+	}
+	return out
+}
+
+func regrouped(t *Binary) bool {
+	r, ok := t.R.(*Binary)
+	if !ok || r.Grouped {
+		return false
+	}
+	if t.Op == "/" || t.Op == "÷" {
+		return r.Implicit
+	}
+	return t.Implicit && r.Op == "^"
+}
+
+func reading(n Node) string {
+	t, ok := n.(*Binary)
+	if !ok {
+		return n.String()
+	}
+	return bracket(t.L) + operatorSymbol(t.Op) + bracket(t.R)
+}
+
+func bracket(n Node) string {
+	if _, ok := n.(*Binary); ok {
+		return "(" + reading(n) + ")"
+	}
+	return reading(n)
+}
+
+func operatorSymbol(op string) string {
+	switch op {
+	case "*", "×", "·":
+		return "·"
+	case "÷":
+		return "/"
+	case "/", "^":
+		return op
+	case "+-":
+		return " ± "
+	}
+	return " " + op + " "
 }
