@@ -37,9 +37,32 @@ type Table struct {
 
 var ErrInconsistentCorrelation = errors.New("the declared correlations are not consistent: no real combined uncertainty exists")
 
-var ErrSensitivityOverflow = errors.New("no uncertainty can be reported here: a derivative or an uncertainty is larger than a 64-bit float can hold")
+const noUncertainty = "no uncertainty can be reported here: "
 
-var ErrSensitivityUndefined = errors.New("no uncertainty can be reported here: a derivative is not a number")
+const (
+	tooLarge = " is larger than a 64-bit float can hold"
+	notANum  = " is not a number"
+)
+
+const (
+	firstOrder    = "a first-order sensitivity"
+	secondOrder   = "a second-order curvature"
+	declaredSigma = "a declared uncertainty"
+	combinedVar   = "the combined variance"
+)
+
+var ErrSensitivityOverflow = errors.New(noUncertainty + "a derivative or an uncertainty" + tooLarge)
+
+var ErrSensitivityUndefined = errors.New(noUncertainty + "a derivative" + notANum)
+
+type termError struct {
+	kind error
+	text string
+}
+
+func (e *termError) Error() string { return noUncertainty + e.text }
+
+func (e *termError) Unwrap() error { return e.kind }
 
 func NewTable() *Table { return &Table{corr: map[Pair]float64{}} }
 
@@ -121,15 +144,15 @@ func (t *Table) Check(s Sens) error {
 		return nil
 	}
 	for _, id := range ids(s) {
-		if err := finite(s[id]); err != nil {
+		if err := finite(s[id], firstOrder); err != nil {
 			return err
 		}
-		if err := finite(t.sigma(id)); err != nil {
+		if err := finite(t.sigma(id), declaredSigma); err != nil {
 			return err
 		}
 	}
 	v := t.Variance(s)
-	if err := finite(v); err != nil {
+	if err := finite(v, combinedVar); err != nil {
 		return err
 	}
 	if v >= 0 {
@@ -152,19 +175,19 @@ func (t *Table) CheckCurv(h Curv) error {
 		}
 		return int(a.B - b.B)
 	}) {
-		if err := finite(h[p]); err != nil {
+		if err := finite(h[p], secondOrder); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func finite(x float64) error {
+func finite(x float64, term string) error {
 	switch {
 	case math.IsNaN(x):
-		return ErrSensitivityUndefined
+		return &termError{ErrSensitivityUndefined, term + notANum}
 	case math.IsInf(x, 0):
-		return ErrSensitivityOverflow
+		return &termError{ErrSensitivityOverflow, term + tooLarge}
 	}
 	return nil
 }

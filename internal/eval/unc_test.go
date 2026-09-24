@@ -641,6 +641,14 @@ func TestEveryUnitThisEngineWritesItCanReadBack(t *testing.T) {
 		"(3 km) / (2 h)", "(3 km) * (2 km)", "(3 g) * (2 m)",
 		"sqrt(2h / g0)", "(1 m) ^ 3", "(1 N) * (1 m)", "R",
 		"(1 m/s) / (1 m/s^2)", "((1 m) / (1 s)) / (1 kg)",
+		"((6 m) / (2 s)) ^ 2", "((10 m/s) * (2 s)) ^ 2", "(1 m·kg) ^ 2",
+		"((1 m) ^ 2) ^ 3", "(((1 m) ^ 2) ^ 3) ^ 2", "(2 / (1 m·K)) ^ 2",
+		"(3 degC) ^ 2", "(3 degF) ^ 3", "(3 degC) ^ -1",
+		"(3 km) ^ 2", "(3 km) ^ -2", "(2 mm) ^ 3", "(3 g) ^ 2",
+		"0.5 * (2 kg) * (((100 m) / (10 s)) ^ 2)",
+		"(((6 m) / (2 s)) ^ 2) * (2 s)", "(((6 m) / (2 s)) ^ 2) / (2 s)",
+		"((3 degC) ^ 2) ^ 2", "((3 km) ^ 2) ^ 2", "(((1 m) ^ 2) ^ 3) * (1 m)",
+		"sqrt((((6 m) / (2 s)) ^ 2))",
 	} {
 		v := mustEval(t, env, src)
 		if v.Unit == "" {
@@ -674,5 +682,99 @@ func TestComposingScaledUnitsFallsBackToSI(t *testing.T) {
 		if !strings.HasSuffix(head, c[1]) {
 			t.Errorf("%s = %q, want it to end in %q", c[0], head, c[1])
 		}
+	}
+}
+
+func TestAPowerSpellsTheDimensionItHolds(t *testing.T) {
+	env := NewEnv()
+	for _, c := range [][2]string{
+		{"((6 m) / (2 s)) ^ 2", "9 (m/s)^2"},
+		{"((1 m) ^ 2) ^ 3", "1 (m^2)^3"},
+		{"((10 m/s) * (2 s)) ^ 2", "400 ((m/s)·s)^2"},
+		{"(1 m·kg) ^ 2", "1 (m·kg)^2"},
+		{"(3 km) ^ 2", "9 km^2"},
+		{"(3 m) ^ 0", "1"},
+		{"(2 m) ^ 1", "2 m"},
+		{"0.5 * (2 kg) * (((100 m) / (10 s)) ^ 2)", "100 kg·(m/s)^2"},
+	} {
+		got := format.Text(mustEval(t, env, c[0]), nil)
+		head, _, _ := strings.Cut(got, "\n")
+		if head != c[1] {
+			t.Errorf("%s = %q, want %q", c[0], head, c[1])
+		}
+	}
+}
+
+func TestAPoweredAffineUnitAgreesWithTheProduct(t *testing.T) {
+	env := NewEnv()
+	for _, c := range [][2]string{
+		{"(3 degC) ^ 2", "(3 degC) * (3 degC)"},
+		{"(3 degF) ^ 2", "(3 degF) * (3 degF)"},
+	} {
+		square := mustEval(t, env, c[0])
+		product := mustEval(t, env, c[1])
+		if square.Unit != product.Unit || square.Dim != product.Dim {
+			t.Errorf("%s has unit %q %v, but %s has unit %q %v",
+				c[0], square.Unit, square.Dim, c[1], product.Unit, product.Dim)
+		}
+		if square.SI(64).Exact().Cmp(product.SI(64).Exact()) != 0 {
+			t.Errorf("%s = %v, but %s = %v", c[0], square.Num, c[1], product.Num)
+		}
+		if square.Offset.Sign() != 0 {
+			t.Errorf("%s kept an affine offset of %v", c[0], square.Offset)
+		}
+	}
+}
+
+func TestADerivativeErrorSaysWhichOrderFailed(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "x = 1e-300 ± 0.5")
+	for _, c := range [][2]string{
+		{"1e400 * x", "first-order"},
+		{"x / x", "second-order"},
+	} {
+		n, _, err := parse.Parse(c[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = env.Eval(n)
+		if err == nil {
+			t.Errorf("%s produced a number", c[0])
+			continue
+		}
+		if !strings.Contains(err.Error(), c[1]) {
+			t.Errorf("%s failed with %q, which does not say it was the %s term", c[0], err, c[1])
+		}
+	}
+}
+
+func TestAGuaranteedBoundIsNotSpelledLikeAnUncertainty(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "x = 0 ± 1")
+	for _, src := range []string{"sin(1e60) + (x*x)", "sin(1e60) + x", "sin(1e60) * (1 ± 0.1)"} {
+		v := mustEval(t, env, src)
+		head, _, _ := strings.Cut(format.Text(v, nil), "\n")
+		if strings.Count(head, "±") > 1 {
+			t.Errorf("%s = %q, which shows two ± on one line", src, head)
+		}
+		if !strings.Contains(head, "[") {
+			t.Errorf("%s = %q, want the guaranteed bound as an interval", src, head)
+		}
+	}
+	degenerate := mustEval(t, env, "sin(1e60) + (x*x)")
+	head, _, _ := strings.Cut(format.Text(degenerate, nil), "\n")
+	if !strings.HasSuffix(head, "± "+format.UnknownUncertainty) {
+		t.Errorf("degenerate line = %q, want it to end in the unknown-uncertainty marker", head)
+	}
+	out, err := format.JSON("sin(1e60) + (x*x)", degenerate, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(out)
+	if !strings.Contains(text, `"ball"`) || !strings.Contains(text, `"degenerate": true`) {
+		t.Errorf("JSON = %s, want the bound under value.ball and the marker under uncertainty.degenerate", text)
+	}
+	if strings.Contains(text, `"standard"`) {
+		t.Errorf("JSON = %s, want no standard uncertainty beside a degenerate estimate", text)
 	}
 }

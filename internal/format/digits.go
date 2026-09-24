@@ -11,6 +11,8 @@ import (
 
 const ballPrec = 256
 
+const boundDigits = 4
+
 func GuaranteedDigits(b num.Ball) int { return b.GuaranteedDigits() }
 
 func (s Style) NumberBall(b num.Ball) (string, int, bool) {
@@ -41,7 +43,38 @@ func provenDecimal(b num.Ball, limit int) (string, int) {
 	if provablyZero(b) {
 		return "0", 0
 	}
-	return b.String(), 0
+	return bounds(b), 0
+}
+
+func bounds(b num.Ball) string {
+	lo, _ := b.Lo().Rat(nil)
+	hi, _ := b.Hi().Rat(nil)
+	if lo == nil || hi == nil {
+		return b.String()
+	}
+	scale := ratScale(lo)
+	if s := ratScale(hi); s > scale {
+		scale = s
+	}
+	decimals := boundDigits - 1 - scale
+	return "[" + outward(lo, decimals, false) + ", " + outward(hi, decimals, true) + "]"
+}
+
+func outward(r *big.Rat, decimals int, up bool) string {
+	text := at(r, decimals)
+	got, ok := new(big.Rat).SetString(text)
+	if !ok {
+		return tidy(text)
+	}
+	switch {
+	case up && got.Cmp(r) < 0:
+		got.Add(got, ratPow10(-decimals))
+	case !up && got.Cmp(r) > 0:
+		got.Sub(got, ratPow10(-decimals))
+	default:
+		return tidy(text)
+	}
+	return tidy(at(got, decimals))
 }
 
 func significantText(x *big.Float, digits, scale int) string {

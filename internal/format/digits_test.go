@@ -235,10 +235,10 @@ func TestWideBallsStraddlingZeroAreNotCollapsedToZero(t *testing.T) {
 		radius float64
 		want   string
 	}{
-		{0.5, 1, "0.5 ± 1"},
-		{0.05, 0.25, "0.05 ± 0.25"},
-		{0, 0.4, "0 ± 0.4"},
-		{-0.5, 1, "-0.5 ± 1"},
+		{0.5, 1, "[-0.5, 1.5]"},
+		{0.05, 0.25, "[-0.2, 0.3001]"},
+		{0, 0.4, "[-0.4001, 0.4001]"},
+		{-0.5, 1, "[-1.5, 0.5]"},
 	}
 	for _, c := range cases {
 		b := num.NewBall(big.NewFloat(c.mid), num.MagFromFloat(c.radius))
@@ -249,6 +249,21 @@ func TestWideBallsStraddlingZeroAreNotCollapsedToZero(t *testing.T) {
 		}
 		if text != c.want {
 			t.Errorf("ball %g ± %g printed %q, want %q", c.mid, c.radius, text, c.want)
+		}
+		if strings.Contains(text, "±") {
+			t.Errorf("ball %g ± %g printed %q, but ± is reserved for statistical uncertainty", c.mid, c.radius, text)
+		}
+		if lo, hi, ok := strings.Cut(strings.Trim(text, "[]"), ", "); !ok {
+			t.Errorf("ball %g ± %g printed %q, which names no interval", c.mid, c.radius, text)
+		} else {
+			low, _ := new(big.Rat).SetString(lo)
+			high, _ := new(big.Rat).SetString(hi)
+			trueLo, _ := b.Lo().Rat(nil)
+			trueHi, _ := b.Hi().Rat(nil)
+			if low == nil || high == nil || low.Cmp(trueLo) > 0 || high.Cmp(trueHi) < 0 {
+				t.Errorf("ball %g ± %g printed %q, which is narrower than the proven range [%s .. %s]",
+					c.mid, c.radius, text, b.Lo().Text('g', 12), b.Hi().Text('g', 12))
+			}
 		}
 		if digits != 0 {
 			t.Errorf("ball %g ± %g claimed %d digits", c.mid, c.radius, digits)

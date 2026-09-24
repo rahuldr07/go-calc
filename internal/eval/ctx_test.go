@@ -385,8 +385,11 @@ func TestWideBallFromAnUncertainInputIsNotPrintedAsZero(t *testing.T) {
 		t.Fatalf("text = %q, but the true value is anywhere in [%s .. %s]",
 			text, b.Lo().Text('g', 4), b.Hi().Text('g', 4))
 	}
-	if !strings.HasPrefix(text, "0 ± ") {
-		t.Fatalf("text = %q, want the midpoint and radius", text)
+	if !strings.HasPrefix(text, "[-") || !strings.Contains(text, ", ") {
+		t.Fatalf("text = %q, want the guaranteed bounds as an interval", text)
+	}
+	if strings.Contains(text, "±") {
+		t.Fatalf("text = %q, but ± belongs to statistical uncertainty, not to a guaranteed bound", text)
 	}
 }
 

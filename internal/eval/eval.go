@@ -532,20 +532,26 @@ func power(t *parse.Binary, l, r value.Value, prec uint) (value.Value, error) {
 			return value.Value{}, &lex.Error{Pos: t.P, Msg: "exponent too large"}
 		}
 		exp := int(exp64)
-		raised, err := l.Num.Pow(exp, prec)
-		if err != nil {
-			return value.Value{}, &lex.Error{Pos: t.P, Msg: err.Error()}
-		}
 		j, err := powerJet(l.Jet(), r.Jet(), siFloat(l, prec), float64(exp))
 		if err != nil {
 			return value.Value{}, &lex.Error{Pos: t.P, Msg: "power: " + err.Error()}
 		}
-		out := l
-		out.Num = raised
-		out.Dim = l.Dim.Scale(exp)
-		out.Factor = l.FactorOrOne().Pow(exp)
-		if exp != 1 && l.Unit != "" {
-			out.Unit = l.Unit + "^" + r.Num.String()
+		if exp == 1 {
+			return l.WithJet(j), nil
+		}
+		base := absolute(l, prec)
+		raised, err := base.Num.Pow(exp, prec)
+		if err != nil {
+			return value.Value{}, &lex.Error{Pos: t.P, Msg: err.Error()}
+		}
+		out := value.Value{
+			Num:     raised,
+			Dim:     base.Dim.Scale(exp),
+			Factor:  base.FactorOrOne().Pow(exp),
+			Stopped: l.Stopped,
+		}
+		if base.Unit != "" && !out.Dim.IsNone() {
+			out.Unit = grouped(base.Unit, "/·^") + "^" + strconv.Itoa(exp)
 		}
 		return out.WithJet(j), nil
 	}
@@ -683,11 +689,26 @@ func spellsItsOwnSize(v value.Value) bool {
 	return v.FactorOrOne().Cmp(num.FromInt(1)) == 0 && v.Offset.Sign() == 0
 }
 
-func grouped(unit, ambiguous string) string {
-	if !strings.ContainsAny(unit, ambiguous) {
-		return unit
+func absolute(v value.Value, prec uint) value.Value {
+	if !v.IsAffine() {
+		return v
 	}
-	return "(" + unit + ")"
+	return value.Value{Num: v.SI(prec), Dim: v.Dim, Unit: units.SISymbol(v.Dim), Factor: num.FromInt(1)}
+}
+
+func grouped(unit, ambiguous string) string {
+	depth := 0
+	for _, r := range unit {
+		switch {
+		case r == '(':
+			depth++
+		case r == ')':
+			depth--
+		case depth == 0 && strings.ContainsRune(ambiguous, r):
+			return "(" + unit + ")"
+		}
+	}
+	return unit
 }
 
 func isPercentNode(n parse.Node) bool {

@@ -152,6 +152,15 @@ func TestCompositeSymbolsParseWithGrouping(t *testing.T) {
 		{"m/s^2", Dim{1, 0, -2, 0, 0, 0, 0, 0}},
 		{"1/mol", Dim{0, 0, 0, 0, 0, -1, 0, 0}},
 		{"J·s", Dim{2, 1, -1, 0, 0, 0, 0, 0}},
+		{"m^-2", Dim{-2, 0, 0, 0, 0, 0, 0, 0}},
+		{"s^-1", Dim{0, 0, -1, 0, 0, 0, 0, 0}},
+		{"m^10", Dim{10, 0, 0, 0, 0, 0, 0, 0}},
+		{"m^-12", Dim{-12, 0, 0, 0, 0, 0, 0, 0}},
+		{"(m/s)^2", Dim{2, 0, -2, 0, 0, 0, 0, 0}},
+		{"(m^2)^3", Dim{6, 0, 0, 0, 0, 0, 0, 0}},
+		{"((m/s)·s)^2", Dim{2, 0, 0, 0, 0, 0, 0, 0}},
+		{"kg·(m/s)^2", Dim{2, 1, -2, 0, 0, 0, 0, 0}},
+		{"(1/(m·K))^2", Dim{-2, 0, 0, 0, -2, 0, 0, 0}},
 	}
 	for _, c := range cases {
 		u, ok := Lookup(c.sym)
@@ -166,7 +175,12 @@ func TestCompositeSymbolsParseWithGrouping(t *testing.T) {
 }
 
 func TestMalformedCompositeSymbolsAreRefused(t *testing.T) {
-	for _, sym := range []string{"m/(s", "m/s)", "m//s", "m·", "(m", "bogus/s", "m^", "m^x", "()", "m/(s·)"} {
+	for _, sym := range []string{
+		"m/(s", "m/s)", "m//s", "m·", "(m", "bogus/s", "m^", "m^x", "()", "m/(s·)",
+		"k", "da", "Ki", "k/s", "k·m", "(k)^2",
+		"/s", "·m", "^2", "/(m·s)", "·(m/s)", "^-1",
+		"m^2^3", "m^^2", "m^+", "m^2.5", "(m/s)^", "m/s^",
+	} {
 		if u, ok := Lookup(sym); ok {
 			t.Errorf("malformed %q was accepted as %v", sym, u.Dim)
 		}
