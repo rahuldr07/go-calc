@@ -550,7 +550,10 @@ func power(t *parse.Binary, l, r value.Value, prec uint) (value.Value, error) {
 			Factor:  base.FactorOrOne().Pow(exp),
 			Stopped: l.Stopped,
 		}
-		if base.Unit != "" && !out.Dim.IsNone() {
+		if out.Dim.IsNone() {
+			out.Num = out.Num.Mul(num.NumExact(out.Factor), prec)
+			out.Factor = num.FromInt(1)
+		} else if base.Unit != "" {
 			out.Unit = grouped(base.Unit, "/·^") + "^" + strconv.Itoa(exp)
 		}
 		return out.WithJet(j), nil

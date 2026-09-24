@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/rahuldr07/go-calc/internal/format"
+	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/parse"
 	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/units"
@@ -651,9 +652,16 @@ func TestEveryUnitThisEngineWritesItCanReadBack(t *testing.T) {
 		"(((6 m) / (2 s)) ^ 2) * (2 s)", "(((6 m) / (2 s)) ^ 2) / (2 s)",
 		"((3 degC) ^ 2) ^ 2", "((3 km) ^ 2) ^ 2", "(((1 m) ^ 2) ^ 3) * (1 m)",
 		"sqrt((((6 m) / (2 s)) ^ 2))",
+		"(2 lakh in crore) ^ 2", "(200 in lakh) ^ 2", "(2 lakh in crore) ^ -2",
+		"(((2 lakh in crore) ^ 1) ^ 2) ^ 2", "(2 lakh in crore) ^ 0", "(3 m) ^ 0",
+		"2 lakh in crore", "(2 lakh in crore) * (2 lakh in crore)",
 	} {
 		v := mustEval(t, env, src)
 		if v.Unit == "" {
+			if v.FactorOrOne().Cmp(num.FromInt(1)) != 0 || v.Offset.Sign() != 0 {
+				t.Errorf("%s printed no unit at all, but the value is scale %v offset %v, so the number shown is not the quantity",
+					src, v.FactorOrOne(), v.Offset)
+			}
 			continue
 		}
 		u, ok := units.Lookup(v.Unit)
@@ -805,6 +813,11 @@ func TestJSONSpellsAGuaranteedBoundWithBracketsAndNeverWithAPlusMinus(t *testing
 		var body map[string]any
 		if err := json.Unmarshal(out, &body); err != nil {
 			t.Fatalf("%s: %v", c.src, err)
+		}
+		echo, _ := body["input"].(string)
+		if echo != c.src {
+			t.Errorf("input = %q, want the source %q verbatim; the ± carve-out only holds while input is an echo",
+				echo, c.src)
 		}
 		delete(body, "input")
 		rest, err := json.Marshal(body)
