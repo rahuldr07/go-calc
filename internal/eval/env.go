@@ -1,6 +1,8 @@
 package eval
 
 import (
+	"sort"
+
 	"github.com/rahuldr07/go-calc/internal/parse"
 	"github.com/rahuldr07/go-calc/internal/prov"
 	"github.com/rahuldr07/go-calc/internal/unc"
@@ -84,4 +86,16 @@ func (e *Env) child() *Env {
 		c.funcs[k] = v
 	}
 	return c
+}
+
+func (e *Env) Names() []string {
+	out := make([]string, 0, len(e.vars)+len(e.funcs))
+	for name := range e.vars {
+		out = append(out, name)
+	}
+	for name := range e.funcs {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
 }

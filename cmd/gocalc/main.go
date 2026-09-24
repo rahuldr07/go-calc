@@ -24,6 +24,9 @@ func main() {
 	flag.Parse()
 	style := format.Style{Digits: format.Digits, Grouped: *grouped || *indian, Indian: *indian}
 	args := flag.Args()
+	if len(args) == 1 && args[0] == "repl" {
+		os.Exit(repl(os.Stdin, os.Stdout, style))
+	}
 	if len(args) > 1 {
 		switch args[0] {
 		case "run":
@@ -52,23 +55,30 @@ func emit(out string, code int) {
 
 func run(args []string, style format.Style, asJSON bool) (string, int) {
 	if len(args) == 0 {
-		return "usage: gocalc [--json] [--indian] \"expression\"\n       gocalc run sheet.calc\n       gocalc trace \"expression\"\n       gocalc why \"expression\"", 2
+		return "usage: gocalc [--json] [--indian] \"expression\"\n       gocalc repl\n       gocalc run sheet.calc\n       gocalc trace \"expression\"\n       gocalc why \"expression\"", 2
 	}
 	src := strings.Join(args, " ")
 	return evalLine(eval.NewEnv(), src, style, asJSON)
 }
 
 func evalLine(env *eval.Env, src string, style format.Style, asJSON bool) (string, int) {
+	out, _, code := evalWith(env, src, eval.DefaultCtx(), style, asJSON)
+	return out, code
+}
+
+func evalWith(env *eval.Env, src string, ctx *eval.Ctx, style format.Style, asJSON bool) (string, eval.Explanation, int) {
 	node, notes, err := parse.Parse(src)
 	if err != nil {
-		return err.Error(), 1
+		return err.Error(), eval.Explanation{}, 1
 	}
-	v, err := env.Eval(node)
+	v, err := env.EvalCtx(node, ctx)
 	if err != nil {
-		return err.Error(), 1
+		return err.Error(), eval.Explanation{}, 1
 	}
-	line := doc.Line{Src: src, Value: v, Notes: append(notes, env.Notes()...), Warning: env.Warning(node, v)}
-	return render(line, style, asJSON, env.Arena())
+	x := env.WhyCtx(node, v, ctx)
+	line := doc.Line{Src: src, Value: v, Notes: append(notes, env.Notes()...), Warning: x.Warning}
+	out, code := render(line, style, asJSON, env.Arena())
+	return out, x, code
 }
 
 func explain(src string, why bool, style format.Style) (string, int) {

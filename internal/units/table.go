@@ -2,6 +2,7 @@ package units
 
 import (
 	"errors"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -308,4 +309,13 @@ func denominator(neg []string) string {
 		return neg[0]
 	}
 	return "(" + strings.Join(neg, "·") + ")"
+}
+
+func Symbols() []string {
+	out := make([]string, 0, len(base))
+	for sym := range base {
+		out = append(out, sym)
+	}
+	sort.Strings(out)
+	return out
 }
