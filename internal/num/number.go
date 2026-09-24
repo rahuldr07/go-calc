@@ -113,3 +113,55 @@ func (n Number) String() string {
 	}
 	return n.ex.String()
 }
+
+func (n Number) Neg() Number {
+	switch n.kind {
+	case KindBall:
+		return NumBall(n.ball.Neg())
+	case KindInterval:
+		return NumInterval(n.hi.Neg(), n.lo.Neg())
+	}
+	return NumExact(n.ex.Neg())
+}
+
+func (n Number) Abs() Number {
+	switch n.kind {
+	case KindBall:
+		return NumBall(n.ball.Abs())
+	case KindInterval:
+		if n.lo.Sign() >= 0 {
+			return n
+		}
+		if n.hi.Sign() <= 0 {
+			return n.Neg()
+		}
+		hi := n.hi
+		if lo := n.lo.Neg(); lo.Cmp(hi) > 0 {
+			hi = lo
+		}
+		return NumInterval(FromInt(0), hi)
+	}
+	if n.ex.Sign() < 0 {
+		return NumExact(n.ex.Neg())
+	}
+	return n
+}
+
+func (n Number) Sign() (int, bool) {
+	switch n.kind {
+	case KindBall:
+		return n.ball.Sign()
+	case KindInterval:
+		if n.lo.Sign() > 0 {
+			return 1, true
+		}
+		if n.hi.Sign() < 0 {
+			return -1, true
+		}
+		if n.lo.Sign() == 0 && n.hi.Sign() == 0 {
+			return 0, true
+		}
+		return 0, false
+	}
+	return n.ex.Sign(), true
+}

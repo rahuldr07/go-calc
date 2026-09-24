@@ -16,8 +16,10 @@ type unitOut struct {
 
 type valueOut struct {
 	Exact   string `json:"exact"`
+	Ball    string `json:"ball,omitempty"`
 	Decimal string `json:"decimal"`
 	Digits  int    `json:"digits"`
+	Capped  bool   `json:"capped,omitempty"`
 }
 
 type result struct {
@@ -35,16 +37,17 @@ func JSON(input string, v value.Value, notes []parse.Note) ([]byte, error) {
 	for _, n := range notes {
 		msgs = append(msgs, n.Msg)
 	}
-	r := result{
-		Schema: Schema,
-		Input:  input,
-		Value: valueOut{
-			Exact:   v.Num.String(),
-			Decimal: trimDecimal(v.Num.Rat().FloatString(Digits)),
-			Digits:  Digits,
-		},
-		Notes: msgs,
+	out := valueOut{Decimal: Default.Number(v), Digits: Digits}
+	if v.Num.IsExact() {
+		out.Exact = v.Num.Exact().String()
+	} else {
+		_, proven, capped := Default.NumberBall(v.Num.Ball(BallPrec))
+		out.Ball, out.Capped = v.Num.String(), capped
+		if proven < out.Digits {
+			out.Digits = proven
+		}
 	}
+	r := result{Schema: Schema, Input: input, Value: out, Notes: msgs}
 	if v.Unit != "" {
 		dims := map[string]int{}
 		for i, e := range v.Dim {

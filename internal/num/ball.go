@@ -143,3 +143,71 @@ func (b Ball) Sign() (int, bool) {
 func (b Ball) String() string {
 	return b.mid().Text('g', 12) + " ± " + b.Rad.String()
 }
+
+const maxDigits = 5000
+
+var bigTen = big.NewInt(10)
+
+func pow10(k int) *big.Float {
+	if k < 0 {
+		k = 0
+	}
+	return new(big.Float).SetInt(new(big.Int).Exp(bigTen, big.NewInt(int64(k)), nil))
+}
+
+func decimalExponent(x *big.Float) int {
+	abs := new(big.Float).Abs(x)
+	if abs.Sign() == 0 || abs.IsInf() {
+		return 0
+	}
+	est := int(float64(abs.MantExp(nil)) * log2Of10Inverse)
+	for compareToPow10(abs, est) < 0 {
+		est--
+	}
+	for compareToPow10(abs, est+1) >= 0 {
+		est++
+	}
+	return est
+}
+
+const log2Of10Inverse = 0.30102999566398119521
+
+func compareToPow10(abs *big.Float, k int) int {
+	if k >= 0 {
+		return abs.Cmp(pow10(k))
+	}
+	scaled := new(big.Float).SetPrec(abs.Prec()+64).Mul(abs, pow10(-k))
+	return scaled.Cmp(floatOne)
+}
+
+var floatOne = big.NewFloat(1)
+
+func (b Ball) GuaranteedDigits() int {
+	mid := b.mid()
+	if b.Rad.IsZero() {
+		if mid.Sign() == 0 {
+			return maxDigits
+		}
+		return clampDigits(decimalDigits(mid.Prec()) - decimalExponent(mid))
+	}
+	rad := b.Rad.float()
+	if rad.IsInf() {
+		return 0
+	}
+	spread := newMag().Add(rad, rad)
+	return clampDigits(-decimalExponent(spread) - 1)
+}
+
+func clampDigits(d int) int {
+	if d < 0 {
+		return 0
+	}
+	if d > maxDigits {
+		return maxDigits
+	}
+	return d
+}
+
+func decimalDigits(prec uint) int {
+	return clampDigits(int(float64(prec) * log2Of10Inverse))
+}

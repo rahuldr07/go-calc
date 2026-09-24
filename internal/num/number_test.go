@@ -117,3 +117,43 @@ func TestBallNegAbsAndBounds(t *testing.T) {
 		t.Errorf("bounds [%s .. %s] are too tight", b.Lo().Text('g', 6), b.Hi().Text('g', 6))
 	}
 }
+
+func TestNumberNegAbsAndSignAcrossKinds(t *testing.T) {
+	exact := NumExact(FromInt(-3))
+	if got := exact.Neg().String(); got != "3" {
+		t.Errorf("exact Neg = %s, want 3", got)
+	}
+	if got := exact.Abs().String(); got != "3" {
+		t.Errorf("exact Abs = %s, want 3", got)
+	}
+	if s, ok := exact.Sign(); !ok || s != -1 {
+		t.Errorf("exact Sign = (%d, %v), want (-1, true)", s, ok)
+	}
+	straddling := NumBall(NewBall(big.NewFloat(0.25), MagFromFloat(1)))
+	if _, ok := straddling.Sign(); ok {
+		t.Error("a ball straddling zero must not claim a sign")
+	}
+	spanning := NumInterval(FromInt(-2), FromInt(5))
+	if _, ok := spanning.Sign(); ok {
+		t.Error("an interval spanning zero must not claim a sign")
+	}
+	if got := spanning.Abs().String(); got != "[0 .. 5]" {
+		t.Errorf("interval Abs = %s, want [0 .. 5]", got)
+	}
+	if got := spanning.Neg().String(); got != "[-5 .. 2]" {
+		t.Errorf("interval Neg = %s, want [-5 .. 2]", got)
+	}
+}
+
+func TestGuaranteedDigitsFollowsTheRadiusNotTheMagnitude(t *testing.T) {
+	for _, mid := range []float64{1e-3, 1, 1e9} {
+		b := NewBall(big.NewFloat(mid), MagFromFloat(2e-10))
+		if got := b.GuaranteedDigits(); got != 9 {
+			t.Errorf("GuaranteedDigits(%g ± 2e-10) = %d, want 9", mid, got)
+		}
+	}
+	wide := NewBall(big.NewFloat(1), MagFromFloat(50))
+	if got := wide.GuaranteedDigits(); got != 0 {
+		t.Errorf("GuaranteedDigits of a ball wider than 1 = %d, want 0", got)
+	}
+}

@@ -1,8 +1,10 @@
 package eval
 
 import (
+	"math/big"
 	"testing"
 
+	"github.com/rahuldr07/go-calc/internal/format"
 	"github.com/rahuldr07/go-calc/internal/parse"
 )
 
@@ -133,15 +135,32 @@ func TestConstantsResolve(t *testing.T) {
 	}
 }
 
-func TestIrrationalIsRefusedNotApproximated(t *testing.T) {
+func TestIrrationalIsProven(t *testing.T) {
+	const sqrt2 = "1.41421356237309504880168872420969807856967187537694"
+	true2, _, err := big.ParseFloat(sqrt2, 10, 300, big.ToNearestEven)
+	if err != nil {
+		t.Fatal(err)
+	}
 	env := NewEnv()
+	ctx := DefaultCtx()
 	n, _, _ := parse.Parse("sqrt(2)")
-	if _, err := env.Eval(n); err == nil {
-		t.Fatal("sqrt(2) must be refused until ball arithmetic lands")
+	v, err := env.EvalCtx(n, ctx)
+	if err != nil {
+		t.Fatalf("sqrt(2): %v", err)
+	}
+	if v.Num.IsExact() {
+		t.Fatal("sqrt(2) is not a rational")
+	}
+	b := v.Num.Ball(ctx.Prec)
+	if !b.Contains(true2) {
+		t.Fatalf("ball %s does not contain the true square root of two", b)
+	}
+	if got := format.GuaranteedDigits(b); got < 12 {
+		t.Fatalf("only %d digits guaranteed, want at least 12", got)
 	}
 	n, _, _ = parse.Parse("sin(1)")
-	if _, err := env.Eval(n); err == nil {
-		t.Fatal("sin(1) must be refused until ball arithmetic lands")
+	if _, err := env.EvalCtx(n, DefaultCtx()); err != nil {
+		t.Fatalf("sin(1): %v", err)
 	}
 }
 

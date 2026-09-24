@@ -6,18 +6,22 @@ import (
 )
 
 type Value struct {
-	Num    num.Exact
+	Num    num.Number
 	Dim    units.Dim
 	Unit   string
 	Factor num.Exact
 	Offset num.Exact
 }
 
-func Scalar(n num.Exact) Value {
+func Scalar(n num.Exact) Value { return ScalarNum(num.NumExact(n)) }
+
+func ScalarNum(n num.Number) Value {
 	return Value{Num: n, Factor: num.FromInt(1)}
 }
 
-func WithUnit(n num.Exact, u units.Unit) Value {
+func WithUnit(n num.Exact, u units.Unit) Value { return WithUnitNum(num.NumExact(n), u) }
+
+func WithUnitNum(n num.Number, u units.Unit) Value {
 	return Value{Num: n, Dim: u.Dim, Unit: u.Symbol, Factor: u.Factor, Offset: u.Offset}
 }
 
@@ -36,4 +40,6 @@ func (v Value) FactorOrOne() num.Exact {
 	return v.Factor
 }
 
-func (v Value) SI() num.Exact { return v.Num.Mul(v.FactorOrOne()).Add(v.Offset) }
+func (v Value) SI(prec uint) num.Number {
+	return v.Num.Mul(num.NumExact(v.FactorOrOne()), prec).Add(num.NumExact(v.Offset), prec)
+}

@@ -2,6 +2,7 @@ package format
 
 import (
 	"math/big"
+	"strconv"
 	"strings"
 
 	"github.com/rahuldr07/go-calc/internal/parse"
@@ -26,6 +27,11 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 	if v.Unit != "" {
 		b.WriteString(" " + v.Unit)
 	}
+	if !v.Num.IsExact() {
+		if _, digits, capped := s.NumberBall(v.Num.Ball(BallPrec)); capped {
+			b.WriteString("\n  " + strconv.Itoa(digits) + " digits guaranteed (precision cap reached)")
+		}
+	}
 	for _, n := range notes {
 		b.WriteString("\n  read as " + strings.TrimPrefix(n.Msg, "read as "))
 	}
@@ -33,15 +39,15 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 }
 
 func (s Style) Number(v value.Value) string {
-	digits := s.Digits
-	if digits <= 0 {
-		digits = Digits
+	if !v.Num.IsExact() {
+		text, _ := provenDecimal(v.Num.Ball(BallPrec), s.digitBudget())
+		return s.groupDecimal(text)
 	}
-	r := v.Num.Rat()
+	r := v.Num.Exact().Rat()
 	if r.IsInt() {
 		return s.group(r.Num().String())
 	}
-	dec := trimDecimal(r.FloatString(digits))
+	dec := trimDecimal(r.FloatString(s.digitBudget()))
 	if terminates(r) {
 		return s.groupDecimal(dec)
 	}

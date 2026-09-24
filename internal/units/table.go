@@ -116,13 +116,21 @@ func Lookup(sym string) (Unit, bool) {
 }
 
 func Convert(v num.Exact, from, to Unit) (num.Exact, error) {
-	if from.Dim != to.Dim {
-		return num.Exact{}, errors.New("cannot convert " + from.Dim.Words() + " (" + from.Symbol + ") to " + to.Dim.Words() + " (" + to.Symbol + ")")
-	}
-	si := v.Mul(from.Factor).Add(from.Offset)
-	out, err := si.Sub(to.Offset).Div(to.Factor)
+	out, err := ConvertNumber(num.NumExact(v), from, to, 0)
 	if err != nil {
 		return num.Exact{}, err
+	}
+	return out.Exact(), nil
+}
+
+func ConvertNumber(v num.Number, from, to Unit, prec uint) (num.Number, error) {
+	if from.Dim != to.Dim {
+		return num.Number{}, errors.New("cannot convert " + from.Dim.Words() + " (" + from.Symbol + ") to " + to.Dim.Words() + " (" + to.Symbol + ")")
+	}
+	si := v.Mul(num.NumExact(from.Factor), prec).Add(num.NumExact(from.Offset), prec)
+	out, err := si.Sub(num.NumExact(to.Offset), prec).Div(num.NumExact(to.Factor), prec)
+	if err != nil {
+		return num.Number{}, err
 	}
 	return out, nil
 }
