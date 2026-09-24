@@ -2,6 +2,9 @@ package format
 
 import (
 	"encoding/json"
+	"math/big"
+
+	"github.com/rahuldr07/go-calc/internal/num"
 
 	"github.com/rahuldr07/go-calc/internal/parse"
 	"github.com/rahuldr07/go-calc/internal/value"
@@ -17,7 +20,7 @@ type unitOut struct {
 type valueOut struct {
 	Exact   string `json:"exact,omitempty"`
 	Ball    string `json:"ball,omitempty"`
-	Decimal string `json:"decimal"`
+	Decimal string `json:"decimal,omitempty"`
 	Digits  int    `json:"digits"`
 	Capped  bool   `json:"capped,omitempty"`
 }
@@ -37,13 +40,15 @@ func JSON(input string, v value.Value, notes []parse.Note) ([]byte, error) {
 	for _, n := range notes {
 		msgs = append(msgs, n.Msg)
 	}
-	decimal, _ := Default.Decimal(v)
-	out := valueOut{Decimal: decimal, Digits: significantDigits(decimal)}
+	out := valueOut{}
 	if v.Num.IsExact() {
 		out.Exact = v.Num.Exact().String()
+		out.Decimal, out.Digits = Default.provenExact(v.Num.Exact().Rat())
 	} else {
-		_, _, out.Capped = Default.NumberBall(v.Num.Ball(ballPrec))
+		b := v.Num.Ball(ballPrec)
+		_, _, out.Capped = Default.NumberBall(b)
 		out.Ball = v.Num.String()
+		out.Decimal, out.Digits = Default.provenBall(b)
 	}
 	r := result{Schema: Schema, Input: input, Value: out, Notes: msgs}
 	if v.Unit != "" {
@@ -56,4 +61,27 @@ func JSON(input string, v value.Value, notes []parse.Note) ([]byte, error) {
 		r.Unit = &unitOut{Symbol: v.Unit, Dims: dims}
 	}
 	return json.MarshalIndent(r, "", "  ")
+}
+
+func (s Style) provenBall(b num.Ball) (string, int) {
+	digits := b.GuaranteedDigits()
+	if digits > s.digitBudget() {
+		digits = s.digitBudget()
+	}
+	if digits == 0 {
+		return "", 0
+	}
+	text, shown := provenDecimal(b, digits)
+	if shown == 0 {
+		return "", 0
+	}
+	return text, shown
+}
+
+func (s Style) provenExact(r *big.Rat) (string, int) {
+	text, complete := s.Decimal(value.Scalar(num.FromRat(r)))
+	if complete {
+		return text, exactSignificantDigits(r)
+	}
+	return text, s.digitBudget()
 }

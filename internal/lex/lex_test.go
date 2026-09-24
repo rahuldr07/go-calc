@@ -91,6 +91,9 @@ func TestCommaGroupsOnlyJoinWhenWellFormed(t *testing.T) {
 		{"12345,678", "12345"},
 		{"1e5,000", "1e5"},
 		{"1.5,000", "1.5"},
+		{"1_000,000", "1_000,000"},
+		{"1_0,000", "1_0,000"},
+		{"1_0000,000", "1_0000"},
 	}
 	for _, c := range cases {
 		toks, err := Scan(c.src)

@@ -2,6 +2,7 @@ package format
 
 import (
 	"encoding/json"
+	"math/big"
 	"strconv"
 	"strings"
 	"testing"
@@ -76,6 +77,35 @@ func TestJSONSchema(t *testing.T) {
 	}
 }
 
+func decodeJSON(t *testing.T, v value.Value) (decimal string, digits int, ball string) {
+	t.Helper()
+	raw, err := JSON("x", v, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Value struct {
+			Exact   string `json:"exact"`
+			Ball    string `json:"ball"`
+			Decimal string `json:"decimal"`
+			Digits  int    `json:"digits"`
+		} `json:"value"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("invalid JSON %s: %v", raw, err)
+	}
+	return out.Value.Decimal, out.Value.Digits, out.Value.Ball
+}
+
+func bigBall(t *testing.T, lit string, radius float64) num.Ball {
+	t.Helper()
+	mid, _, err := big.ParseFloat(lit, 10, 200, big.ToNearestEven)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return num.NewBall(mid, num.MagFromFloat(radius))
+}
+
 func TestJSONDecimalIsABareNumber(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -86,30 +116,54 @@ func TestJSONDecimalIsABareNumber(t *testing.T) {
 		{"non-terminating", value.Scalar(mustRat(t, "1/3")), "0.333333333333", 12},
 		{"terminating", value.Scalar(mustRat(t, "3/10")), "0.3", 1},
 		{"integer", value.Scalar(num.FromInt(3000)), "3000", 4},
+		{"negative exact", value.Scalar(mustRat(t, "-1/3")), "-0.333333333333", 12},
+		{"narrow ball", value.ScalarNum(num.NumBall(bigBall(t, "1.414213562373095048801688724", 1e-27))), "1.41421356237", 12},
+		{"negative ball", value.ScalarNum(num.NumBall(bigBall(t, "-1.414213562373095048801688724", 1e-27))), "-1.41421356237", 12},
+		{"scientific ball", value.ScalarNum(num.NumBall(bigBall(t, "1.414213562373095048801688724e30", 1e-6))), "1.41421356237e+30", 12},
+		{"zero digits, straddling", value.ScalarNum(num.NumBall(num.NewBall(big.NewFloat(0.5), num.MagFromFloat(1)))), "", 0},
+		{"zero digits, lopsided", value.ScalarNum(num.NumBall(num.NewBall(big.NewFloat(-0.0300926553811), num.MagFromFloat(0.0300927)))), "", 0},
+		{"zero digits, clear of zero", value.ScalarNum(num.NumBall(num.NewBall(big.NewFloat(3), num.MagFromFloat(2)))), "", 0},
 	}
 	for _, c := range cases {
-		b, err := JSON("x", c.value, nil)
-		if err != nil {
-			t.Fatalf("%s: %v", c.name, err)
+		decimal, digits, ball := decodeJSON(t, c.value)
+		if decimal != c.decimal {
+			t.Errorf("%s: decimal = %q, want %q", c.name, decimal, c.decimal)
 		}
-		var out struct {
-			Value struct {
-				Exact   string `json:"exact"`
-				Decimal string `json:"decimal"`
-				Digits  int    `json:"digits"`
-			} `json:"value"`
+		if digits != c.digits {
+			t.Errorf("%s: digits = %d, want %d", c.name, digits, c.digits)
 		}
-		if err := json.Unmarshal(b, &out); err != nil {
-			t.Fatalf("%s: %v", c.name, err)
+		if decimal == "" {
+			if ball == "" {
+				t.Errorf("%s: no decimal and no ball, the value went missing", c.name)
+			}
+			continue
 		}
-		if out.Value.Decimal != c.decimal {
-			t.Errorf("%s: decimal = %q, want %q", c.name, out.Value.Decimal, c.decimal)
+		if _, err := strconv.ParseFloat(decimal, 64); err != nil {
+			if ne, ok := err.(*strconv.NumError); !ok || ne.Err != strconv.ErrRange {
+				t.Errorf("%s: decimal %q is not a number: %v", c.name, decimal, err)
+			}
 		}
-		if _, err := strconv.ParseFloat(out.Value.Decimal, 64); err != nil {
-			t.Errorf("%s: decimal %q does not parse as a number: %v", c.name, out.Value.Decimal, err)
+		if strings.ContainsAny(decimal, "\u00b1/\u2248") {
+			t.Errorf("%s: decimal %q carries something that is not a number", c.name, decimal)
 		}
-		if out.Value.Digits != c.digits {
-			t.Errorf("%s: digits = %d, want %d", c.name, out.Value.Digits, c.digits)
+	}
+}
+
+func TestJSONDigitsCountWhatIsProvenNotWhatIsPrinted(t *testing.T) {
+	cases := []struct {
+		name   string
+		value  value.Value
+		digits int
+	}{
+		{"exponent is not a digit", value.ScalarNum(num.NumBall(bigBall(t, "1.414213562373095048801688724e30", 1e-6))), 12},
+		{"trimmed zeros are still proven", value.ScalarNum(num.NumBall(bigBall(t, "2.0000000000000000000000000000", 1e-28))), 12},
+		{"a radius is not a digit", value.ScalarNum(num.NumBall(num.NewBall(big.NewFloat(4.51389830716), num.MagFromFloat(3.00927)))), 0},
+		{"a short ball claims only what it proves", value.ScalarNum(num.NumBall(bigBall(t, "2.5", 1e-3))), 3},
+	}
+	for _, c := range cases {
+		decimal, digits, _ := decodeJSON(t, c.value)
+		if digits != c.digits {
+			t.Errorf("%s: digits = %d for decimal %q, want %d", c.name, digits, decimal, c.digits)
 		}
 	}
 }

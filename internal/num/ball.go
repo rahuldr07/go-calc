@@ -232,7 +232,8 @@ func (b Ball) GuaranteedPlaces() int {
 	if b.Rad.IsZero() {
 		return clampDigits(decimalDigits(b.mid().Prec()) - decimalExponent(b.mid()))
 	}
-	return clampDigits(-decimalExponent(newMag().Add(rad, rad)) - 1)
+	farthest := newMag().Add(newMag().Abs(b.mid()), rad)
+	return clampDigits(-decimalExponent(newMag().Add(farthest, farthest)) - 1)
 }
 
 func (b Ball) ContainsZero() bool { return b.Lo().Sign() <= 0 && b.Hi().Sign() >= 0 }

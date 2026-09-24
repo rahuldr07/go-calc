@@ -109,15 +109,16 @@ func scanNumber(rs []rune, i int) int {
 }
 
 func leadingGroup(rs []rune, i, j int) bool {
-	if j-i < 1 || j-i > 3 {
-		return false
-	}
+	start := i
 	for k := i; k < j; k++ {
-		if !unicode.IsDigit(rs[k]) {
+		switch {
+		case rs[k] == '_':
+			start = k + 1
+		case !unicode.IsDigit(rs[k]):
 			return false
 		}
 	}
-	return true
+	return j-start >= 1 && j-start <= 3
 }
 
 func groupedDigits(rs []rune, j int) int {

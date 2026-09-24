@@ -257,3 +257,16 @@ func significantDigits(text string) int {
 	}
 	return seen
 }
+
+func exactSignificantDigits(r *big.Rat) int {
+	places, ok := terminatingPlaces(r)
+	if !ok {
+		return 0
+	}
+	scaled := new(big.Int).Mul(new(big.Int).Abs(r.Num()), new(big.Int).Exp(bigTen, big.NewInt(int64(places)), nil))
+	scaled.Quo(scaled, r.Denom())
+	if scaled.Sign() == 0 {
+		return 0
+	}
+	return len(scaled.String())
+}

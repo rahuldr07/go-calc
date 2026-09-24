@@ -194,3 +194,17 @@ func TestCommaSeparatedArgumentsWithoutASpace(t *testing.T) {
 		t.Errorf("grouped numbers = %s, want 1851000", got)
 	}
 }
+
+func TestUnderscoresAndCommaGroupingCompose(t *testing.T) {
+	env := NewEnv()
+	for _, c := range []struct{ src, want string }{
+		{"1_000,000", "1000000"},
+		{"1_000_000", "1000000"},
+		{"18,50,000", "1850000"},
+		{"1,000", "1000"},
+	} {
+		if got := run(t, env, c.src); got != c.want {
+			t.Errorf("%s = %s, want %s", c.src, got, c.want)
+		}
+	}
+}

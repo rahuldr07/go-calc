@@ -157,3 +157,37 @@ func TestGuaranteedDigitsCountsSignificantDigits(t *testing.T) {
 		t.Errorf("GuaranteedDigits of a ball wider than its midpoint = %d, want 0", got)
 	}
 }
+
+func TestGuaranteedPlacesAccountsForTheMidpointOffset(t *testing.T) {
+	cases := []struct {
+		mid    float64
+		radius float64
+		want   int
+	}{
+		{0, 0.004, 2},
+		{0.04, 0.004, 1},
+		{-0.0300926553811, 0.0300927, 0},
+		{0, 0.4, 0},
+	}
+	for _, c := range cases {
+		b := NewBall(big.NewFloat(c.mid), MagFromFloat(c.radius))
+		got := b.GuaranteedPlaces()
+		if got != c.want {
+			t.Errorf("GuaranteedPlaces(%g ± %g) = %d, want %d", c.mid, c.radius, got, c.want)
+		}
+		if got == 0 {
+			continue
+		}
+		half := new(big.Float).Quo(big.NewFloat(1), new(big.Float).SetPrec(200).SetInt(pow10Int(got)))
+		half.Quo(half, big.NewFloat(2))
+		for _, edge := range []*big.Float{b.Lo(), b.Hi()} {
+			if new(big.Float).Abs(edge).Cmp(half) >= 0 {
+				t.Errorf("%g ± %g claims %d places but reaches %s", c.mid, c.radius, got, edge.Text('g', 6))
+			}
+		}
+	}
+}
+
+func pow10Int(k int) *big.Int {
+	return new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(k)), nil)
+}

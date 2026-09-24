@@ -313,3 +313,47 @@ func TestOneDigitReadsAsSingular(t *testing.T) {
 		t.Errorf("Text = %q, want the singular decimal place", got)
 	}
 }
+
+func TestZeroNoteHoldsForEveryPointInTheBall(t *testing.T) {
+	balls := []num.Ball{
+		num.NewBall(new(big.Float), num.MagFromFloat(1e-30)),
+		num.NewBall(new(big.Float), num.MagFromFloat(0.004)),
+		num.NewBall(big.NewFloat(0.04), num.MagFromFloat(0.004)),
+		num.NewBall(big.NewFloat(-0.0300926553811), num.MagFromFloat(0.0300927)),
+		num.NewBall(big.NewFloat(0.5), num.MagFromFloat(1)),
+		num.NewBall(big.NewFloat(-0.009), num.MagFromFloat(0.01)),
+	}
+	for _, b := range balls {
+		v := value.ScalarNum(num.NumBall(b))
+		note := Default.precisionNote(v)
+		if !strings.HasPrefix(note, "zero to ") {
+			continue
+		}
+		places := b.GuaranteedPlaces()
+		for _, edge := range []*big.Float{b.Lo(), b.Hi()} {
+			if rendered := unsignZero(edge.Text('f', places)); strings.Trim(rendered, "0.") != "" {
+				t.Errorf("ball %s claims %q but its edge %s reads %s at %d places",
+					b, note, edge.Text('g', 6), rendered, places)
+			}
+		}
+	}
+}
+
+func TestLopsidedBallAroundZeroIsNotCalledZero(t *testing.T) {
+	b := num.NewBall(big.NewFloat(-0.0300926553811), num.MagFromFloat(0.0300927))
+	if !b.ContainsZero() {
+		t.Fatal("the case under test has drifted: the ball no longer straddles zero")
+	}
+	if got := b.GuaranteedPlaces(); got != 0 {
+		t.Errorf("GuaranteedPlaces = %d, but the ball reaches %s, which is not 0 to any decimal place",
+			got, b.Lo().Text('g', 6))
+	}
+	text, digits, _ := Default.NumberBall(b)
+	if text == "0" || digits != 0 {
+		t.Errorf("printed %q with %d digits, want the midpoint and radius", text, digits)
+	}
+	v := value.ScalarNum(num.NumBall(b))
+	if note := Default.precisionNote(v); strings.HasPrefix(note, "zero to ") {
+		t.Errorf("note = %q, but the ball reaches %s", note, b.Lo().Text('g', 6))
+	}
+}
