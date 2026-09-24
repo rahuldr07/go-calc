@@ -48,6 +48,15 @@ type Value struct {
 
 Sensitivities are `float64`, not `big.Float`: uncertainty is reported to two significant digits, so arbitrary precision buys nothing there. Arbitrary precision is confined to the ball midpoint.
 
+### Architecture decisions (2026-09-24)
+
+1. **`Number` is a tagged struct, not an interface.** Go was chosen for cold start (5 ms measured), a single static binary and a cgo-free WASM build — not for raw big-number throughput, where GMP-backed languages win. Since we gave up peak arithmetic speed by staying pure Go, we keep the shape that costs nothing: no interface boxing, no allocation per operation on the exact path. Correctness is held by the containment property tests either way.
+2. **Provenance is always on.** A node id is one `int32` per value and an arena per evaluation, so `trace` is free rather than a mode to enable.
+3. **Web front end is plain Vite + Svelte 5**, one static page, no router. Docs and a landing page can be a separate Astro site later.
+4. **One repository.** `web/` carries its own `package.json`; CI builds the WASM module and the front end together so they cannot drift.
+5. **Performance budget, enforced by benchmarks in CI** and published as measured numbers in the README: typical 12-digit expression under 1 ms; 1,000 digits of `exp(pi·sqrt(163))` under 1 s; recalculating a 100-line document under 10 ms; CLI cold start under 50 ms; WASM bundle under 4 MB compressed.
+6. **The browser crosses the boundary once per keystroke**, not once per line: the whole document goes into one `goCalcEval` call and every line's result comes back together, inside a Web Worker so a deep precision retry never freezes the page.
+
 ## 3. Decisions made during design
 
 These differ from the PRD and win over it.
