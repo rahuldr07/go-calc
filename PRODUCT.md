@@ -41,6 +41,8 @@ The web surface is designed for daily users first: an editor ready to type into.
 - An optional keypad: a full scientific instrument (sci, calculus, algebra, matrix, stats, and go-calc's own trust keys) that types into the sheet rather than replacing it, so a key press and typed text are the same thing underneath. Hidden by default on desktop, shown by default on phones, remembered per person. Keys for engines not yet built are visible but inactive and say so.
 - `%` means percent (Soulver-style: `500 + 10%`, `18% of 500`); modulo is `mod`. (Assumed default; user did not object.)
 - Names after a number resolve as units (`5 h` is hours); bare names resolve variable → constant → unit.
+- Names in unit position resolve as units before constants. A name is in unit position when it is an operand of `*`, `·` or `/` whose other side carries a unit or names one — so `h` in `60 km/h`, `s` in `9.8 m/s^2` and `mol`, `K` in `1 J/(mol·K)` are units, while bare `h` and `1/h` stay Planck's constant. Unit position runs through both sides of `*`, `·`, `/` and into the base of `^`, never through `+`, `-` or a function call. A variable that carries a unit or a declared uncertainty still wins, and a reading that could have gone the other way prints an interpretation note.
+- A conversion target may be a unit expression: `to m/s`, `to km/h`, `to J/(mol·K)`, `to m^2`.
 - Indian digit grouping accepted in input and available in output.
 
 ## Brand

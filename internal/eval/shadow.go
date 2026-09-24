@@ -48,27 +48,30 @@ func (e *Env) Shadow(n parse.Node) Shadow {
 }
 
 type shadowPass struct {
-	env  *Env
-	prec uint
-	lost []LossSite
+	env   *Env
+	prec  uint
+	lost  []LossSite
+	units unitScope
 }
 
 type shown struct {
 	num     float64
 	factor  float64
-	dimless bool
+	dim     units.Dim
 }
 
-func plain(x float64) shown { return shown{num: x, factor: 1, dimless: true} }
+func plain(x float64) shown { return shown{num: x, factor: 1} }
 
 func wearing(x, factor float64, dim units.Dim) shown {
-	return shown{num: x, factor: factor, dimless: dim.IsNone()}
+	return shown{num: x, factor: factor, dim: dim}
 }
+
+func (v shown) dimless() bool { return v.dim.IsNone() }
 
 func (v shown) si() float64 { return v.num * v.factor }
 
 func (v shown) rescaled(num, factor float64) shown {
-	return shown{num: num, factor: factor, dimless: v.dimless}
+	return shown{num: num, factor: factor, dim: v.dim}
 }
 
 type scope map[string]shown
@@ -102,6 +105,11 @@ func (s *shadowPass) walk(n parse.Node, sc scope, depth int) (shown, bool) {
 }
 
 func (s *shadowPass) name(t *parse.Name, sc scope) (shown, bool) {
+	if s.units.holds(t) {
+		if x, ok, handled := s.unitInPosition(t, sc); handled {
+			return x, ok
+		}
+	}
 	if x, ok := sc[t.Text]; ok {
 		return x, true
 	}
@@ -135,6 +143,35 @@ func (s *shadowPass) name(t *parse.Name, sc scope) (shown, bool) {
 	return shown{}, false
 }
 
+func (s *shadowPass) readsAsUnit(t *parse.Name, sc scope) (units.Unit, bool) {
+	if x, bound := sc[t.Text]; bound {
+		u, known := units.Lookup(t.Text)
+		return u, known && x.dimless() && x.factor == 1
+	}
+	u, _, _, asUnit := s.env.implicitReading(t)
+	return u, asUnit
+}
+
+func (s *shadowPass) unitInPosition(t *parse.Name, sc scope) (shown, bool, bool) {
+	u, asUnit := s.readsAsUnit(t, sc)
+	if !asUnit {
+		return shown{}, false, false
+	}
+	if u.Offset.Sign() != 0 {
+		return shown{}, false, true
+	}
+	return wearing(1, exactFloat(u.Factor), u.Dim), true, true
+}
+
+func (s *shadowPass) walkPositioned(n parse.Node, sc scope, depth int, unitPosition bool) (shown, bool) {
+	if !unitPosition {
+		return s.walk(n, sc, depth)
+	}
+	s.units.enter(n)
+	defer s.units.leave(n)
+	return s.walk(n, sc, depth)
+}
+
 func (s *shadowPass) unary(t *parse.Unary, sc scope, depth int) (shown, bool) {
 	x, ok := s.walk(t.X, sc, depth+1)
 	if !ok {
@@ -165,22 +202,23 @@ func factorialFloat(x float64) (shown, bool) {
 const maxFactorial = 20000
 
 func (s *shadowPass) binary(t *parse.Binary, sc scope, depth int) (shown, bool) {
-	if t.Implicit {
-		if x, ok, handled := s.implicit(t, sc, depth); handled {
-			return x, ok
-		}
-	}
 	if t.Op == "to" || t.Op == "in" {
 		return s.conversion(t, sc, depth)
 	}
-	l, ok := s.walk(t.L, sc, depth+1)
+	inherited := s.units.holds(t)
+	l, ok := s.walkPositioned(t.L, sc, depth+1, leftUnitPosition(t, inherited))
 	if !ok {
 		return shown{}, false
 	}
 	if t.Op == "±" || t.Op == "+-" {
 		return l, true
 	}
-	r, ok := s.walk(t.R, sc, depth+1)
+	if t.Implicit {
+		if x, ok, handled := s.attach(t, l, sc); handled {
+			return x, ok
+		}
+	}
+	r, ok := s.walkPositioned(t.R, sc, depth+1, rightUnitPosition(t, inherited, !l.dimless() || l.factor != 1))
 	if !ok {
 		return shown{}, false
 	}
@@ -191,9 +229,9 @@ func (s *shadowPass) binary(t *parse.Binary, sc scope, depth int) (shown, bool) 
 		}
 		return s.sum(t, l, r)
 	case "*", "×", "·":
-		return plain(l.si() * r.si()), true
+		return joined(l.si()*r.si(), l.dim.Add(r.dim)), true
 	case "/", "÷":
-		return plain(l.si() / r.si()), true
+		return joined(l.si()/r.si(), l.dim.Sub(r.dim)), true
 	case "^":
 		return raised(l, r.si()), true
 	case "mod":
@@ -209,13 +247,20 @@ func (s *shadowPass) binary(t *parse.Binary, sc scope, depth int) (shown, bool) 
 	return shown{}, false
 }
 
+func joined(x float64, dim units.Dim) shown {
+	return shown{num: x, factor: 1, dim: dim}
+}
+
 func raised(base shown, exponent float64) shown {
-	out := shown{
-		num:     math.Pow(base.num, exponent),
-		factor:  math.Pow(base.factor, exponent),
-		dimless: base.dimless,
+	if base.dimless() {
+		return plain(math.Pow(base.si(), exponent))
 	}
-	if out.dimless {
+	out := shown{
+		num:    math.Pow(base.num, exponent),
+		factor: math.Pow(base.factor, exponent),
+		dim:    base.dim.Scale(int(exponent)),
+	}
+	if out.dimless() {
 		return plain(out.si())
 	}
 	return out
@@ -231,23 +276,16 @@ func (s *shadowPass) sum(t *parse.Binary, l, r shown) (shown, bool) {
 	return l.rescaled(out, l.factor), true
 }
 
-func (s *shadowPass) implicit(t *parse.Binary, sc scope, depth int) (shown, bool, bool) {
+func (s *shadowPass) attach(t *parse.Binary, l shown, sc scope) (shown, bool, bool) {
 	name, ok := t.R.(*parse.Name)
 	if !ok {
 		return shown{}, false, false
 	}
-	if _, bound := sc[name.Text]; bound {
-		return shown{}, false, false
-	}
-	u, _, _, asUnit := s.env.implicitReading(name)
-	if !asUnit {
+	u, asUnit := s.readsAsUnit(name, sc)
+	if !asUnit || !l.dimless() || l.factor != 1 {
 		return shown{}, false, false
 	}
 	if u.Offset.Sign() != 0 {
-		return shown{}, false, true
-	}
-	l, ok := s.walk(t.L, sc, depth+1)
-	if !ok {
 		return shown{}, false, true
 	}
 	factor := exactFloat(u.Factor)
@@ -258,11 +296,11 @@ func (s *shadowPass) implicit(t *parse.Binary, sc scope, depth int) (shown, bool
 }
 
 func (s *shadowPass) conversion(t *parse.Binary, sc scope, depth int) (shown, bool) {
-	name, ok := t.R.(*parse.Name)
+	target, ok := unitTarget(t.R)
 	if !ok {
 		return shown{}, false
 	}
-	to, ok := units.Lookup(name.Text)
+	to, ok := units.Lookup(target)
 	if !ok || to.Offset.Sign() != 0 {
 		return shown{}, false
 	}

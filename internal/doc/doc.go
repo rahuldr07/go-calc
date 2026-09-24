@@ -142,8 +142,9 @@ func read(src string) *entry {
 			e.def, e.params = a.Name, a.Params
 		}
 	}
-	e.refs = append(freeNames(node, nil, nil), e.corr...)
-	e.units = unitNames(node, nil, nil)
+	worn := eval.UnitPositions(node)
+	e.refs = append(freeNames(node, nil, worn, nil), e.corr...)
+	e.units = unitNames(node, nil, worn, nil)
 	return e
 }
 

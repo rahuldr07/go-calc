@@ -1,6 +1,7 @@
 package eval
 
 import (
+	"fmt"
 	"math/big"
 	"strings"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/rahuldr07/go-calc/internal/format"
 	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/units"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
 
@@ -319,5 +321,218 @@ func TestPlainNumberRejectsAScaleNoSymbolCarries(t *testing.T) {
 	}
 	if !plainNumber(value.Scalar(num.FromInt(3))) {
 		t.Error("a plain 3 was refused as a plain number")
+	}
+}
+
+func TestANameInUnitPositionIsAUnit(t *testing.T) {
+	for _, c := range [][2]string{
+		{"60 km/h", "50/3 m/s"},
+		{"60 km/h to m/s", "50/3 m/s"},
+		{"60 km/hour", "50/3 m/s"},
+		{"9.8 m/s^2", "49/5 m/s^2"},
+		{"1 J/(mol·K)", "1 J/(mol·K)"},
+		{"100 km/h * 2 h", "200000 m"},
+		{"(60 km/h) / (2 h)", "1/432 m/s^2"},
+		{"2 * (60 km/h)", "100/3 m/s"},
+		{"60 km/h + 10 km/h", "175/9 m/s"},
+		{"3 kW·h", "10800000 m^2·kg/s^2"},
+		{"km/h", "5/18 m/s"},
+		{"60 km/h to mile/h", "156250/4191 mile/h"},
+		{"h/km", "18/5 s/m"},
+		{"h/s^2", "3600 1/s"},
+		{"2 mile/hour", "2794/3125 m/s"},
+	} {
+		if got := run(t, NewEnv(), c[0]); got != c[1] {
+			t.Errorf("%s = %s, want %s", c[0], got, c[1])
+		}
+	}
+}
+
+func TestAUnitPositionReadingSaysWhichWayItWent(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "60 km/h")
+	notes := env.Notes()
+	if len(notes) != 1 {
+		t.Fatalf("60 km/h left %d notes, want one saying how h was read", len(notes))
+	}
+	if !strings.Contains(notes[0].Msg, "the unit h") || !strings.Contains(notes[0].Msg, "not the constant h") {
+		t.Errorf("note = %q, want it to say h was read as the unit, not the constant", notes[0].Msg)
+	}
+	if quiet := NewEnv(); len(quiet.Notes()) != 0 {
+		t.Error("a fresh environment already carries notes")
+	}
+	plain := NewEnv()
+	run(t, plain, "60 km/min")
+	if len(plain.Notes()) != 0 {
+		t.Errorf("60 km/min left notes %v, want none: min is only a unit", plain.Notes())
+	}
+}
+
+func TestTheRuledNameReadingsSurviveUnitPosition(t *testing.T) {
+	shadowed := NewEnv()
+	run(t, shadowed, "h = 3")
+	if got := run(t, shadowed, "5 h"); got != "5 h" {
+		t.Errorf("after h = 3, 5 h = %s, want 5 h", got)
+	}
+	measured := NewEnv()
+	run(t, measured, "h = 12.3 ± 0.2 m")
+	if got := run(t, measured, "2h"); got != "123/5 m" {
+		t.Errorf("after a measured h, 2h = %s, want 123/5 m", got)
+	}
+	if got := run(t, measured, "(3 km) / (2 h)"); got != "5000/41" {
+		t.Errorf("(3 km) / (2 h) with a measured h = %s, want 5000/41, the variable reading", got)
+	}
+	bare := NewEnv()
+	if got := run(t, bare, "h"); got != "132521403/200000000000000000000000000000000000000000 J·s" {
+		t.Errorf("bare h = %s, want Planck's constant", got)
+	}
+	if got := run(t, bare, "g0"); got != "196133/20000 m/s^2" {
+		t.Errorf("g0 = %s, want standard gravity", got)
+	}
+	if got := run(t, bare, "c"); got != "299792458 m/s" {
+		t.Errorf("c = %s, want the speed of light", got)
+	}
+	if got := run(t, bare, "1/h"); !strings.HasSuffix(got, "1/(J·s)") {
+		t.Errorf("1/h = %s, want Planck's constant inverted: 1 carries no unit", got)
+	}
+}
+
+func TestAVariableCarriesItsUnitExpressionThroughAConversion(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "x = 60 km/h")
+	if got := run(t, env, "x to m/s"); got != "50/3 m/s" {
+		t.Errorf("x to m/s = %s, want 50/3 m/s", got)
+	}
+	if got := run(t, env, "x to km/h"); got != "60 km/h" {
+		t.Errorf("x to km/h = %s, want 60 km/h", got)
+	}
+}
+
+func TestAConversionTargetMayBeAUnitExpression(t *testing.T) {
+	for _, c := range [][2]string{
+		{"5 m/s to km/h", "18 km/h"},
+		{"1 m^2 to cm^2", "10000 cm^2"},
+		{"1 J/(mol·K) to J/(mol·K)", "1 J/(mol·K)"},
+		{"1 N·m to J", "1 J"},
+		{"90 minute to hour", "3/2 hour"},
+		{"1 m/s^2 to km/h^2", "12960 km/h^2"},
+		{"2 m·kg/s^2 to N", "2 N"},
+	} {
+		if got := run(t, NewEnv(), c[0]); got != c[1] {
+			t.Errorf("%s = %s, want %s", c[0], got, c[1])
+		}
+	}
+}
+
+func TestAConversionTargetThatIsNotAUnitIsRefused(t *testing.T) {
+	for _, c := range [][2]string{
+		{"5 m to 2", "convert to what unit?"},
+		{"5 m to (2 + 3)", "convert to what unit?"},
+		{"5 m to sqrt(2)", "convert to what unit?"},
+		{"2 km/h to bogus/s", "unknown unit bogus/s"},
+		{"2 km/h to m/", "unexpected end of input"},
+		{"5 m to m^2.5", "convert to what unit?"},
+	} {
+		n, _, err := parse.Parse(c[0])
+		if err != nil {
+			if !strings.Contains(err.Error(), c[1]) {
+				t.Errorf("%s failed with %q, want %q", c[0], err, c[1])
+			}
+			continue
+		}
+		if _, err := NewEnv().Eval(n); err == nil || !strings.Contains(err.Error(), c[1]) {
+			t.Errorf("%s gave error %v, want %q", c[0], err, c[1])
+		}
+	}
+}
+
+func compoundSymbols() []string {
+	var out []string
+	for _, top := range []string{"m", "km", "J", "N", "g", "mile", "W", "mol", "cm", "kJ"} {
+		for _, bottom := range []string{"s", "h", "min", "K", "day", "hour", "second"} {
+			for _, shape := range []string{
+				"%[1]s/%[2]s", "%[1]s·%[2]s", "%[1]s/%[2]s^2", "%[1]s^2/%[2]s",
+				"%[1]s/(%[2]s·K)", "%[1]s^2/%[2]s^2", "%[1]s/%[2]s/%[2]s",
+				"%[1]s·%[2]s/(mol·K)", "%[1]s/(%[2]s^3)",
+			} {
+				out = append(out, fmt.Sprintf(shape, top, bottom))
+			}
+		}
+	}
+	return out
+}
+
+func TestEveryCompoundUnitReadsAsTheUnitItSpells(t *testing.T) {
+	prec := DefaultCtx().Prec
+	checked := 0
+	for _, sym := range compoundSymbols() {
+		want, ok := units.Lookup(sym)
+		if !ok {
+			t.Fatalf("the unit table cannot read %q, so the sweep is built wrong", sym)
+		}
+		v := mustEval(t, NewEnv(), "1 "+sym)
+		checked++
+		if v.Dim != want.Dim {
+			t.Errorf("1 %s has dimension %v, want %v", sym, v.Dim, want.Dim)
+			continue
+		}
+		si := v.SI(prec)
+		if !si.IsExact() || si.Exact().Cmp(want.Factor) != 0 {
+			t.Errorf("1 %s is %v in SI, want %v", sym, si, want.Factor)
+		}
+		if v.Unit == "" {
+			if !v.Dim.IsNone() {
+				t.Errorf("1 %s printed no unit at all, though it holds %v", sym, v.Dim)
+			}
+			continue
+		}
+		back, ok := units.Lookup(v.Unit)
+		if !ok {
+			t.Errorf("1 %s printed unit %q, which this engine cannot read back", sym, v.Unit)
+			continue
+		}
+		if back.Dim != v.Dim || back.Factor.Cmp(v.FactorOrOne()) != 0 || back.Offset.Cmp(v.Offset) != 0 {
+			t.Errorf("1 %s printed unit %q, which reads back as %v scale %v, want %v scale %v",
+				sym, v.Unit, back.Dim, back.Factor, v.Dim, v.FactorOrOne())
+		}
+	}
+	if checked < 400 {
+		t.Fatalf("only %d compound units were checked", checked)
+	}
+}
+
+func TestEveryCompoundUnitIsAConversionTarget(t *testing.T) {
+	for _, sym := range compoundSymbols() {
+		want, _ := units.Lookup(sym)
+		v := mustEval(t, NewEnv(), "1 "+sym+" to "+sym)
+		if !v.Num.IsExact() || v.Num.Exact().Cmp(num.FromInt(1)) != 0 {
+			t.Errorf("1 %s to %s = %v, want 1", sym, sym, v.Num)
+		}
+		back, ok := units.Lookup(v.Unit)
+		if !ok {
+			t.Errorf("1 %s to %s printed unit %q, which this engine cannot read back", sym, sym, v.Unit)
+			continue
+		}
+		if back.Dim != want.Dim || back.Factor.Cmp(want.Factor) != 0 {
+			t.Errorf("1 %s to %s landed in %q (%v scale %v), want %v scale %v",
+				sym, sym, v.Unit, back.Dim, back.Factor, want.Dim, want.Factor)
+		}
+	}
+}
+
+func TestTheShadowReadsAUnitPositionTheSameWay(t *testing.T) {
+	for _, src := range []string{
+		"60 km/h", "60 km/h to m/s", "9.8 m/s^2", "100 km/h * 2 h",
+		"(60 km/h) / (2 h)", "h/km", "3 kW·h", "1 J/(mol·K)", "60 km/hour",
+	} {
+		env := NewEnv()
+		n := mustParse(t, src)
+		v, err := env.Eval(n)
+		if err != nil {
+			t.Fatalf("%s: %v", src, err)
+		}
+		if w := env.Warning(n, v); w != "" {
+			t.Errorf("%s: the float64 shadow disagrees: %s", src, w)
+		}
 	}
 }

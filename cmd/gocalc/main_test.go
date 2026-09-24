@@ -325,3 +325,53 @@ func TestOneShotWarnsAboutAWrongPrintedInteger(t *testing.T) {
 		t.Errorf("out = %q, want a small exact product to stay silent", quiet)
 	}
 }
+
+func TestRunAnswersASpeedWithASpeed(t *testing.T) {
+	for _, c := range [][2]string{
+		{"60 km/h", "16.6666666667 m/s"},
+		{"60 km/h to m/s", "16.6666666667 m/s"},
+		{"60 km/hour", "16.6666666667 m/s"},
+		{"9.8 m/s^2", "9.8 m/s^2"},
+		{"1 J/(mol·K)", "1 J/(mol·K)"},
+		{"100 km/h * 2 h", "200000 m"},
+		{"(60 km/h) / (2 h)", "0.00231481481481 m/s^2"},
+		{"5 m/s to km/h", "18 km/h"},
+	} {
+		out, code := run([]string{c[0]}, plain, false)
+		if code != 0 {
+			t.Fatalf("%s: exit %d: %s", c[0], code, out)
+		}
+		head, _, _ := strings.Cut(out, "\n")
+		if !strings.HasSuffix(strings.TrimSpace(head), c[1]) {
+			t.Errorf("%s = %q, want it to end in %q", c[0], head, c[1])
+		}
+	}
+}
+
+func TestRunSaysHowItReadAUnitItCouldHaveReadAsAConstant(t *testing.T) {
+	out, code := run([]string{"60 km/h"}, plain, false)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if !strings.Contains(out, "read as the unit h (time), not the constant h") {
+		t.Errorf("out = %q, want the interpretation note", out)
+	}
+	if !strings.Contains(out, "m/s") {
+		t.Errorf("out = %q, want a speed", out)
+	}
+}
+
+func TestRunKeepsTheRuledReadings(t *testing.T) {
+	sheet := doc.New()
+	lines := sheet.SetLines([]string{"h = 3", "5 h", "h"})
+	for i, want := range []string{"3", "5 h", "3"} {
+		out, code := render(lines[i], plain, false, sheet.Arena())
+		if code != 0 {
+			t.Fatalf("line %d: %s", i, out)
+		}
+		head, _, _ := strings.Cut(out, "\n")
+		if strings.TrimSpace(head) != want {
+			t.Errorf("line %q = %q, want %q", lines[i].Src, head, want)
+		}
+	}
+}

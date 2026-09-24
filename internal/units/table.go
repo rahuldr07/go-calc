@@ -27,6 +27,7 @@ var (
 	amount      = Dim{0, 0, 0, 0, 0, 1, 0, 0}
 	luminous    = Dim{0, 0, 0, 0, 0, 0, 1, 0}
 	information = Dim{0, 0, 0, 0, 0, 0, 0, 1}
+	volume      = Dim{3, 0, 0, 0, 0, 0, 0, 0}
 	force       = Dim{1, 1, -2, 0, 0, 0, 0, 0}
 	energy      = Dim{2, 1, -2, 0, 0, 0, 0, 0}
 	power       = Dim{2, 1, -3, 0, 0, 0, 0, 0}
@@ -75,6 +76,23 @@ func init() {
 		"lakh":  {"lakh", none, rat("100000"), rat("0"), Absolute},
 		"crore": {"crore", none, rat("10000000"), rat("0"), Absolute},
 	}
+	base["litre"] = Unit{"litre", volume, rat("1/1000"), rat("0"), Absolute}
+	base["liter"] = Unit{"liter", volume, rat("1/1000"), rat("0"), Absolute}
+	base["tonne"] = Unit{"tonne", mass, rat("1000"), rat("0"), Absolute}
+	for written, symbol := range spelledOut {
+		u := base[symbol]
+		u.Symbol = written
+		base[written] = u
+	}
+}
+
+var spelledOut = map[string]string{
+	"metre":  "m",
+	"meter":  "m",
+	"gram":   "g",
+	"second": "s",
+	"minute": "min",
+	"hour":   "h",
 }
 
 var prefixes = map[string]string{

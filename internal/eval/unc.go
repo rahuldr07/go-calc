@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 
+	"github.com/rahuldr07/go-calc/internal/consts"
 	"github.com/rahuldr07/go-calc/internal/lex"
 	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/parse"
@@ -337,4 +338,8 @@ func readingNote(name *parse.Name, u units.Unit, bound value.Value) parse.Note {
 		return parse.Note{Pos: name.P, Msg: "read as " + variable + ", not " + unit + "; the variable already carries a unit"}
 	}
 	return parse.Note{Pos: name.P, Msg: "read as " + unit + ", not " + variable + "; the variable is a plain number"}
+}
+
+func constantReadingNote(name *parse.Name, u units.Unit, c consts.Const) parse.Note {
+	return parse.Note{Pos: name.P, Msg: "read as the unit " + name.Text + " (" + u.Dim.Words() + "), not the constant " + name.Text + " (" + c.Name + "); a name beside a unit is read as a unit"}
 }

@@ -28,6 +28,7 @@ type pass struct {
 	assigned  bool
 	notes     []parse.Note
 	prov      map[parse.Node]prov.NodeID
+	units     unitScope
 }
 
 func (p *pass) prec() uint { return p.ctx.Prec }

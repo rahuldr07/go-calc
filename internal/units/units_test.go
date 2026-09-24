@@ -186,3 +186,44 @@ func TestMalformedCompositeSymbolsAreRefused(t *testing.T) {
 		}
 	}
 }
+
+func TestALongFormNameIsTheUnitItSpells(t *testing.T) {
+	for _, c := range [][2]string{
+		{"hour", "h"}, {"minute", "min"}, {"second", "s"},
+		{"metre", "m"}, {"meter", "m"}, {"gram", "g"},
+	} {
+		long, ok := Lookup(c[0])
+		if !ok {
+			t.Errorf("%s not found", c[0])
+			continue
+		}
+		short, _ := Lookup(c[1])
+		if long.Dim != short.Dim || long.Factor.Cmp(short.Factor) != 0 || long.Offset.Cmp(short.Offset) != 0 {
+			t.Errorf("%s is %v scale %v, want %s: %v scale %v", c[0], long.Dim, long.Factor, c[1], short.Dim, short.Factor)
+		}
+		if long.Symbol != c[0] {
+			t.Errorf("%s calls itself %q, so it would not print as written", c[0], long.Symbol)
+		}
+	}
+	for _, sym := range []string{"litre", "liter", "tonne"} {
+		u, ok := Lookup(sym)
+		if !ok {
+			t.Errorf("%s not found", sym)
+			continue
+		}
+		if u.Symbol != sym || u.Offset.Sign() != 0 {
+			t.Errorf("%s = %v", sym, u)
+		}
+	}
+	if u, _ := Lookup("litre"); u.Dim != (Dim{3, 0, 0, 0, 0, 0, 0, 0}) || u.Factor.String() != "1/1000" {
+		t.Errorf("litre = %v scale %v, want a cubic metre over a thousand", u.Dim, u.Factor)
+	}
+	if u, _ := Lookup("tonne"); u.Dim != mass || u.Factor.String() != "1000" {
+		t.Errorf("tonne = %v scale %v, want a thousand kilograms", u.Dim, u.Factor)
+	}
+	for _, sym := range []string{"km/hour", "metre/second", "gram/litre", "tonne/hour"} {
+		if _, ok := Lookup(sym); !ok {
+			t.Errorf("a compound written in full, %q, was refused", sym)
+		}
+	}
+}

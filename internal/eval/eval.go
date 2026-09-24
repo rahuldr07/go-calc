@@ -40,7 +40,25 @@ func (e *Env) evalNode(n parse.Node, p *pass) (value.Value, error) {
 	return value.Value{}, errors.New("unsupported expression")
 }
 
+type unitScope struct{ at map[parse.Node]bool }
+
+func (s *unitScope) holds(n parse.Node) bool { return s.at[n] }
+
+func (s *unitScope) enter(n parse.Node) {
+	if s.at == nil {
+		s.at = map[parse.Node]bool{}
+	}
+	s.at[n] = true
+}
+
+func (s *unitScope) leave(n parse.Node) { delete(s.at, n) }
+
 func (e *Env) evalName(t *parse.Name, p *pass) (value.Value, error) {
+	if p.units.holds(t) {
+		if v, ok := e.unitInPosition(t, p); ok {
+			return v, nil
+		}
+	}
 	if v, ok := e.vars[t.Text]; ok {
 		e.namedProv(t, p, v)
 		return p.note(v), nil
@@ -67,6 +85,21 @@ func (e *Env) evalName(t *parse.Name, p *pass) (value.Value, error) {
 		return value.WithUnit(num.FromInt(1), u), nil
 	}
 	return value.Value{}, &lex.Error{Pos: t.P, Msg: "unknown name " + t.Text}
+}
+
+func (e *Env) unitInPosition(t *parse.Name, p *pass) (value.Value, bool) {
+	u, bound, shadowed, asUnit := e.implicitReading(t)
+	if shadowed {
+		p.notes = append(p.notes, readingNote(t, u, bound))
+	}
+	if !asUnit {
+		return value.Value{}, false
+	}
+	if c, ok := consts.Lookup(t.Text); ok && !shadowed {
+		p.notes = append(p.notes, constantReadingNote(t, u, c))
+	}
+	e.record(t, p, prov.Node{Kind: prov.Unit, Label: t.Text, Detail: unitDetail(u)})
+	return value.WithUnit(num.FromInt(1), u), true
 }
 
 const workingPrecision = "computed to the working precision"
@@ -488,22 +521,23 @@ func (e *Env) evalUnary(t *parse.Unary, p *pass) (value.Value, error) {
 }
 
 func (e *Env) evalBinary(t *parse.Binary, p *pass) (value.Value, error) {
-	if t.Implicit {
-		if v, err, handled := e.implicitUnit(t, p); handled {
-			return v, err
-		}
-	}
 	if t.Op == "to" || t.Op == "in" {
 		return e.convert(t, p)
 	}
 	if t.Op == "±" || t.Op == "+-" {
 		return e.measure(t, p)
 	}
-	l, err := e.eval(t.L, p)
+	inherited := p.units.holds(t)
+	l, err := e.evalPositioned(t.L, p, leftUnitPosition(t, inherited))
 	if err != nil {
 		return value.Value{}, err
 	}
-	r, err := e.eval(t.R, p)
+	if t.Implicit {
+		if v, err, handled := e.attachUnit(t, l, p); handled {
+			return v, err
+		}
+	}
+	r, err := e.evalPositioned(t.R, p, rightUnitPosition(t, inherited, !l.IsScalar()))
 	if err != nil {
 		return value.Value{}, err
 	}
@@ -611,7 +645,81 @@ func (e *Env) implicitReading(name *parse.Name) (units.Unit, value.Value, bool, 
 	return u, bound, defined && known, known
 }
 
-func (e *Env) implicitUnit(t *parse.Binary, p *pass) (value.Value, error, bool) {
+func isProduct(op string) bool {
+	switch op {
+	case "*", "×", "·", "/", "÷":
+		return true
+	}
+	return false
+}
+
+func namesAUnit(n parse.Node) bool {
+	switch t := n.(type) {
+	case *parse.Name:
+		_, known := units.Lookup(t.Text)
+		return known
+	case *parse.Binary:
+		if isProduct(t.Op) {
+			return namesAUnit(t.L) || namesAUnit(t.R)
+		}
+		if t.Op == "^" {
+			return namesAUnit(t.L)
+		}
+	}
+	return false
+}
+
+func leftUnitPosition(t *parse.Binary, inherited bool) bool {
+	if !isProduct(t.Op) {
+		return inherited && t.Op == "^"
+	}
+	return inherited || namesAUnit(t.R)
+}
+
+func rightUnitPosition(t *parse.Binary, inherited, leftWearsAUnit bool) bool {
+	return isProduct(t.Op) && (inherited || leftWearsAUnit || namesAUnit(t.L))
+}
+
+func UnitPositions(n parse.Node) map[parse.Node]bool {
+	marked := map[parse.Node]bool{}
+	markUnitPositions(n, false, marked)
+	return marked
+}
+
+func markUnitPositions(n parse.Node, inherited bool, marked map[parse.Node]bool) {
+	switch t := n.(type) {
+	case *parse.Name:
+		if inherited {
+			marked[t] = true
+		}
+	case *parse.Unary:
+		markUnitPositions(t.X, false, marked)
+	case *parse.Binary:
+		if t.Op == "to" || t.Op == "in" {
+			markUnitPositions(t.L, false, marked)
+			return
+		}
+		markUnitPositions(t.L, leftUnitPosition(t, inherited), marked)
+		markUnitPositions(t.R, rightUnitPosition(t, inherited, false), marked)
+	case *parse.Call:
+		for _, a := range t.Args {
+			markUnitPositions(a, false, marked)
+		}
+	case *parse.Assign:
+		markUnitPositions(t.Body, false, marked)
+	}
+}
+
+func (e *Env) evalPositioned(n parse.Node, p *pass, unitPosition bool) (value.Value, error) {
+	if !unitPosition {
+		return e.eval(n, p)
+	}
+	p.units.enter(n)
+	defer p.units.leave(n)
+	return e.eval(n, p)
+}
+
+func (e *Env) attachUnit(t *parse.Binary, l value.Value, p *pass) (value.Value, error, bool) {
 	name, ok := t.R.(*parse.Name)
 	if !ok {
 		return value.Value{}, nil, false
@@ -620,15 +728,8 @@ func (e *Env) implicitUnit(t *parse.Binary, p *pass) (value.Value, error, bool) 
 	if ambiguous {
 		p.notes = append(p.notes, readingNote(name, u, bound))
 	}
-	if !asUnit {
+	if !asUnit || !l.IsScalar() {
 		return value.Value{}, nil, false
-	}
-	l, err := e.eval(t.L, p)
-	if err != nil {
-		return value.Value{}, err, true
-	}
-	if !l.IsScalar() {
-		return value.Value{}, &lex.Error{Pos: t.P, Msg: "cannot attach " + name.Text + " to a value that already has a unit"}, true
 	}
 	e.record(t, p, prov.Node{Kind: prov.Unit, Label: name.Text, Detail: unitDetail(u), Children: []prov.NodeID{l.Prov}})
 	scaled := unc.Unary(l.Jet(), exactFloat(u.Factor), 0)
@@ -767,18 +868,91 @@ func (e *Env) convert(t *parse.Binary, p *pass) (value.Value, error) {
 	if err != nil {
 		return value.Value{}, err
 	}
-	name, ok := t.R.(*parse.Name)
+	target, ok := unitTarget(t.R)
 	if !ok {
-		return value.Value{}, &lex.Error{Pos: t.P, Msg: "convert to what unit?"}
+		return value.Value{}, &lex.Error{Pos: t.R.Pos(), Msg: "convert to what unit? " + t.R.String() + " is not a unit"}
 	}
-	to, ok := units.Lookup(name.Text)
+	to, ok := units.Lookup(target)
 	if !ok {
-		return value.Value{}, &lex.Error{Pos: name.P, Msg: "unknown unit " + name.Text}
+		return value.Value{}, &lex.Error{Pos: t.R.Pos(), Msg: "unknown unit " + target}
 	}
 	out, err := units.ConvertNumber(l.Num, l.Unwrap(), to, p.prec())
 	if err != nil {
 		return value.Value{}, err
 	}
-	e.record(t, p, prov.Node{Kind: prov.Unit, Label: t.Op + " " + name.Text, Detail: unitDetail(to), Children: []prov.NodeID{l.Prov}})
+	e.record(t, p, prov.Node{Kind: prov.Unit, Label: t.Op + " " + target, Detail: unitDetail(to), Children: []prov.NodeID{l.Prov}})
 	return value.WithUnitNum(out, to).WithJet(l.Jet()), nil
+}
+
+func unitTarget(n parse.Node) (string, bool) {
+	switch t := n.(type) {
+	case *parse.Name:
+		return t.Text, true
+	case *parse.NumLit:
+		if t.Text == "1" {
+			return "1", true
+		}
+	case *parse.Binary:
+		if isProduct(t.Op) {
+			return unitPair(t, separatorFor(t.Op))
+		}
+		if t.Op == "^" {
+			base, ok := unitTarget(t.L)
+			if !ok {
+				return "", false
+			}
+			exponent, ok := wholeExponent(t.R)
+			if !ok {
+				return "", false
+			}
+			return bracketed(t.L, base) + "^" + exponent, true
+		}
+	}
+	return "", false
+}
+
+func separatorFor(op string) string {
+	if op == "/" || op == "÷" {
+		return "/"
+	}
+	return "·"
+}
+
+func unitPair(t *parse.Binary, sep string) (string, bool) {
+	left, ok := unitTarget(t.L)
+	if !ok {
+		return "", false
+	}
+	right, ok := unitTarget(t.R)
+	if !ok {
+		return "", false
+	}
+	return bracketed(t.L, left) + sep + bracketed(t.R, right), true
+}
+
+func bracketed(n parse.Node, sym string) string {
+	if t, ok := n.(*parse.Binary); ok && isProduct(t.Op) {
+		return "(" + sym + ")"
+	}
+	return sym
+}
+
+func wholeExponent(n parse.Node) (string, bool) {
+	if u, ok := n.(*parse.Unary); ok && u.Op == "-" {
+		digits, ok := wholeExponent(u.X)
+		if !ok {
+			return "", false
+		}
+		return "-" + digits, true
+	}
+	lit, ok := n.(*parse.NumLit)
+	if !ok {
+		return "", false
+	}
+	for _, r := range lit.Text {
+		if r < '0' || r > '9' {
+			return "", false
+		}
+	}
+	return lit.Text, len(lit.Text) > 0
 }

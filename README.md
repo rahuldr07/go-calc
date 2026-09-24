@@ -63,6 +63,8 @@ gocalc run sheet.calc
 - Units with SI prefixes, binary prefixes, imperial, time, force, energy, power and pressure, converted through exact rational factors (`inch` is exactly 127/5000 m).
 - Affine temperature: `20 degC to K` is `293.15 K`, `20 degC + 5 K` is `25 degC`, and adding two absolute temperatures is refused.
 - A name straight after a number is a unit, so `5 h` is five hours even when `h` is a variable.
+- Compound units: `60 km/h`, `9.8 m/s^2`, `1 J/(mol·K)` — a name multiplied or divided by a unit is read as a unit too, and says so when it could have been a constant. Conversion targets may be unit expressions: `60 km/h to m/s`.
+- Long-form unit names: `hour`, `minute`, `second`, `metre`, `meter`, `gram`, `litre`, `liter`, `tonne`.
 - Implicit multiplication with an interpretation note whenever it meets division.
 - Variables and user functions: `f(x) = x^2 + 1`.
 - CODATA 2022 constants with citations, pinned by checksum.

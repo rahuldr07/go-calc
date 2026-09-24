@@ -614,3 +614,36 @@ func TestEveryLineCarriesProvenance(t *testing.T) {
 		t.Errorf("trace does not point back at the input line:\n%s", tree)
 	}
 }
+
+func TestAUnitIsNotAForwardReference(t *testing.T) {
+	for _, c := range []struct {
+		src  []string
+		want []string
+	}{
+		{[]string{"v = 60 km/h", "h = 3"}, []string{"50/3  ≈ 16.6666666667 m/s", "3"}},
+		{[]string{"x = 5 m/s", "y = x to km/h", "s = 2"}, []string{"5 m/s", "18 km/h", "2"}},
+		{[]string{"a = 1 J/(mol·K)", "mol = 7"}, []string{"1 J/(mol·K)", "7"}},
+		{[]string{"p = 5 km to km/h·s", "h = 3"}, []string{"18000 (km/h)·s", "3"}},
+	} {
+		d := New()
+		lines := d.SetLines(c.src)
+		if got := numbers(lines); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%v = %v, want %v", c.src, got, c.want)
+		}
+	}
+}
+
+func TestAUnitNameDefinedAboveStillLinksTheLine(t *testing.T) {
+	d := New()
+	lines := d.SetLines([]string{"h = 3", "v = 60 km/h"})
+	if got := numbers(lines); !reflect.DeepEqual(got, []string{"3", "50/3  ≈ 16.6666666667 m/s"}) {
+		t.Errorf("sheet = %v", numbers(lines))
+	}
+	changed := d.Edit(0, "h = 12.3 ± 0.2 m")
+	if len(changed) < 2 {
+		t.Errorf("redefining h changed %d lines, want the line that reads h as a unit to follow", len(changed))
+	}
+	if got := numbers(d.Lines())[1]; !strings.Contains(got, "±") {
+		t.Errorf("after h became a measurement, 60 km/h = %q, want the variable reading", got)
+	}
+}

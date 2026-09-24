@@ -14,30 +14,38 @@ func Blank(src string) bool {
 	return trimmed == "" || strings.HasPrefix(trimmed, "#")
 }
 
-func freeNames(n parse.Node, bound map[string]bool, out []string) []string {
+func freeNames(n parse.Node, bound map[string]bool, worn map[parse.Node]bool, out []string) []string {
 	switch t := n.(type) {
 	case *parse.Name:
-		if !bound[t.Text] {
+		if !bound[t.Text] && !wornAsUnit(t, worn) {
 			out = append(out, t.Text)
 		}
 	case *parse.Unary:
-		out = freeNames(t.X, bound, out)
+		out = freeNames(t.X, bound, worn, out)
 	case *parse.Binary:
-		out = freeNames(t.L, bound, out)
+		out = freeNames(t.L, bound, worn, out)
 		if !unitOperand(t) {
-			out = freeNames(t.R, bound, out)
+			out = freeNames(t.R, bound, worn, out)
 		}
 	case *parse.Call:
 		if !bound[t.Fn] {
 			out = append(out, t.Fn)
 		}
 		for _, a := range t.Args {
-			out = freeNames(a, bound, out)
+			out = freeNames(a, bound, worn, out)
 		}
 	case *parse.Assign:
-		out = freeNames(t.Body, withParams(bound, t.Params), out)
+		out = freeNames(t.Body, withParams(bound, t.Params), worn, out)
 	}
 	return out
+}
+
+func wornAsUnit(t *parse.Name, worn map[parse.Node]bool) bool {
+	if !worn[t] {
+		return false
+	}
+	_, known := units.Lookup(t.Text)
+	return known
 }
 
 func withParams(bound map[string]bool, params []string) map[string]bool {
@@ -55,14 +63,11 @@ func withParams(bound map[string]bool, params []string) map[string]bool {
 }
 
 func unitOperand(t *parse.Binary) bool {
-	name, ok := t.R.(*parse.Name)
-	if !ok {
-		return false
-	}
 	if t.Op == "to" || t.Op == "in" {
 		return true
 	}
-	if !t.Implicit {
+	name, ok := t.R.(*parse.Name)
+	if !ok || !t.Implicit {
 		return false
 	}
 	_, ok = units.Lookup(name.Text)
@@ -244,14 +249,18 @@ func joinInts(xs []int) string {
 	return strings.Join(parts, ", ")
 }
 
-func unitNames(n parse.Node, bound map[string]bool, out []string) []string {
+func unitNames(n parse.Node, bound map[string]bool, worn map[parse.Node]bool, out []string) []string {
 	switch t := n.(type) {
+	case *parse.Name:
+		if !bound[t.Text] && wornAsUnit(t, worn) {
+			out = append(out, t.Text)
+		}
 	case *parse.Unary:
-		out = unitNames(t.X, bound, out)
+		out = unitNames(t.X, bound, worn, out)
 	case *parse.Binary:
-		out = unitNames(t.L, bound, out)
+		out = unitNames(t.L, bound, worn, out)
 		if !unitOperand(t) {
-			out = unitNames(t.R, bound, out)
+			out = unitNames(t.R, bound, worn, out)
 			break
 		}
 		if name, ok := t.R.(*parse.Name); ok && t.Implicit && !bound[name.Text] {
@@ -259,10 +268,10 @@ func unitNames(n parse.Node, bound map[string]bool, out []string) []string {
 		}
 	case *parse.Call:
 		for _, a := range t.Args {
-			out = unitNames(a, bound, out)
+			out = unitNames(a, bound, worn, out)
 		}
 	case *parse.Assign:
-		out = unitNames(t.Body, withParams(bound, t.Params), out)
+		out = unitNames(t.Body, withParams(bound, t.Params), worn, out)
 	}
 	return out
 }
