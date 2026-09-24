@@ -661,6 +661,10 @@ func TestEveryUnitThisEngineWritesItCanReadBack(t *testing.T) {
 		"(2 lakh in crore) ^ 2", "(200 in lakh) ^ 2", "(2 lakh in crore) ^ -2",
 		"(((2 lakh in crore) ^ 1) ^ 2) ^ 2", "(2 lakh in crore) ^ 0", "(3 m) ^ 0",
 		"2 lakh in crore", "(2 lakh in crore) * (2 lakh in crore)",
+		"2 m^2", "2 km^2", "2 mm^3", "0.5 s^-1", "3 degC^2", "2 lakh^2",
+		"100 W / 2 m^2", "3 m / 2 s / 4 s", "100 km / 2 h", "5 kg m/s^2",
+		"9.8 m/s^2", "2 m^2 + 3 m^2", "(2 m^2) * (3 km^2)", "sqrt(2 m^2)",
+		"2 h^2", "2 m^2 to km^2", "2 km^2 to m^2",
 	} {
 		v := mustEval(t, env, src)
 		if v.Unit == "" {
