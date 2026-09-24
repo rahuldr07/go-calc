@@ -27,7 +27,7 @@ type valueOut struct {
 	Capped  bool   `json:"capped,omitempty"`
 }
 
-type contributionOut struct {
+type Contribution struct {
 	Name        string  `json:"name"`
 	Share       float64 `json:"share"`
 	Sigma       float64 `json:"sigma"`
@@ -35,27 +35,27 @@ type contributionOut struct {
 	Covariance  bool    `json:"covariance,omitempty"`
 }
 
-type uncertaintyOut struct {
-	Value      string            `json:"value,omitempty"`
-	Reported   string            `json:"reported,omitempty"`
-	Standard   *float64          `json:"standard,omitempty"`
-	Degenerate bool              `json:"degenerate,omitempty"`
-	Coverage   string            `json:"coverage,omitempty"`
-	Factor     float64           `json:"factor,omitempty"`
-	Budget     []contributionOut `json:"budget,omitempty"`
-	Warning    string            `json:"warning,omitempty"`
+type Uncertainty struct {
+	Value      string         `json:"value,omitempty"`
+	Reported   string         `json:"reported,omitempty"`
+	Standard   *float64       `json:"standard,omitempty"`
+	Degenerate bool           `json:"degenerate,omitempty"`
+	Coverage   string         `json:"coverage,omitempty"`
+	Factor     float64        `json:"factor,omitempty"`
+	Budget     []Contribution `json:"budget,omitempty"`
+	Warning    string         `json:"warning,omitempty"`
 }
 
 type result struct {
-	Schema      string          `json:"schema"`
-	Input       string          `json:"input"`
-	Definition  string          `json:"definition,omitempty"`
-	Value       *valueOut       `json:"value,omitempty"`
-	Unit        *unitOut        `json:"unit,omitempty"`
-	Uncertainty *uncertaintyOut `json:"uncertainty,omitempty"`
-	Provenance  *prov.Export    `json:"provenance,omitempty"`
-	Warning     string          `json:"warning,omitempty"`
-	Notes       []string        `json:"notes,omitempty"`
+	Schema      string       `json:"schema"`
+	Input       string       `json:"input"`
+	Definition  string       `json:"definition,omitempty"`
+	Value       *valueOut    `json:"value,omitempty"`
+	Unit        *unitOut     `json:"unit,omitempty"`
+	Uncertainty *Uncertainty `json:"uncertainty,omitempty"`
+	Provenance  *prov.Export `json:"provenance,omitempty"`
+	Warning     string       `json:"warning,omitempty"`
+	Notes       []string     `json:"notes,omitempty"`
 }
 
 type Detail struct {
@@ -80,14 +80,11 @@ func JSONDetail(input string, v value.Value, notes []parse.Note, d Detail) ([]by
 	out := valueOut{}
 	if v.Num.IsExact() {
 		out.Exact = v.Num.Exact().String()
-		out.Decimal, out.Digits = Default.provenExact(v.Num.Exact().Rat())
 	} else {
-		b := v.Num.Ball(ballPrec)
-		_, _, out.Capped = Default.NumberBall(b)
-		out.Ball = tightBounds(b)
-		out.Decimal, out.Digits = Default.provenBall(b)
+		out.Ball = tightBounds(v.Num.Ball(ballPrec))
 	}
-	r := result{Schema: Schema, Input: input, Value: &out, Notes: msgs, Uncertainty: uncertainty(v), Warning: d.Warning}
+	out.Decimal, out.Digits, out.Capped = Default.Proven(v)
+	r := result{Schema: Schema, Input: input, Value: &out, Notes: msgs, Uncertainty: UncertaintyOf(v), Warning: d.Warning}
 	if d.Arena != nil && d.Arena.Has(v.Prov) {
 		trace := d.Arena.Export(v.Prov)
 		r.Provenance = &trace
@@ -102,6 +99,17 @@ func JSONDetail(input string, v value.Value, notes []parse.Note, d Detail) ([]by
 		r.Unit = &unitOut{Symbol: v.Unit, Dims: dims}
 	}
 	return json.MarshalIndent(r, "", "  ")
+}
+
+func (s Style) Proven(v value.Value) (string, int, bool) {
+	if v.Num.IsExact() {
+		text, digits := s.provenExact(v.Num.Exact().Rat())
+		return text, digits, false
+	}
+	b := v.Num.Ball(ballPrec)
+	_, _, capped := s.NumberBall(b)
+	text, digits := s.provenBall(b)
+	return text, digits, capped
 }
 
 func (s Style) provenBall(b num.Ball) (string, int) {
@@ -127,7 +135,7 @@ func (s Style) provenExact(r *big.Rat) (string, int) {
 	return text, s.digitBudget()
 }
 
-func uncertainty(v value.Value) *uncertaintyOut {
+func UncertaintyOf(v value.Value) *Uncertainty {
 	mid, reported, ok := Default.Uncertain(v)
 	if !ok && v.Unc.Warning == "" {
 		return nil
@@ -136,7 +144,7 @@ func uncertainty(v value.Value) *uncertaintyOut {
 	if f, _ := v.FactorOrOne().Rat().Float64(); f != 0 {
 		scale = math.Abs(f)
 	}
-	out := &uncertaintyOut{
+	out := &Uncertainty{
 		Value:      mid,
 		Reported:   reported,
 		Degenerate: v.Unc.Degenerate,
@@ -149,7 +157,7 @@ func uncertainty(v value.Value) *uncertaintyOut {
 		out.Standard = &standard
 	}
 	for _, c := range v.Unc.Budget {
-		out.Budget = append(out.Budget, contributionOut{
+		out.Budget = append(out.Budget, Contribution{
 			Name:        c.Name,
 			Share:       c.Share,
 			Sigma:       c.Sigma,

@@ -46,15 +46,18 @@ type Doc struct {
 	table     *unc.Table
 	arena     *prov.Arena
 	evaluator func(*eval.Env, parse.Node) (value.Value, error)
+	warner    func(*eval.Env, parse.Node, value.Value) string
 }
 
 func New() *Doc {
-	return &Doc{defs: map[string][]int{}, table: unc.NewTable(), arena: prov.NewArena(), evaluator: evalNode}
+	return &Doc{defs: map[string][]int{}, table: unc.NewTable(), arena: prov.NewArena(), evaluator: evalNode, warner: warnNode}
 }
 
 func (d *Doc) Arena() *prov.Arena { return d.arena }
 
 func evalNode(env *eval.Env, n parse.Node) (value.Value, error) { return env.Eval(n) }
+
+func warnNode(env *eval.Env, n parse.Node, v value.Value) string { return env.Warning(n, v) }
 
 func (d *Doc) SetLines(src []string) []Line {
 	d.lines = make([]*entry, len(src))
@@ -166,7 +169,7 @@ func (d *Doc) evaluate(i int) {
 		e.value, e.err = d.evaluator(env, e.node)
 		e.notes = append(append([]parse.Note{}, e.read...), env.Notes()...)
 		if e.err == nil {
-			e.warning = env.Warning(e.node, e.value)
+			e.warning = d.warner(env, e.node, e.value)
 		}
 	}
 }

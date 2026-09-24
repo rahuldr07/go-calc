@@ -2,3 +2,5 @@
 /dist/
 .impeccable/
 .superpowers/
+/web/public/gocalc.wasm
+/web/public/wasm_exec.js
