@@ -30,6 +30,7 @@ type entry struct {
 	corr     []string
 	refs     []string
 	units    []string
+	read     []parse.Note
 	deps     []int
 	fwd      []string
 	cyclic   bool
@@ -129,7 +130,7 @@ func read(src string) *entry {
 		e.parseErr = err
 		return e
 	}
-	e.node, e.notes = node, notes
+	e.node, e.notes, e.read = node, notes, notes
 	if a, ok := node.(*parse.Assign); ok {
 		if a.Name == "corr" && len(a.Params) == 2 {
 			e.corr = a.Params
@@ -144,7 +145,7 @@ func read(src string) *entry {
 
 func (d *Doc) evaluate(i int) {
 	e := d.lines[i]
-	e.value, e.err, e.warning = value.Value{}, nil, ""
+	e.value, e.err, e.warning, e.notes = value.Value{}, nil, "", e.read
 	broken := d.brokenInputs(i)
 	switch {
 	case e.node == nil:
@@ -156,7 +157,9 @@ func (d *Doc) evaluate(i int) {
 	case broken != nil:
 		e.err = broken
 	default:
-		e.value, e.err = d.evaluator(d.env(i), e.node)
+		env := d.env(i)
+		e.value, e.err = d.evaluator(env, e.node)
+		e.notes = append(append([]parse.Note{}, e.read...), env.Notes()...)
 	}
 }
 

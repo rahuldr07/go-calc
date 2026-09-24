@@ -24,6 +24,7 @@ type pass struct {
 	ctx       *Ctx
 	uncertain bool
 	naming    string
+	notes     []parse.Note
 }
 
 func (p *pass) prec() uint { return p.ctx.Prec }
@@ -54,7 +55,10 @@ func (e *Env) report(v value.Value) (value.Value, error) {
 	}
 	v.Unc.Sigma = e.table.Combined(v.Sens)
 	v.Unc.Budget = e.table.Contributions(v.Sens)
-	if e.table.Nonlinear(v.Sens, v.Curv) {
+	switch {
+	case e.table.NonlinearityUnchecked(v.Sens, v.Curv):
+		v.Unc.Warning = unc.UncheckedWarning
+	case e.table.Nonlinear(v.Sens, v.Curv):
 		v.Unc.Warning = unc.NonlinearWarning
 	}
 	return v, nil
@@ -73,6 +77,7 @@ func (e *Env) evalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
 	for {
 		p := &pass{ctx: ctx}
 		v, err := e.eval(n, p)
+		e.notes = distinct(p.notes)
 		if err != nil {
 			return value.Value{}, err
 		}

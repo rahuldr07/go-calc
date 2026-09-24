@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rahuldr07/go-calc/internal/eval"
 	"github.com/rahuldr07/go-calc/internal/format"
+	"github.com/rahuldr07/go-calc/internal/parse"
 )
 
 var plain = format.Style{Digits: format.Digits}
@@ -135,4 +137,49 @@ func TestRunFileExplainsADependentOfAFailedLine(t *testing.T) {
 	if !strings.Contains(out, "= 2") {
 		t.Errorf("out = %q, want the independent line still evaluated", out)
 	}
+}
+
+func TestSheetShowsWhichReadingItTook(t *testing.T) {
+	out, code := runFile(writeSheet(t, "h = 12.3 ± 0.2 m\n2 h\n"), plain, false)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	want := "read as the variable h, not the unit h (time); the variable carries a measured uncertainty"
+	if !strings.Contains(out, want) {
+		t.Errorf("out = %q, want %q", out, want)
+	}
+	out, code = runFile(writeSheet(t, "h = 3\n5 h\n"), plain, false)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if !strings.Contains(out, "read as the unit h (time), not the variable h") {
+		t.Errorf("out = %q, want the unit reading explained", out)
+	}
+}
+
+func TestEvalLineCarriesTheEvaluatorNote(t *testing.T) {
+	env := eval.NewEnv()
+	node, _, err := parse.Parse("h = 3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.Eval(node); err != nil {
+		t.Fatal(err)
+	}
+	out, code := evalLine(env, "5 h", plain, false)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if !strings.Contains(out, "read as the unit h (time), not the variable h") {
+		t.Errorf("out = %q, want the reading note", out)
+	}
+}
+
+func writeSheet(t *testing.T, body string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "sheet.calc")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

@@ -567,11 +567,15 @@ func (e *Env) implicitUnit(t *parse.Binary, p *pass) (value.Value, error, bool) 
 	if !ok {
 		return value.Value{}, nil, false
 	}
-	if bound, ok := e.vars[name.Text]; ok && (!bound.IsScalar() || bound.IsMeasured()) {
+	u, known := units.Lookup(name.Text)
+	bound, defined := e.vars[name.Text]
+	if defined && known {
+		p.notes = append(p.notes, readingNote(name, u, bound))
+	}
+	if defined && (!bound.IsScalar() || bound.IsMeasured()) {
 		return value.Value{}, nil, false
 	}
-	u, ok := units.Lookup(name.Text)
-	if !ok {
+	if !known {
 		return value.Value{}, nil, false
 	}
 	l, err := e.eval(t.L, p)

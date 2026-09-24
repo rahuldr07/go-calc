@@ -8,6 +8,7 @@ import (
 	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/parse"
 	"github.com/rahuldr07/go-calc/internal/unc"
+	"github.com/rahuldr07/go-calc/internal/units"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
 
@@ -317,4 +318,16 @@ func signOf(op string) float64 {
 func exactFloat(x num.Exact) float64 {
 	f, _ := x.Rat().Float64()
 	return f
+}
+
+func readingNote(name *parse.Name, u units.Unit, bound value.Value) parse.Note {
+	unit := "the unit " + name.Text + " (" + u.Dim.Words() + ")"
+	variable := "the variable " + name.Text
+	switch {
+	case bound.IsMeasured():
+		return parse.Note{Pos: name.P, Msg: "read as " + variable + ", not " + unit + "; the variable carries a measured uncertainty"}
+	case !bound.IsScalar():
+		return parse.Note{Pos: name.P, Msg: "read as " + variable + ", not " + unit + "; the variable already carries a unit"}
+	}
+	return parse.Note{Pos: name.P, Msg: "read as " + unit + ", not " + variable + "; the variable is a plain number"}
 }

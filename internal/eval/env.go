@@ -16,6 +16,7 @@ type Env struct {
 	funcs map[string]fn
 	table *unc.Table
 	line  int
+	notes []parse.Note
 }
 
 func NewEnv() *Env { return NewEnvWith(unc.NewTable()) }
@@ -30,6 +31,24 @@ func NewEnvWith(t *unc.Table) *Env {
 func (e *Env) Table() *unc.Table { return e.table }
 
 func (e *Env) SetLine(n int) { e.line = n }
+
+func (e *Env) Notes() []parse.Note { return e.notes }
+
+func distinct(notes []parse.Note) []parse.Note {
+	if len(notes) < 2 {
+		return notes
+	}
+	seen := make(map[parse.Note]bool, len(notes))
+	out := notes[:0]
+	for _, n := range notes {
+		if seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
+	}
+	return out
+}
 
 func (e *Env) Uncertainty(v value.Value) float64 { return e.table.Combined(v.Sens) }
 

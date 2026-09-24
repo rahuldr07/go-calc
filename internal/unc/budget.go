@@ -28,6 +28,8 @@ type Report struct {
 
 const NonlinearWarning = "first-order propagation may be unreliable here; Monte Carlo would be better"
 
+const UncheckedWarning = "nonlinearity not checked: inputs are correlated"
+
 func (t *Table) Contributions(s Sens) []Contribution {
 	u := t.Combined(s)
 	if u == 0 {
@@ -71,6 +73,10 @@ func (t *Table) SecondOrder(s Sens, h Curv) float64 {
 		return 0
 	}
 	return math.Sqrt(v)
+}
+
+func (t *Table) NonlinearityUnchecked(s Sens, h Curv) bool {
+	return len(h) > 0 && t.Correlated(s)
 }
 
 func (t *Table) Nonlinear(s Sens, h Curv) bool {

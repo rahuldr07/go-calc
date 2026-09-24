@@ -500,3 +500,70 @@ func TestPlainVariableStillLosesToAUnitName(t *testing.T) {
 		t.Errorf("5 h = %q, want 5 h", got)
 	}
 }
+
+func messages(l Line) []string {
+	out := make([]string, 0, len(l.Notes))
+	for _, n := range l.Notes {
+		out = append(out, n.Msg)
+	}
+	return out
+}
+
+func TestDocumentSaysWhichReadingItTook(t *testing.T) {
+	d := New()
+	lines := d.SetLines([]string{
+		"h = 3",
+		"5 h",
+		"k = 12.3 ± 0.2 m",
+		"2 k",
+	})
+	plain := "read as the unit h (time), not the variable h; the variable is a plain number"
+	if got := messages(lines[1]); !reflect.DeepEqual(got, []string{plain}) {
+		t.Errorf("line 2 notes = %q, want [%q]", got, plain)
+	}
+	if got := messages(lines[3]); len(got) != 0 {
+		t.Errorf("line 4 notes = %q, want none: k is not a unit", got)
+	}
+}
+
+func TestDocumentNotesDoNotPileUpAcrossEdits(t *testing.T) {
+	d := New()
+	d.SetLines([]string{"h = 3", "5 h"})
+	d.Edit(0, "h = 4")
+	got := messages(d.Lines()[1])
+	if len(got) != 1 {
+		t.Errorf("notes after an edit = %q, want exactly one", got)
+	}
+	if numbers(d.Lines())[1] != "5 h" {
+		t.Errorf("5 h = %q, want 5 h", numbers(d.Lines())[1])
+	}
+}
+
+func TestDocumentReportsTheSkippedNonlinearityCheck(t *testing.T) {
+	d := New()
+	lines := d.SetLines([]string{
+		"a = 1 ± 1",
+		"b = 1 ± 1",
+		"corr(a, b) = 0.5",
+		"a * b",
+	})
+	if !strings.Contains(text(lines[3].Value), "nonlinearity not checked: inputs are correlated") {
+		t.Errorf("a * b = %q, want the skipped check reported", text(lines[3].Value))
+	}
+}
+
+func TestAFailedLineDropsItsOldEvaluatorNotes(t *testing.T) {
+	d := New()
+	lines := d.SetLines([]string{"h = 3", "5 h"})
+	if len(messages(lines[1])) != 1 {
+		t.Fatalf("setup notes = %q, want one", messages(lines[1]))
+	}
+	d.Edit(0, "h = 1/0")
+	after := d.Lines()[1]
+	if after.Err == nil {
+		t.Fatal("line 2 should have failed with its input")
+	}
+	if got := messages(after); len(got) != 0 {
+		t.Errorf("notes on the failed line = %q, want none", got)
+	}
+}

@@ -54,7 +54,7 @@ func evalLine(env *eval.Env, src string, style format.Style, asJSON bool) (strin
 	if err != nil {
 		return err.Error(), 1
 	}
-	return render(doc.Line{Src: src, Value: v, Notes: notes}, style, asJSON)
+	return render(doc.Line{Src: src, Value: v, Notes: append(notes, env.Notes()...)}, style, asJSON)
 }
 
 func render(l doc.Line, style format.Style, asJSON bool) (string, int) {

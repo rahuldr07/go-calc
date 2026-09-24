@@ -2,10 +2,12 @@ package eval
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/rahuldr07/go-calc/internal/format"
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
 
@@ -271,5 +273,78 @@ func TestDegreesScaleTheSensitivity(t *testing.T) {
 	want := math.Cos(math.Pi/6) * math.Pi / 180
 	if u := env.Uncertainty(v); math.Abs(u-want) > 1e-12 {
 		t.Errorf("u(sin(30 deg ± 1 deg)) = %g, want %g", u, want)
+	}
+}
+
+func noteMsgs(env *Env) []string {
+	out := make([]string, 0, len(env.Notes()))
+	for _, n := range env.Notes() {
+		out = append(out, n.Msg)
+	}
+	return out
+}
+
+func TestAmbiguousNameSaysWhichReadingItTook(t *testing.T) {
+	cases := []struct {
+		define string
+		use    string
+		want   string
+	}{
+		{"h = 3", "5 h", "read as the unit h (time), not the variable h; the variable is a plain number"},
+		{"h = 3 m", "2 h", "read as the variable h, not the unit h (time); the variable already carries a unit"},
+		{"h = 12.3 ± 0.2 m", "2 h", "read as the variable h, not the unit h (time); the variable carries a measured uncertainty"},
+	}
+	for _, c := range cases {
+		env := NewEnv()
+		run(t, env, c.define)
+		mustEval(t, env, c.use)
+		got := noteMsgs(env)
+		if len(got) != 1 || got[0] != c.want {
+			t.Errorf("%s then %s: notes = %q, want [%q]", c.define, c.use, got, c.want)
+		}
+	}
+}
+
+func TestUnambiguousNameSaysNothing(t *testing.T) {
+	for _, c := range [][2]string{
+		{"x = 3", "5 m"},
+		{"x = 3", "5 x"},
+		{"h = 3", "h + 1"},
+	} {
+		env := NewEnv()
+		run(t, env, c[0])
+		mustEval(t, env, c[1])
+		if got := noteMsgs(env); len(got) != 0 {
+			t.Errorf("%s then %s: notes = %q, want none", c[0], c[1], got)
+		}
+	}
+}
+
+func TestTheNoteReachesTheOutput(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "h = 12.3 ± 0.2 m")
+	v := mustEval(t, env, "2 h")
+	got := format.Text(v, env.Notes())
+	want := "24.60 ± 0.40 m\n  read as the variable h, not the unit h (time); the variable carries a measured uncertainty"
+	if got != want {
+		t.Errorf("text = %q, want %q", got, want)
+	}
+}
+
+func TestNonlinearityIsNotCheckedSilentlyWhenCorrelated(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "a = 1 ± 1")
+	run(t, env, "b = 1 ± 1")
+	run(t, env, "corr(a, b) = 0.5")
+	v := mustEval(t, env, "a * b")
+	if v.Unc.Warning != unc.UncheckedWarning {
+		t.Errorf("warning = %q, want %q", v.Unc.Warning, unc.UncheckedWarning)
+	}
+	if !strings.Contains(format.Text(v, nil), unc.UncheckedWarning) {
+		t.Errorf("the skipped check did not reach the output: %q", format.Text(v, nil))
+	}
+	w := mustEval(t, env, "a + b")
+	if w.Unc.Warning != "" {
+		t.Errorf("a linear expression was annotated: %q", w.Unc.Warning)
 	}
 }

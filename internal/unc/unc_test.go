@@ -226,3 +226,23 @@ func TestComposeCarriesTheInnerCurvature(t *testing.T) {
 		t.Errorf("hess = %g, want 6: a linear outer function still carries the inner curvature", got)
 	}
 }
+
+func TestNonlinearityUncheckedIsDistinctFromLinear(t *testing.T) {
+	tab := NewTable()
+	a := tab.Declare("a", 1, 1, 1)
+	b := tab.Declare("b", 1, 1, 1)
+	if err := tab.SetCorr(a, b, 0.5); err != nil {
+		t.Fatal(err)
+	}
+	s := Sens{a: 1, b: 1}
+	h := Curv{Pair{A: a, B: b}: 1}
+	if !tab.NonlinearityUnchecked(s, h) {
+		t.Error("a curved expression over correlated inputs was not reported as unchecked")
+	}
+	if tab.Nonlinear(s, h) {
+		t.Error("the check ran on correlated inputs")
+	}
+	if tab.NonlinearityUnchecked(s, nil) {
+		t.Error("a linear expression was reported as unchecked")
+	}
+}
