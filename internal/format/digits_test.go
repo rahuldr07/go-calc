@@ -54,24 +54,26 @@ func TestPrintedDigitsMatchAKnownExpansion(t *testing.T) {
 		b := num.NewBall(mid, num.MagFromFloat(radius))
 		text, digits, _ := Style{Digits: 60}.NumberBall(b)
 		if digits < 4 {
-			t.Fatalf("radius %g: only %d places", radius, digits)
+			t.Fatalf("radius %g: only %d digits", radius, digits)
 		}
-		want := truncateDecimals(sqrt2, digits-1)
+		want := truncateSignificant(sqrt2, digits-1)
 		if !strings.HasPrefix(text, want) {
 			t.Fatalf("radius %g: printed %q, want it to start with %q", radius, text, want)
 		}
 	}
 }
 
-func truncateDecimals(decimal string, places int) string {
-	dot := strings.IndexByte(decimal, '.')
-	if dot < 0 || dot+1+places > len(decimal) {
-		return decimal
+func truncateSignificant(decimal string, digits int) string {
+	seen := 0
+	for i := 0; i < len(decimal); i++ {
+		if decimal[i] >= '0' && decimal[i] <= '9' {
+			seen++
+		}
+		if seen == digits {
+			return decimal[:i+1]
+		}
 	}
-	if places <= 0 {
-		return decimal[:dot]
-	}
-	return decimal[:dot+1+places]
+	return decimal
 }
 
 func TestCappedIsReportedWhenTheBallCannotJustifyTheStyle(t *testing.T) {
@@ -85,15 +87,15 @@ func TestCappedIsReportedWhenTheBallCannotJustifyTheStyle(t *testing.T) {
 	}
 }
 
-func TestGuaranteedDigitsTracksTheRadius(t *testing.T) {
+func TestGuaranteedDigitsIsRelativeAccuracy(t *testing.T) {
 	cases := []struct {
 		mid    float64
 		radius float64
 		want   int
 	}{
 		{1, 2e-10, 9},
-		{1000, 2e-10, 9},
-		{0.001, 2e-10, 9},
+		{1000, 2e-10, 12},
+		{0.001, 2e-10, 6},
 		{0.5, 0.1, 0},
 		{2, 4, 0},
 	}
@@ -111,7 +113,7 @@ func TestTextSaysWhenTheBallRanOutOfDigits(t *testing.T) {
 	if !strings.HasPrefix(got, "2.5") {
 		t.Fatalf("Text = %q, want it to open with 2.5", got)
 	}
-	if !strings.Contains(got, "2 digits guaranteed (precision cap reached)") {
+	if !strings.Contains(got, "3 digits guaranteed (precision cap reached)") {
 		t.Fatalf("Text = %q, want it to say how many digits are guaranteed", got)
 	}
 }

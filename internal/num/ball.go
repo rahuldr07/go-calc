@@ -188,14 +188,18 @@ func (b Ball) GuaranteedDigits() int {
 		if mid.Sign() == 0 {
 			return maxDigits
 		}
-		return clampDigits(decimalDigits(mid.Prec()) - decimalExponent(mid))
+		return decimalDigits(mid.Prec())
 	}
 	rad := b.Rad.float()
 	if rad.IsInf() {
 		return 0
 	}
-	spread := newMag().Add(rad, rad)
-	return clampDigits(-decimalExponent(spread) - 1)
+	abs := new(big.Float).SetPrec(b.boundPrec()).Abs(mid)
+	if abs.Cmp(rad) <= 0 {
+		return 0
+	}
+	ratio := new(big.Float).SetPrec(b.boundPrec()).Quo(abs, rad)
+	return clampDigits(decimalExponent(ratio))
 }
 
 func clampDigits(d int) int {
@@ -210,4 +214,12 @@ func clampDigits(d int) int {
 
 func decimalDigits(prec uint) int {
 	return clampDigits(int(float64(prec) * log2Of10Inverse))
+}
+
+func (b Ball) DecimalScale() int {
+	widest := new(big.Float).Abs(b.Lo())
+	if hi := new(big.Float).Abs(b.Hi()); hi.Cmp(widest) > 0 {
+		widest = hi
+	}
+	return decimalExponent(widest)
 }

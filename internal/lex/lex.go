@@ -88,8 +88,12 @@ func scanNumber(rs []rune, i int) int {
 		switch {
 		case unicode.IsDigit(rs[j]) || rs[j] == '_':
 			j++
-		case rs[j] == ',' && j+1 < len(rs) && unicode.IsDigit(rs[j+1]):
-			j++
+		case rs[j] == ',' && !seenDot:
+			end := groupedDigits(rs, j)
+			if end == j {
+				return j
+			}
+			j = end
 		case rs[j] == '.' && !seenDot && j+1 < len(rs) && unicode.IsDigit(rs[j+1]):
 			seenDot = true
 			j++
@@ -100,4 +104,23 @@ func scanNumber(rs []rune, i int) int {
 		}
 	}
 	return j
+}
+
+func groupedDigits(rs []rune, j int) int {
+	end := j
+	for j < len(rs) && rs[j] == ',' {
+		k := j + 1
+		for k < len(rs) && unicode.IsDigit(rs[k]) {
+			k++
+		}
+		size := k - j - 1
+		if size != 2 && size != 3 {
+			return end
+		}
+		if size == 3 {
+			end = k
+		}
+		j = k
+	}
+	return end
 }

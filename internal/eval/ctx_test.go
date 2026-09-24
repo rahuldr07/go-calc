@@ -14,21 +14,47 @@ import (
 func TestProvenDigitsForFamousValue(t *testing.T) {
 	env := NewEnv()
 	ctx := DefaultCtx()
-	ctx.Digits = 30
+	ctx.Digits = 35
 	n, _, _ := parse.Parse("exp(pi * sqrt(163))")
 	v, err := env.EvalCtx(n, ctx)
 	if err != nil {
 		t.Fatalf("eval: %v", err)
 	}
+	if ctx.Prec <= DefaultCtx().Prec {
+		t.Fatalf("precision stayed at %d, but 35 digits need more than the default", ctx.Prec)
+	}
 	text, digits, capped := format.Default.NumberBall(v.Num.Ball(ctx.Prec))
 	if capped {
-		t.Fatalf("hit the precision cap for 30 digits")
+		t.Fatalf("hit the precision cap for 35 digits")
 	}
-	if digits < 30 {
-		t.Fatalf("only %d digits guaranteed, want 30", digits)
+	if digits < 35 {
+		t.Fatalf("only %d digits guaranteed, want 35", digits)
 	}
 	if !strings.HasPrefix(text, "262537412640768743.99999999999925007") {
 		t.Fatalf("got %s", text)
+	}
+}
+
+func TestTwelveDigitsNeedNoRetry(t *testing.T) {
+	env := NewEnv()
+	ctx := DefaultCtx()
+	n, _, _ := parse.Parse("exp(pi * sqrt(163))")
+	v, err := env.EvalCtx(n, ctx)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if ctx.Prec != DefaultCtx().Prec {
+		t.Fatalf("precision moved to %d, but the default precision already proves 12 digits", ctx.Prec)
+	}
+	text, digits, capped := format.Default.NumberBall(v.Num.Ball(ctx.Prec))
+	if capped || digits < 12 {
+		t.Fatalf("%d digits, capped=%v, want at least 12 uncapped", digits, capped)
+	}
+	if !strings.HasPrefix(text, "262537412640768743.9999") {
+		t.Fatalf("got %s", text)
+	}
+	if got := format.Default.Number(v); got != "2.62537412641e+17" {
+		t.Fatalf("styled number = %s, want 12 significant digits", got)
 	}
 }
 
@@ -172,5 +198,26 @@ func TestIrrationalConstantsResolveAndCanBeShadowed(t *testing.T) {
 	}
 	if got := v.Num.String(); got != "3" {
 		t.Errorf("shadowed pi = %s, want 3", got)
+	}
+}
+
+func TestRetryGivesUpWhenPrecisionStopsHelping(t *testing.T) {
+	env := NewEnv()
+	ctx := DefaultCtx()
+	ctx.Digits = 30
+	n, _, _ := parse.Parse("sqrt(2) - sqrt(2)")
+	v, err := env.EvalCtx(n, ctx)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if ctx.Prec > 2*DefaultCtx().Prec {
+		t.Fatalf("precision climbed to %d chasing digits a ball around zero can never have", ctx.Prec)
+	}
+	b := v.Num.Ball(ctx.Prec)
+	if !b.Contains(new(big.Float)) {
+		t.Fatalf("ball %s should contain zero", b)
+	}
+	if got := format.GuaranteedDigits(b); got != 0 {
+		t.Fatalf("guaranteed %d significant digits for a ball straddling zero, want 0", got)
 	}
 }

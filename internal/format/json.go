@@ -15,7 +15,7 @@ type unitOut struct {
 }
 
 type valueOut struct {
-	Exact   string `json:"exact"`
+	Exact   string `json:"exact,omitempty"`
 	Ball    string `json:"ball,omitempty"`
 	Decimal string `json:"decimal"`
 	Digits  int    `json:"digits"`

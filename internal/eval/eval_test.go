@@ -181,3 +181,16 @@ func TestDivisionByZeroIsReported(t *testing.T) {
 		t.Fatal("want division by zero error")
 	}
 }
+
+func TestCommaSeparatedArgumentsWithoutASpace(t *testing.T) {
+	env := NewEnv()
+	if got := run(t, env, "gcd(48,18)"); got != "6" {
+		t.Errorf("gcd(48,18) = %s, want 6", got)
+	}
+	if got := run(t, env, "root(27,3)"); got != "3" {
+		t.Errorf("root(27,3) = %s, want 3", got)
+	}
+	if got := run(t, env, "18,50,000 + 1,000"); got != "1851000" {
+		t.Errorf("grouped numbers = %s, want 1851000", got)
+	}
+}

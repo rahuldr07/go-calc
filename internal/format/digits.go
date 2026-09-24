@@ -1,6 +1,7 @@
 package format
 
 import (
+	"math/big"
 	"strings"
 
 	"github.com/rahuldr07/go-calc/internal/num"
@@ -23,19 +24,33 @@ func (s Style) digitBudget() int {
 }
 
 func provenDecimal(b num.Ball, limit int) (string, int) {
-	places := b.GuaranteedDigits()
-	if limit >= 0 && places > limit {
-		places = limit
+	digits := b.GuaranteedDigits()
+	if limit >= 0 && digits > limit {
+		digits = limit
 	}
-	lo, hi := b.Lo(), b.Hi()
-	for ; places >= 0; places-- {
-		text := unsignZero(lo.Text('f', places))
-		if text != unsignZero(hi.Text('f', places)) {
+	lo, hi, scale := b.Lo(), b.Hi(), b.DecimalScale()
+	for ; digits >= 1; digits-- {
+		text := significantText(lo, digits, scale)
+		if text != significantText(hi, digits, scale) {
 			continue
 		}
-		return trimDecimal(text), places
+		return text, digits
 	}
 	return b.String(), 0
+}
+
+func significantText(x *big.Float, digits, scale int) string {
+	if places := digits - 1 - scale; places >= 0 {
+		return tidy(x.Text('f', places))
+	}
+	return tidy(x.Text('e', digits-1))
+}
+
+func tidy(text string) string {
+	if i := strings.IndexByte(text, 'e'); i >= 0 {
+		return unsignZero(trimDecimal(text[:i])) + text[i:]
+	}
+	return unsignZero(trimDecimal(text))
 }
 
 func unsignZero(text string) string {

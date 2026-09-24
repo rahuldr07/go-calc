@@ -45,6 +45,7 @@ func (e *Env) EvalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
 	if ctx.MaxPrec < ctx.Prec {
 		ctx.MaxPrec = ctx.Prec
 	}
+	best := -1
 	for {
 		p := &pass{ctx: ctx}
 		v, err := e.eval(n, p)
@@ -54,9 +55,11 @@ func (e *Env) EvalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
 		if v.Num.IsExact() || p.uncertain || ctx.Prec >= ctx.MaxPrec {
 			return v, nil
 		}
-		if v.Num.Ball(ctx.Prec).GuaranteedDigits() >= ctx.Digits {
+		digits := v.Num.Ball(ctx.Prec).GuaranteedDigits()
+		if digits >= ctx.Digits || digits <= best {
 			return v, nil
 		}
+		best = digits
 		if !ctx.Deadline.IsZero() && !time.Now().Before(ctx.Deadline) {
 			return v, nil
 		}

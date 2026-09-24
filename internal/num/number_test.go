@@ -145,15 +145,25 @@ func TestNumberNegAbsAndSignAcrossKinds(t *testing.T) {
 	}
 }
 
-func TestGuaranteedDigitsFollowsTheRadiusNotTheMagnitude(t *testing.T) {
-	for _, mid := range []float64{1e-3, 1, 1e9} {
-		b := NewBall(big.NewFloat(mid), MagFromFloat(2e-10))
-		if got := b.GuaranteedDigits(); got != 9 {
-			t.Errorf("GuaranteedDigits(%g ± 2e-10) = %d, want 9", mid, got)
+func TestGuaranteedDigitsCountsSignificantDigits(t *testing.T) {
+	cases := []struct {
+		mid    float64
+		radius float64
+		want   int
+	}{
+		{1, 2e-10, 9},
+		{1000, 2e-10, 12},
+		{0.001, 2e-10, 6},
+		{1e9, 2e-10, 18},
+	}
+	for _, c := range cases {
+		b := NewBall(big.NewFloat(c.mid), MagFromFloat(c.radius))
+		if got := b.GuaranteedDigits(); got != c.want {
+			t.Errorf("GuaranteedDigits(%g ± %g) = %d, want %d", c.mid, c.radius, got, c.want)
 		}
 	}
 	wide := NewBall(big.NewFloat(1), MagFromFloat(50))
 	if got := wide.GuaranteedDigits(); got != 0 {
-		t.Errorf("GuaranteedDigits of a ball wider than 1 = %d, want 0", got)
+		t.Errorf("GuaranteedDigits of a ball wider than its midpoint = %d, want 0", got)
 	}
 }

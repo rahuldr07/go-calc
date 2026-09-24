@@ -71,3 +71,44 @@ func FuzzScan(f *testing.F) {
 		}
 	})
 }
+
+func TestCommaGroupsOnlyJoinWhenWellFormed(t *testing.T) {
+	cases := []struct {
+		src  string
+		want string
+	}{
+		{"1,000", "1,000"},
+		{"18,50,000", "18,50,000"},
+		{"1,00,00,000", "1,00,00,000"},
+		{"1,234,567", "1,234,567"},
+		{"1,000.5", "1,000.5"},
+		{"48,18", "48"},
+		{"1,2", "1"},
+		{"12,345,67", "12,345"},
+		{"1,0000", "1"},
+		{"1,", "1"},
+	}
+	for _, c := range cases {
+		toks, err := Scan(c.src)
+		if err != nil {
+			t.Fatalf("Scan(%q): %v", c.src, err)
+		}
+		if toks[0].Kind != Num {
+			t.Errorf("Scan(%q) first token kind = %v, want Num", c.src, toks[0].Kind)
+			continue
+		}
+		if toks[0].Text != c.want {
+			t.Errorf("Scan(%q) first number = %q, want %q", c.src, toks[0].Text, c.want)
+		}
+	}
+}
+
+func TestMalformedGroupingLeavesACommaToken(t *testing.T) {
+	toks, err := Scan("48,18")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(toks) != 4 || toks[1].Kind != Comma || toks[2].Text != "18" {
+		t.Fatalf("Scan(48,18) = %v, want 48 , 18 and EOF", toks)
+	}
+}
