@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahuldr07/go-calc/internal/format"
 	"github.com/rahuldr07/go-calc/internal/num"
@@ -262,5 +263,30 @@ func TestExactTierHonoursTheSameDigitBudget(t *testing.T) {
 	}
 	if got := format.Text(v, nil); got != "462500/3  \u2248 154166.666667" {
 		t.Fatalf("text = %q, want 12 significant digits after the fraction", got)
+	}
+}
+
+func TestDeadlineStopsTheRetryAndIsNamedAsItself(t *testing.T) {
+	env := NewEnv()
+	ctx := DefaultCtx()
+	ctx.Digits = 400
+	ctx.Deadline = time.Now().Add(-time.Second)
+	n, _, _ := parse.Parse("sqrt(2)")
+	v, err := env.EvalCtx(n, ctx)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if ctx.Prec != DefaultCtx().Prec {
+		t.Fatalf("precision moved to %d, but the deadline had already passed", ctx.Prec)
+	}
+	if v.Stopped != value.StopDeadline {
+		t.Fatalf("stop reason = %d, want StopDeadline", v.Stopped)
+	}
+	text := format.Style{Digits: ctx.Digits}.Text(v, nil)
+	if !strings.Contains(text, "digits guaranteed (time limit reached)") {
+		t.Fatalf("text = %q, want the deadline named", text)
+	}
+	if strings.Contains(text, "precision cap") {
+		t.Fatalf("text = %q, names a cap that was never reached", text)
 	}
 }

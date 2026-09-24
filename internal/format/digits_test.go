@@ -174,7 +174,7 @@ func TestNonTerminatingRationalsShowSignificantDigits(t *testing.T) {
 	}
 }
 
-func TestTerminatingRationalsPrintInFull(t *testing.T) {
+func TestTerminatingRationalsWithinBudgetPrintInFullAndExact(t *testing.T) {
 	for _, c := range []struct{ src, want string }{
 		{"3/10", "0.3"},
 		{"1/1024", "0.0009765625"},
@@ -184,26 +184,34 @@ func TestTerminatingRationalsPrintInFull(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := Text(value.Scalar(r), nil); got != c.want {
+		got := Text(value.Scalar(r), nil)
+		if got != c.want {
 			t.Errorf("Text(%s) = %q, want %q", c.src, got, c.want)
+		}
+		if strings.Contains(got, "\u2248") {
+			t.Errorf("Text(%s) = %q, a complete decimal must not be marked approximate", c.src, got)
 		}
 	}
 }
 
-func countSignificant(text string) int {
-	seen, started := 0, false
-	for _, r := range text {
-		if r < '0' || r > '9' {
-			continue
-		}
-		if r != '0' {
-			started = true
-		}
-		if started {
-			seen++
-		}
+func TestLongTerminatingDecimalsRoundToTheBudget(t *testing.T) {
+	tiny := value.Scalar(num.FromRat(new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Exp(big.NewInt(2), big.NewInt(500), nil))))
+	got := Text(tiny, nil)
+	marker := "  \u2248 "
+	i := strings.Index(got, marker)
+	if i < 0 {
+		t.Fatalf("Text = %q, want a rounded decimal marked approximate", got)
 	}
-	return seen
+	decimal := got[i+len(marker):]
+	if want := "0." + strings.Repeat("0", 150) + "30549363635"; decimal != want {
+		t.Fatalf("decimal = %q, want %q", decimal, want)
+	}
+	if n := significantDigits(decimal); n > Digits {
+		t.Fatalf("decimal carries %d significant digits, want at most %d", n, Digits)
+	}
+	if !strings.HasPrefix(got, "1/") {
+		t.Fatalf("Text = %q, want the exact fraction beside the decimal", got[:20])
+	}
 }
 
 func TestDefaultBudgetIsTwelveSignificantDigitsInBothTiers(t *testing.T) {
@@ -212,11 +220,11 @@ func TestDefaultBudgetIsTwelveSignificantDigitsInBothTiers(t *testing.T) {
 		t.Fatal(err)
 	}
 	exact := strings.TrimPrefix(Text(value.Scalar(r), nil), "462500/3  \u2248 ")
-	if got := countSignificant(exact); got != Digits {
+	if got := significantDigits(exact); got != Digits {
 		t.Errorf("exact tier printed %d significant digits (%s), want %d", got, exact, Digits)
 	}
 	b := num.NewBall(big.NewFloat(154166.666666666666), num.MagFromFloat(1e-30))
-	if got := countSignificant(Default.Number(value.ScalarNum(num.NumBall(b)))); got != Digits {
+	if got := significantDigits(Default.Number(value.ScalarNum(num.NumBall(b)))); got != Digits {
 		t.Errorf("ball tier printed %d significant digits, want %d", got, Digits)
 	}
 }

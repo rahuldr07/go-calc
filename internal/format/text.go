@@ -46,7 +46,9 @@ func (s Style) Number(v value.Value) string {
 		return s.group(r.Num().String())
 	}
 	if places, ok := terminatingPlaces(r); ok {
-		return s.groupDecimal(trimDecimal(r.FloatString(places)))
+		if full := trimDecimal(r.FloatString(places)); significantDigits(full) <= s.digitBudget() {
+			return s.groupDecimal(full)
+		}
 	}
 	return r.RatString() + "  ≈ " + s.groupDecimal(significantRat(r, s.digitBudget()))
 }
@@ -210,3 +212,19 @@ func abs(k int) int {
 }
 
 var bigTen = big.NewInt(10)
+
+func significantDigits(text string) int {
+	seen, started := 0, false
+	for _, r := range text {
+		if r < '0' || r > '9' {
+			continue
+		}
+		if r != '0' {
+			started = true
+		}
+		if started {
+			seen++
+		}
+	}
+	return seen
+}
