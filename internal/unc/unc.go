@@ -20,6 +20,8 @@ type Jet struct {
 	Hess Curv
 }
 
+func (j Jet) IsZero() bool { return len(j.Grad) == 0 && len(j.Hess) == 0 }
+
 type Input struct {
 	ID    InputID
 	Name  string
@@ -35,9 +37,9 @@ type Table struct {
 
 var ErrInconsistentCorrelation = errors.New("the declared correlations are not consistent: no real combined uncertainty exists")
 
-var ErrSensitivityOverflow = errors.New("no uncertainty can be reported here: a sensitivity or an uncertainty is larger than a 64-bit float can hold")
+var ErrSensitivityOverflow = errors.New("no uncertainty can be reported here: a derivative or an uncertainty is larger than a 64-bit float can hold")
 
-var ErrSensitivityUndefined = errors.New("no uncertainty can be reported here: a sensitivity is not a number")
+var ErrSensitivityUndefined = errors.New("no uncertainty can be reported here: a derivative is not a number")
 
 func NewTable() *Table { return &Table{corr: map[Pair]float64{}} }
 
@@ -141,6 +143,20 @@ func (t *Table) Check(s Sens) error {
 		return nil
 	}
 	return ErrInconsistentCorrelation
+}
+
+func (t *Table) CheckCurv(h Curv) error {
+	for _, p := range slices.SortedFunc(maps.Keys(h), func(a, b Pair) int {
+		if a.A != b.A {
+			return int(a.A - b.A)
+		}
+		return int(a.B - b.B)
+	}) {
+		if err := finite(h[p]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func finite(x float64) error {

@@ -136,3 +136,39 @@ func TestWordsParenthesiseAMultipleDenominator(t *testing.T) {
 		}
 	}
 }
+
+func TestCompositeSymbolsParseWithGrouping(t *testing.T) {
+	cases := []struct {
+		sym string
+		dim Dim
+	}{
+		{"(m/s)·s", Dim{1, 0, 0, 0, 0, 0, 0, 0}},
+		{"J/(J/(mol·K))", Dim{0, 0, 0, 0, 1, 1, 0, 0}},
+		{"1/(m·K)", Dim{-1, 0, 0, 0, -1, 0, 0, 0}},
+		{"1/(J/(mol·K))", Dim{-2, -1, 2, 0, 1, 1, 0, 0}},
+		{"m/(m/s^2)", Dim{0, 0, 2, 0, 0, 0, 0, 0}},
+		{"J/(mol·K)", Dim{2, 1, -2, 0, -1, -1, 0, 0}},
+		{"m^3/(kg·s^2)", Dim{3, -1, -2, 0, 0, 0, 0, 0}},
+		{"m/s^2", Dim{1, 0, -2, 0, 0, 0, 0, 0}},
+		{"1/mol", Dim{0, 0, 0, 0, 0, -1, 0, 0}},
+		{"J·s", Dim{2, 1, -1, 0, 0, 0, 0, 0}},
+	}
+	for _, c := range cases {
+		u, ok := Lookup(c.sym)
+		if !ok {
+			t.Errorf("Lookup(%q) failed", c.sym)
+			continue
+		}
+		if u.Dim != c.dim {
+			t.Errorf("Lookup(%q).Dim = %v, want %v", c.sym, u.Dim, c.dim)
+		}
+	}
+}
+
+func TestMalformedCompositeSymbolsAreRefused(t *testing.T) {
+	for _, sym := range []string{"m/(s", "m/s)", "m//s", "m·", "(m", "bogus/s", "m^", "m^x", "()", "m/(s·)"} {
+		if u, ok := Lookup(sym); ok {
+			t.Errorf("malformed %q was accepted as %v", sym, u.Dim)
+		}
+	}
+}

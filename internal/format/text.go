@@ -32,6 +32,9 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 		if v.Unit != "" {
 			b.WriteString(" " + v.Unit)
 		}
+		if note := s.precisionNote(v); note != "" {
+			b.WriteString("\n  " + note)
+		}
 	case rounded:
 		b.WriteString(mid + " ± " + u)
 		if v.Unit != "" {

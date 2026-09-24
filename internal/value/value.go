@@ -25,7 +25,7 @@ func (v Value) WithJet(j unc.Jet) Value {
 	return v
 }
 
-func (v Value) IsMeasured() bool { return len(v.Sens) > 0 }
+func (v Value) IsMeasured() bool { return len(v.Sens) > 0 || len(v.Curv) > 0 }
 
 func Scalar(n num.Exact) Value { return ScalarNum(num.NumExact(n)) }
 

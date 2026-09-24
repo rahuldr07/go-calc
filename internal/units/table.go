@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/rahuldr07/go-calc/internal/num"
 )
@@ -124,48 +125,107 @@ func simple(sym string) (Unit, bool) {
 }
 
 func composite(sym string) (Unit, bool) {
-	if !strings.ContainsAny(sym, "/·^") {
+	if !strings.ContainsAny(sym, "/·^()") {
 		return Unit{}, false
 	}
-	out := Unit{Symbol: sym, Factor: num.FromInt(1), Offset: num.FromInt(0)}
-	for i, group := range strings.Split(sym, "/") {
-		sign := 1
-		if i > 0 {
-			sign = -1
-		}
-		group = strings.TrimSuffix(strings.TrimPrefix(group, "("), ")")
-		for _, term := range strings.Split(group, "·") {
-			if term == "1" {
-				continue
-			}
-			name, power, ok := splitPower(term)
-			if !ok {
-				return Unit{}, false
-			}
-			u, ok := simple(name)
-			if !ok || u.Offset.Sign() != 0 {
-				return Unit{}, false
-			}
-			out.Dim = out.Dim.Add(u.Dim.Scale(sign * power))
-			out.Factor = out.Factor.Mul(u.Factor.Pow(sign * power))
-		}
+	p := &symbols{src: []rune(sym)}
+	dim, factor, ok := p.expr()
+	if !ok || p.i != len(p.src) {
+		return Unit{}, false
 	}
-	return out, true
+	return Unit{Symbol: sym, Dim: dim, Factor: factor, Offset: num.FromInt(0)}, true
 }
 
-func splitPower(term string) (string, int, bool) {
-	name, exp, found := strings.Cut(term, "^")
-	if name == "" {
-		return "", 0, false
+type symbols struct {
+	src []rune
+	i   int
+}
+
+func (p *symbols) expr() (Dim, num.Exact, bool) {
+	dim, factor, ok := p.factor()
+	if !ok {
+		return Dim{}, num.Exact{}, false
 	}
-	if !found {
-		return name, 1, true
+	for p.i < len(p.src) && (p.src[p.i] == '·' || p.src[p.i] == '/') {
+		op := p.src[p.i]
+		p.i++
+		d, f, ok := p.factor()
+		if !ok {
+			return Dim{}, num.Exact{}, false
+		}
+		if op == '/' {
+			dim, factor = dim.Sub(d), factor.Mul(f.Pow(-1))
+			continue
+		}
+		dim, factor = dim.Add(d), factor.Mul(f)
 	}
-	n, err := strconv.Atoi(exp)
-	if err != nil || n <= 0 {
-		return "", 0, false
+	return dim, factor, true
+}
+
+func (p *symbols) factor() (Dim, num.Exact, bool) {
+	dim, f, ok := p.atom()
+	if !ok {
+		return Dim{}, num.Exact{}, false
 	}
-	return name, n, true
+	if p.i < len(p.src) && p.src[p.i] == '^' {
+		p.i++
+		n, ok := p.integer()
+		if !ok {
+			return Dim{}, num.Exact{}, false
+		}
+		dim, f = dim.Scale(n), f.Pow(n)
+	}
+	return dim, f, true
+}
+
+func (p *symbols) atom() (Dim, num.Exact, bool) {
+	if p.i >= len(p.src) {
+		return Dim{}, num.Exact{}, false
+	}
+	switch {
+	case p.src[p.i] == '(':
+		p.i++
+		dim, f, ok := p.expr()
+		if !ok || p.i >= len(p.src) || p.src[p.i] != ')' {
+			return Dim{}, num.Exact{}, false
+		}
+		p.i++
+		return dim, f, true
+	case p.src[p.i] == '1':
+		p.i++
+		return Dim{}, num.FromInt(1), true
+	}
+	start := p.i
+	for p.i < len(p.src) && unicode.IsLetter(p.src[p.i]) {
+		p.i++
+	}
+	if p.i == start {
+		return Dim{}, num.Exact{}, false
+	}
+	u, ok := simple(string(p.src[start:p.i]))
+	if !ok || u.Offset.Sign() != 0 {
+		return Dim{}, num.Exact{}, false
+	}
+	return u.Dim, u.Factor, true
+}
+
+func (p *symbols) integer() (int, bool) {
+	start := p.i
+	if p.i < len(p.src) && (p.src[p.i] == '-' || p.src[p.i] == '+') {
+		p.i++
+	}
+	digits := p.i
+	for p.i < len(p.src) && unicode.IsDigit(p.src[p.i]) {
+		p.i++
+	}
+	if p.i == digits {
+		return 0, false
+	}
+	n, err := strconv.Atoi(string(p.src[start:p.i]))
+	if err != nil {
+		return 0, false
+	}
+	return n, true
 }
 
 func Convert(v num.Exact, from, to Unit) (num.Exact, error) {

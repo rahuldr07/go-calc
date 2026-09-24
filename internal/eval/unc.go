@@ -129,10 +129,10 @@ func (e *Env) expand(t *parse.Call, args []value.Value, p *pass) (value.Value, e
 	if len(args) != 2 {
 		return value.Value{}, &lex.Error{Pos: t.P, Msg: "expand takes a value and a coverage factor"}
 	}
-	if !args[0].IsMeasured() {
-		if e.table.Degenerate(args[0].Sens, args[0].Curv) {
-			return value.Value{}, &lex.Error{Pos: t.P, Msg: "the first-order terms cancel here, so there is no standard uncertainty to expand"}
-		}
+	if e.table.Degenerate(args[0].Sens, args[0].Curv) {
+		return value.Value{}, &lex.Error{Pos: t.P, Msg: "the first-order terms cancel here, so there is no standard uncertainty to expand"}
+	}
+	if len(args[0].Sens) == 0 {
 		return value.Value{}, &lex.Error{Pos: t.P, Msg: "expand needs a value with a declared uncertainty"}
 	}
 	if !args[1].IsScalar() || args[1].IsMeasured() {
@@ -222,7 +222,7 @@ var elemPartials = map[string]func(x, y float64) (partials, error){
 }
 
 func elemJet(name string, in unc.Jet, x, y float64) (unc.Jet, error) {
-	if len(in.Grad) == 0 {
+	if in.IsZero() {
 		return unc.Jet{}, nil
 	}
 	f, ok := elemPartials[name]
@@ -237,10 +237,10 @@ func elemJet(name string, in unc.Jet, x, y float64) (unc.Jet, error) {
 }
 
 func powerJet(a, b unc.Jet, base, exponent float64) (unc.Jet, error) {
-	if len(a.Grad) == 0 && len(b.Grad) == 0 {
+	if a.IsZero() && b.IsZero() {
 		return unc.Jet{}, nil
 	}
-	if len(b.Grad) == 0 {
+	if b.IsZero() {
 		if base == 0 && exponent < 2 {
 			return unc.Jet{}, errOutsideDomain
 		}
@@ -262,7 +262,7 @@ func powerJet(a, b unc.Jet, base, exponent float64) (unc.Jet, error) {
 }
 
 func atan2Jet(y, x unc.Jet, yv, xv float64) (unc.Jet, error) {
-	if len(y.Grad) == 0 && len(x.Grad) == 0 {
+	if y.IsZero() && x.IsZero() {
 		return unc.Jet{}, nil
 	}
 	r2 := xv*xv + yv*yv

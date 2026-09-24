@@ -649,13 +649,17 @@ func verbFor(op string) string {
 
 func combine(l, r value.Value, n num.Number, d units.Dim, sep string) value.Value {
 	out := value.Value{Num: n, Dim: d, Factor: num.FromInt(1)}
+	if !spellsItsOwnSize(l) || !spellsItsOwnSize(r) {
+		out.Unit = units.SISymbol(d)
+		return out
+	}
 	switch {
 	case l.Unit == "" && r.Unit == "":
 		out.Unit = ""
 	case l.Unit == "":
 		out.Unit = r.Unit
 		if sep == "/" {
-			out.Unit = "1/" + r.Unit
+			out.Unit = "1/" + grouped(r.Unit, "/·")
 		}
 	case r.Unit == "":
 		out.Unit = l.Unit
@@ -670,6 +674,13 @@ func combine(l, r value.Value, n num.Number, d units.Dim, sep string) value.Valu
 		out.Unit = ""
 	}
 	return out
+}
+
+func spellsItsOwnSize(v value.Value) bool {
+	if v.Unit == "" {
+		return true
+	}
+	return v.FactorOrOne().Cmp(num.FromInt(1)) == 0 && v.Offset.Sign() == 0
 }
 
 func grouped(unit, ambiguous string) string {

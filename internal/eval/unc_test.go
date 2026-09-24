@@ -9,6 +9,7 @@ import (
 	"github.com/rahuldr07/go-calc/internal/format"
 	"github.com/rahuldr07/go-calc/internal/parse"
 	"github.com/rahuldr07/go-calc/internal/unc"
+	"github.com/rahuldr07/go-calc/internal/units"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
 
@@ -351,7 +352,13 @@ func TestNonlinearityIsNotCheckedSilentlyWhenCorrelated(t *testing.T) {
 }
 
 func TestAStationaryPointIsNotReportedAsCertain(t *testing.T) {
-	for _, src := range []string{"cos(x)", "x * x", "x ^ 2"} {
+	for _, src := range []string{
+		"cos(x)", "x * x", "x ^ 2",
+		"cos(x) + 1", "cos(x) * 2", "2 - cos(x)", "(x*x) + (x*x)", "(x*x) / 3",
+		"exp(x * x)", "sqrt(4 + x*x)", "atan2(x * x, 1)", "abs(cos(x))",
+		"cos(x) ^ 3", "2 ^ (x * x)", "root(4 + x*x, 2)",
+		"(x*x) m", "-(x * x)", "(x*x)%",
+	} {
 		env := NewEnv()
 		run(t, env, "x = 0 ± 1")
 		v := mustEval(t, env, src)
@@ -570,6 +577,102 @@ func TestComposedUnitSymbolsKeepTheirGrouping(t *testing.T) {
 		v := mustEval(t, env, c[0])
 		if v.Unit != c[1] {
 			t.Errorf("%s has unit %q, want %q", c[0], v.Unit, c[1])
+		}
+	}
+}
+
+func TestAStationaryPointSurvivesAStoredVariable(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "x = 0 ± 1")
+	run(t, env, "z = x * x")
+	for _, src := range []string{"z", "z + 1", "z * 4", "sqrt(z + 4)", "z - z"} {
+		v := mustEval(t, env, src)
+		if src == "z - z" {
+			if v.Unc.Degenerate || v.Unc.Warning != "" {
+				t.Errorf("z - z = %+v, want an exact zero", v.Unc)
+			}
+			continue
+		}
+		if !v.Unc.Degenerate {
+			t.Errorf("%s: a stored stationary point was reported as certain", src)
+		}
+		if v.Unc.Warning != unc.NonlinearWarning {
+			t.Errorf("%s: warning = %q", src, v.Unc.Warning)
+		}
+	}
+}
+
+func TestAStationaryPointSurvivesAUserFunction(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "sq(v) = v * v")
+	run(t, env, "x = 0 ± 1")
+	v := mustEval(t, env, "sq(x) + 1")
+	if !v.Unc.Degenerate {
+		t.Error("a stationary point through a user function was reported as certain")
+	}
+	if got := format.Text(v, nil); !strings.HasPrefix(got, "1 ± ?") {
+		t.Errorf("sq(x) + 1 = %q, want 1 ± ?", got)
+	}
+}
+
+func TestANonFiniteCurvatureIsRefusedNotDropped(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "x = 1e-300 ± 0.5")
+	n, _, err := parse.Parse("x / x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = env.Eval(n)
+	if err == nil {
+		t.Fatal("a curvature that underflowed to NaN produced a confident answer")
+	}
+	if !errors.Is(err, unc.ErrSensitivityUndefined) {
+		t.Errorf("error = %v, want the undefined-derivative error", err)
+	}
+}
+
+func TestEveryUnitThisEngineWritesItCanReadBack(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "h = 12.3 ± 0.2 m")
+	for _, src := range []string{
+		"3 m", "3 km", "3 g", "3 degC", "3 J/(mol·K)", "3 mol",
+		"(10 m/s) * (2 s)", "(6 m) / (2 s)", "(1 J) / (1 J/(mol·K))",
+		"(3 m) * (2 kg)", "2 / (1 m·K)", "1 / (1 J/(mol·K))", "2 / (1 m)",
+		"(3 km) / (2 h)", "(3 km) * (2 km)", "(3 g) * (2 m)",
+		"sqrt(2h / g0)", "(1 m) ^ 3", "(1 N) * (1 m)", "R",
+		"(1 m/s) / (1 m/s^2)", "((1 m) / (1 s)) / (1 kg)",
+	} {
+		v := mustEval(t, env, src)
+		if v.Unit == "" {
+			continue
+		}
+		u, ok := units.Lookup(v.Unit)
+		if !ok {
+			t.Errorf("%s printed unit %q, which this engine cannot read back", src, v.Unit)
+			continue
+		}
+		if u.Dim != v.Dim {
+			t.Errorf("%s printed unit %q, which reads back as %v, not %v", src, v.Unit, u.Dim, v.Dim)
+		}
+		if u.Factor.Cmp(v.FactorOrOne()) != 0 || u.Offset.Cmp(v.Offset) != 0 {
+			t.Errorf("%s printed unit %q with scale %v offset %v, but the value is scale %v offset %v",
+				src, v.Unit, u.Factor, u.Offset, v.FactorOrOne(), v.Offset)
+		}
+	}
+}
+
+func TestComposingScaledUnitsFallsBackToSI(t *testing.T) {
+	env := NewEnv()
+	for _, c := range [][2]string{
+		{"(3 km) / (2 h)", "0.416666666667 m/s"},
+		{"(3 km) * (2 km)", "6000000 m^2"},
+		{"(3 g) * (2 m)", "0.006 m·kg"},
+		{"(3 kg) * (2 m)", "6 kg·m"},
+	} {
+		got := format.Text(mustEval(t, env, c[0]), nil)
+		head, _, _ := strings.Cut(got, "\n")
+		if !strings.HasSuffix(head, c[1]) {
+			t.Errorf("%s = %q, want it to end in %q", c[0], head, c[1])
 		}
 	}
 }

@@ -243,3 +243,26 @@ func TestJSONOmitsUncertaintyWhenThereIsNone(t *testing.T) {
 		t.Errorf("uncertainty block appeared for an exact value: %s", b)
 	}
 }
+
+func wideBall(t *testing.T) num.Ball {
+	t.Helper()
+	mid := new(big.Float).SetPrec(64).SetFloat64(1.234)
+	return num.Ball{Mid: mid, Rad: num.MagFromFloat(0.01)}
+}
+
+func TestDegenerateStillReportsWhatIsProven(t *testing.T) {
+	v := value.ScalarNum(num.NumBall(wideBall(t)))
+	v.Sens = nil
+	v.Curv = unc.Curv{unc.Pair{A: 0, B: 0}: 2}
+	v.Unc = unc.Report{Degenerate: true, Warning: unc.NonlinearWarning}
+	got := Text(v, nil)
+	if !strings.HasPrefix(got, "1.2 ± ?") {
+		t.Errorf("text = %q, want it to start with 1.2 ± ?", got)
+	}
+	if !strings.Contains(got, "guaranteed") {
+		t.Errorf("text = %q, want the precision note kept in the degenerate branch", got)
+	}
+	if !strings.Contains(got, unc.NonlinearWarning) {
+		t.Errorf("text = %q, want the warning", got)
+	}
+}

@@ -47,10 +47,13 @@ func (e *Env) EvalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
 }
 
 func (e *Env) report(v value.Value) (value.Value, error) {
-	if !v.IsMeasured() && len(v.Curv) == 0 {
+	if !v.IsMeasured() {
 		return v, nil
 	}
 	if err := e.table.Check(v.Sens); err != nil {
+		return value.Value{}, err
+	}
+	if err := e.table.CheckCurv(v.Curv); err != nil {
 		return value.Value{}, err
 	}
 	v.Unc.Sigma = e.table.Combined(v.Sens)
