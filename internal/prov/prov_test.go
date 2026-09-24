@@ -155,3 +155,29 @@ func TestEveryKindSpellsItself(t *testing.T) {
 		seen[name] = true
 	}
 }
+
+func TestWhatTheArenaHandsOutCannotBeUsedToRewriteIt(t *testing.T) {
+	a := NewArena()
+	one := a.Add(Node{Kind: Literal, Label: "1"})
+	two := a.Add(Node{Kind: Literal, Label: "2"})
+	root := a.Add(Node{Kind: Operation, Label: "+", Children: []NodeID{one, two}})
+
+	got := a.Get(root)
+	got.Children[0] = NodeID(999)
+	if a.Get(root).Children[0] != one {
+		t.Errorf("Get let a caller rewrite the arena: %v", a.Get(root).Children)
+	}
+
+	export := a.Export(root)
+	for i := range export.Nodes {
+		if export.Nodes[i].ID == root {
+			export.Nodes[i].Children[1] = NodeID(999)
+		}
+	}
+	if a.Get(root).Children[1] != two {
+		t.Errorf("Export let a caller rewrite the arena: %v", a.Get(root).Children)
+	}
+	if again := a.Export(root); again.Nodes[0].Children[1] != two {
+		t.Errorf("a second export saw the first export's edit: %v", again.Nodes[0].Children)
+	}
+}

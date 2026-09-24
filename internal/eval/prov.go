@@ -4,7 +4,6 @@ import (
 	"strconv"
 
 	"github.com/rahuldr07/go-calc/internal/consts"
-	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/parse"
 	"github.com/rahuldr07/go-calc/internal/prov"
 	"github.com/rahuldr07/go-calc/internal/units"
@@ -96,17 +95,14 @@ func constantDetail(c consts.Const) string {
 
 func unitDetail(u units.Unit) string {
 	base := units.SISymbol(u.Dim)
-	if base == "" {
-		base = "1"
+	detail := "1 " + u.Symbol + " = " + u.Factor.String()
+	if base != "" {
+		detail += " " + base
 	}
-	if u.Symbol == base && u.Offset.Sign() == 0 && u.Factor.Cmp(num.FromInt(1)) == 0 {
-		return "the SI unit of " + u.Dim.Words()
-	}
-	detail := "1 " + u.Symbol + " = " + u.Factor.String() + " " + base
 	if u.Offset.Sign() != 0 {
 		detail += " + " + u.Offset.String() + " " + base
 	}
-	return detail
+	return detail + " (" + u.Dim.Words() + ")"
 }
 
 func inputDetail(v value.Value, sigma float64, prec uint) string {

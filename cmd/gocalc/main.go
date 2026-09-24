@@ -114,12 +114,10 @@ func comparison(x eval.Explanation, style format.Style) string {
 }
 
 func provenText(v value.Value, style format.Style) string {
-	out := style.Number(v)
-	if v.Unit != "" {
-		out += " " + v.Unit
-	}
-	return out
+	return strings.ReplaceAll(style.Text(v, nil), "\n", "\n"+provenIndent)
 }
+
+const provenIndent = "         "
 
 func agreement(digits float64) string {
 	if math.IsInf(digits, 1) {

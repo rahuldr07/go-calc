@@ -167,13 +167,16 @@ func TestShadowStaysSilentWhereItCannotModelTheEvaluator(t *testing.T) {
 	}
 }
 
-func TestShadowTracksUnitsInSI(t *testing.T) {
+func TestShadowMirrorsTheUnitTheEvaluatorKeeps(t *testing.T) {
 	env := NewEnv()
 	src := "3 km + 200 m"
 	n := mustParse(t, src)
 	sh := env.Shadow(n)
-	if !sh.modelled || math.Abs(sh.Value-3200) > 1e-9 {
-		t.Errorf("shadow = %+v, want 3200 in SI", sh)
+	if !sh.modelled || math.Abs(sh.Value-3.2) > 1e-9 {
+		t.Errorf("shadow = %+v, want 3.2 km, the number the calculator shows", sh)
+	}
+	if math.Abs(sh.si-3200) > 1e-9 {
+		t.Errorf("shadow SI = %v, want 3200", sh.si)
 	}
 }
 

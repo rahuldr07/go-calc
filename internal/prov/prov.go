@@ -71,7 +71,9 @@ func (a *Arena) Get(id NodeID) Node {
 	if !a.Has(id) {
 		return Node{}
 	}
-	return a.nodes[id]
+	n := a.nodes[id]
+	n.Children = append([]NodeID(nil), n.Children...)
+	return n
 }
 
 func (a *Arena) Len() int { return len(a.nodes) }
