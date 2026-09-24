@@ -2,6 +2,7 @@ package value
 
 import (
 	"github.com/rahuldr07/go-calc/internal/num"
+	"github.com/rahuldr07/go-calc/internal/prov"
 	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/units"
 )
@@ -16,6 +17,7 @@ type Value struct {
 	Sens    unc.Sens
 	Curv    unc.Curv
 	Unc     unc.Report
+	Prov    prov.NodeID
 }
 
 func (v Value) Jet() unc.Jet { return unc.Jet{Grad: v.Sens, Hess: v.Curv} }

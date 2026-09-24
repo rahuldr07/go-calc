@@ -7,6 +7,7 @@ import (
 	"github.com/rahuldr07/go-calc/internal/lex"
 	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/prov"
 	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/units"
 	"github.com/rahuldr07/go-calc/internal/value"
@@ -94,7 +95,9 @@ func (e *Env) measure(t *parse.Binary, p *pass) (value.Value, error) {
 	if e.line > 0 {
 		line = e.line
 	}
-	id := e.table.Declare(name, siFloat(out, prec), math.Abs(siFloat(r, prec)), line)
+	sigma := math.Abs(siFloat(r, prec))
+	id := e.table.Declare(name, siFloat(out, prec), sigma, line)
+	e.record(t, p, prov.Node{Kind: prov.Input, Label: name, Detail: inputDetail(out, sigma, prec), Line: line})
 	p.uncertain = true
 	return out.WithJet(unc.Jet{Grad: unc.Sens{id: 1}}), nil
 }

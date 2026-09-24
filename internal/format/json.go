@@ -8,6 +8,7 @@ import (
 	"github.com/rahuldr07/go-calc/internal/num"
 
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/prov"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
 
@@ -51,12 +52,23 @@ type result struct {
 	Value       valueOut        `json:"value"`
 	Unit        *unitOut        `json:"unit,omitempty"`
 	Uncertainty *uncertaintyOut `json:"uncertainty,omitempty"`
+	Provenance  *prov.Export    `json:"provenance,omitempty"`
+	Warning     string          `json:"warning,omitempty"`
 	Notes       []string        `json:"notes,omitempty"`
+}
+
+type Detail struct {
+	Arena   *prov.Arena
+	Warning string
 }
 
 var dimKeys = [8]string{"L", "M", "T", "I", "Θ", "N", "J", "B"}
 
 func JSON(input string, v value.Value, notes []parse.Note) ([]byte, error) {
+	return JSONDetail(input, v, notes, Detail{})
+}
+
+func JSONDetail(input string, v value.Value, notes []parse.Note, d Detail) ([]byte, error) {
 	msgs := make([]string, 0, len(notes))
 	for _, n := range notes {
 		msgs = append(msgs, n.Msg)
@@ -71,7 +83,11 @@ func JSON(input string, v value.Value, notes []parse.Note) ([]byte, error) {
 		out.Ball = tightBounds(b)
 		out.Decimal, out.Digits = Default.provenBall(b)
 	}
-	r := result{Schema: Schema, Input: input, Value: out, Notes: msgs, Uncertainty: uncertainty(v)}
+	r := result{Schema: Schema, Input: input, Value: out, Notes: msgs, Uncertainty: uncertainty(v), Warning: d.Warning}
+	if d.Arena != nil && d.Arena.Has(v.Prov) {
+		trace := d.Arena.Export(v.Prov)
+		r.Provenance = &trace
+	}
 	if v.Unit != "" {
 		dims := map[string]int{}
 		for i, e := range v.Dim {

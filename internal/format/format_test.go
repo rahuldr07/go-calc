@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rahuldr07/go-calc/internal/num"
+	"github.com/rahuldr07/go-calc/internal/prov"
 	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/units"
 	"github.com/rahuldr07/go-calc/internal/value"
@@ -264,5 +265,56 @@ func TestDegenerateStillReportsWhatIsProven(t *testing.T) {
 	}
 	if !strings.Contains(got, unc.NonlinearWarning) {
 		t.Errorf("text = %q, want the warning", got)
+	}
+}
+
+func TestJSONDetailCarriesProvenanceAndWarning(t *testing.T) {
+	a := prov.NewArena()
+	one := a.Add(prov.Node{Kind: prov.Literal, Label: "1"})
+	root := a.Add(prov.Node{Kind: prov.Operation, Label: "-", Children: []prov.NodeID{one}})
+	v := value.Scalar(num.FromInt(1))
+	v.Prov = root
+	raw, err := JSONDetail("x", v, nil, Detail{Arena: a, Warning: "float64 would answer 0 here"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Warning    string `json:"warning"`
+		Provenance *struct {
+			Root  prov.NodeID `json:"root"`
+			Nodes []struct {
+				ID   prov.NodeID `json:"id"`
+				Kind string      `json:"kind"`
+			} `json:"nodes"`
+		} `json:"provenance"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Warning != "float64 would answer 0 here" {
+		t.Errorf("warning = %q", out.Warning)
+	}
+	if out.Provenance == nil || out.Provenance.Root != root || len(out.Provenance.Nodes) != 2 {
+		t.Fatalf("provenance = %+v", out.Provenance)
+	}
+}
+
+func TestJSONWithoutADetailOmitsBothKeys(t *testing.T) {
+	raw, err := JSON("2", value.Scalar(num.FromInt(2)), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{`"provenance"`, `"warning"`} {
+		if strings.Contains(string(raw), key) {
+			t.Errorf("plain JSON carries %s:\n%s", key, raw)
+		}
+	}
+}
+
+func TestProvenanceNeverBorrowsThePlusMinusSign(t *testing.T) {
+	a := prov.NewArena()
+	id := a.Add(prov.Node{Kind: prov.Unit, Label: "km", Detail: "1 km = 1000 m"})
+	if strings.Contains(a.Tree(id), "±") {
+		t.Errorf("a unit node borrowed ±:\n%s", a.Tree(id))
 	}
 }

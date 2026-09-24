@@ -2,6 +2,7 @@ package eval
 
 import (
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/prov"
 	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
@@ -15,6 +16,7 @@ type Env struct {
 	vars  map[string]value.Value
 	funcs map[string]fn
 	table *unc.Table
+	arena *prov.Arena
 	line  int
 	notes []parse.Note
 }
@@ -25,7 +27,15 @@ func NewEnvWith(t *unc.Table) *Env {
 	if t == nil {
 		t = unc.NewTable()
 	}
-	return &Env{vars: map[string]value.Value{}, funcs: map[string]fn{}, table: t}
+	return &Env{vars: map[string]value.Value{}, funcs: map[string]fn{}, table: t, arena: prov.NewArena()}
+}
+
+func (e *Env) Arena() *prov.Arena { return e.arena }
+
+func (e *Env) SetArena(a *prov.Arena) {
+	if a != nil {
+		e.arena = a
+	}
 }
 
 func (e *Env) Table() *unc.Table { return e.table }
@@ -65,6 +75,7 @@ func (e *Env) Get(name string) (value.Value, bool) {
 
 func (e *Env) child() *Env {
 	c := NewEnvWith(e.table)
+	c.arena = e.arena
 	c.line = e.line
 	for k, v := range e.vars {
 		c.vars[k] = v

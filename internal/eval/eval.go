@@ -12,12 +12,13 @@ import (
 	"github.com/rahuldr07/go-calc/internal/lex"
 	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/prov"
 	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/units"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
 
-func (e *Env) eval(n parse.Node, p *pass) (value.Value, error) {
+func (e *Env) evalNode(n parse.Node, p *pass) (value.Value, error) {
 	switch t := n.(type) {
 	case *parse.NumLit:
 		x, err := num.ParseExact(t.Text)
@@ -41,9 +42,11 @@ func (e *Env) eval(n parse.Node, p *pass) (value.Value, error) {
 
 func (e *Env) evalName(t *parse.Name, p *pass) (value.Value, error) {
 	if v, ok := e.vars[t.Text]; ok {
+		e.namedProv(t, p, v)
 		return p.note(v), nil
 	}
 	if c, ok := consts.Lookup(t.Text); ok {
+		e.record(t, p, prov.Node{Kind: prov.Constant, Label: t.Text, Detail: constantDetail(c)})
 		if u, ok := units.Lookup(c.Unit); ok && c.Unit != "" {
 			return value.WithUnit(c.Value, u), nil
 		}
@@ -53,15 +56,20 @@ func (e *Env) evalName(t *parse.Name, p *pass) (value.Value, error) {
 	}
 	switch t.Text {
 	case "pi", "π":
+		e.record(t, p, prov.Node{Kind: prov.Constant, Label: t.Text, Detail: workingPrecision})
 		return value.ScalarNum(num.NumBall(elem.Pi(p.prec()))), nil
 	case "e":
+		e.record(t, p, prov.Node{Kind: prov.Constant, Label: t.Text, Detail: workingPrecision})
 		return value.ScalarNum(num.NumBall(elem.E(p.prec()))), nil
 	}
 	if u, ok := units.Lookup(t.Text); ok {
+		e.record(t, p, prov.Node{Kind: prov.Unit, Label: t.Text, Detail: unitDetail(u)})
 		return value.WithUnit(num.FromInt(1), u), nil
 	}
 	return value.Value{}, &lex.Error{Pos: t.P, Msg: "unknown name " + t.Text}
 }
+
+const workingPrecision = "computed to the working precision"
 
 func (e *Env) evalAssign(t *parse.Assign, p *pass) (value.Value, error) {
 	if t.Name == "corr" && len(t.Params) == 2 {
@@ -81,6 +89,7 @@ func (e *Env) evalAssign(t *parse.Assign, p *pass) (value.Value, error) {
 		return value.Value{}, err
 	}
 	e.vars[t.Name] = v
+	p.assigned = true
 	return v, nil
 }
 
@@ -593,20 +602,25 @@ func power(t *parse.Binary, l, r value.Value, prec uint) (value.Value, error) {
 	return value.ScalarNum(num.NumBall(b)).WithJet(j), nil
 }
 
+func (e *Env) implicitReading(name *parse.Name) (units.Unit, value.Value, bool, bool) {
+	u, known := units.Lookup(name.Text)
+	bound, defined := e.vars[name.Text]
+	if defined && (!bound.IsScalar() || bound.IsMeasured()) {
+		return u, bound, defined && known, false
+	}
+	return u, bound, defined && known, known
+}
+
 func (e *Env) implicitUnit(t *parse.Binary, p *pass) (value.Value, error, bool) {
 	name, ok := t.R.(*parse.Name)
 	if !ok {
 		return value.Value{}, nil, false
 	}
-	u, known := units.Lookup(name.Text)
-	bound, defined := e.vars[name.Text]
-	if defined && known {
+	u, bound, ambiguous, asUnit := e.implicitReading(name)
+	if ambiguous {
 		p.notes = append(p.notes, readingNote(name, u, bound))
 	}
-	if defined && (!bound.IsScalar() || bound.IsMeasured()) {
-		return value.Value{}, nil, false
-	}
-	if !known {
+	if !asUnit {
 		return value.Value{}, nil, false
 	}
 	l, err := e.eval(t.L, p)
@@ -616,6 +630,7 @@ func (e *Env) implicitUnit(t *parse.Binary, p *pass) (value.Value, error, bool) 
 	if !l.IsScalar() {
 		return value.Value{}, &lex.Error{Pos: t.P, Msg: "cannot attach " + name.Text + " to a value that already has a unit"}, true
 	}
+	e.record(t, p, prov.Node{Kind: prov.Unit, Label: name.Text, Detail: unitDetail(u), Children: []prov.NodeID{l.Prov}})
 	scaled := unc.Unary(l.Jet(), exactFloat(u.Factor), 0)
 	if u.Dim.IsNone() {
 		return value.ScalarNum(l.Num.Mul(num.NumExact(u.Factor), p.prec())).WithJet(scaled), nil, true
@@ -764,5 +779,6 @@ func (e *Env) convert(t *parse.Binary, p *pass) (value.Value, error) {
 	if err != nil {
 		return value.Value{}, err
 	}
+	e.record(t, p, prov.Node{Kind: prov.Unit, Label: t.Op + " " + name.Text, Detail: unitDetail(to), Children: []prov.NodeID{l.Prov}})
 	return value.WithUnitNum(out, to).WithJet(l.Jet()), nil
 }

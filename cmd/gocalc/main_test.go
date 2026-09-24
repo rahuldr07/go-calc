@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rahuldr07/go-calc/internal/doc"
 	"github.com/rahuldr07/go-calc/internal/eval"
 	"github.com/rahuldr07/go-calc/internal/format"
 	"github.com/rahuldr07/go-calc/internal/parse"
@@ -182,4 +183,100 @@ func writeSheet(t *testing.T, body string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func TestTracePrintsTheTree(t *testing.T) {
+	out, code := explain("sqrt(2 m / g0)", false)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	for _, want := range []string{"sqrt", "function", "g0", "CODATA 2022", "m", "unit", "└──"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("trace missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestWhyNamesBothAnswers(t *testing.T) {
+	out, code := explain("(1e16 + 1) - 1e16", true)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	for _, want := range []string{"proven:", "float64:", "bits at the -"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("why missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestTraceReportsAFailedExpression(t *testing.T) {
+	if out, code := explain("5 m + 3 s", false); code == 0 {
+		t.Errorf("want non-zero exit, got %q", out)
+	}
+	if out, code := explain("5 m + 3 s", true); code == 0 {
+		t.Errorf("want non-zero exit, got %q", out)
+	}
+}
+
+func TestOneShotCarriesThePrecisionWarning(t *testing.T) {
+	out, code := run([]string{"(1e16 + 1) - 1e16"}, plain, false)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if !strings.Contains(out, "float64 would answer 0") {
+		t.Errorf("out = %q, want the float64 warning", out)
+	}
+	quiet, code := run([]string{"2 + 3 * 4"}, plain, false)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, quiet)
+	}
+	if strings.Contains(quiet, "float64") {
+		t.Errorf("out = %q, want no warning on benign arithmetic", quiet)
+	}
+}
+
+func TestJSONCarriesProvenanceAndWarning(t *testing.T) {
+	out, code := run([]string{"(1e16 + 1) - 1e16"}, plain, true)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	for _, want := range []string{`"provenance"`, `"root"`, `"nodes"`, `"warning"`, `"kind": "literal"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("json missing %q:\n%s", want, out)
+		}
+	}
+	quiet, code := run([]string{"2 + 2"}, plain, true)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, quiet)
+	}
+	if strings.Contains(quiet, `"warning"`) {
+		t.Errorf("json = %s, want no warning key", quiet)
+	}
+	if !strings.Contains(quiet, `"provenance"`) {
+		t.Errorf("json = %s, want provenance on every result", quiet)
+	}
+}
+
+func TestSheetWarnsOnTheLineThatLosesDigits(t *testing.T) {
+	out, code := runFile(writeSheet(t, "fine = 2 + 2\nlost = (1e16 + 1) - 1e16\n"), plain, false)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if !strings.Contains(out, "at 2:") {
+		t.Errorf("out = %q, want the warning to name sheet line 2", out)
+	}
+	if strings.Count(out, "float64") != 1 {
+		t.Errorf("out = %q, want exactly one warning", out)
+	}
+}
+
+func TestSheetTraceReachesAcrossLines(t *testing.T) {
+	sheet := doc.New()
+	lines := sheet.SetLines([]string{"h = 12.3 ± 0.2 m", "t = sqrt(2h / g0)"})
+	tree := sheet.Arena().Tree(lines[1].Value.Prov)
+	for _, want := range []string{"h", "input", "line 1", "g0", "CODATA 2022"} {
+		if !strings.Contains(tree, want) {
+			t.Errorf("trace missing %q:\n%s", want, tree)
+		}
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/rahuldr07/go-calc/internal/eval"
 	"github.com/rahuldr07/go-calc/internal/format"
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/prov"
 )
 
 func main() {
@@ -20,9 +21,18 @@ func main() {
 	flag.Parse()
 	style := format.Style{Digits: format.Digits, Grouped: *grouped || *indian, Indian: *indian}
 	args := flag.Args()
-	if len(args) > 1 && args[0] == "run" {
-		out, code := runFile(args[1], style, *asJSON)
-		emit(out, code)
+	if len(args) > 1 {
+		switch args[0] {
+		case "run":
+			out, code := runFile(args[1], style, *asJSON)
+			emit(out, code)
+		case "trace":
+			out, code := explain(strings.Join(args[1:], " "), false)
+			emit(out, code)
+		case "why":
+			out, code := explain(strings.Join(args[1:], " "), true)
+			emit(out, code)
+		}
 	}
 	out, code := run(args, style, *asJSON)
 	emit(out, code)
@@ -39,7 +49,7 @@ func emit(out string, code int) {
 
 func run(args []string, style format.Style, asJSON bool) (string, int) {
 	if len(args) == 0 {
-		return "usage: gocalc [--json] [--indian] \"expression\"\n       gocalc run sheet.calc", 2
+		return "usage: gocalc [--json] [--indian] \"expression\"\n       gocalc run sheet.calc\n       gocalc trace \"expression\"\n       gocalc why \"expression\"", 2
 	}
 	src := strings.Join(args, " ")
 	return evalLine(eval.NewEnv(), src, style, asJSON)
@@ -54,21 +64,46 @@ func evalLine(env *eval.Env, src string, style format.Style, asJSON bool) (strin
 	if err != nil {
 		return err.Error(), 1
 	}
-	return render(doc.Line{Src: src, Value: v, Notes: append(notes, env.Notes()...)}, style, asJSON)
+	line := doc.Line{Src: src, Value: v, Notes: append(notes, env.Notes()...), Warning: env.Warning(node, v)}
+	return render(line, style, asJSON, env.Arena())
 }
 
-func render(l doc.Line, style format.Style, asJSON bool) (string, int) {
+func explain(src string, why bool) (string, int) {
+	env := eval.NewEnv()
+	node, _, err := parse.Parse(src)
+	if err != nil {
+		return err.Error(), 1
+	}
+	v, err := env.Eval(node)
+	if err != nil {
+		return err.Error(), 1
+	}
+	if why {
+		return env.Why(node, v), 0
+	}
+	tree := strings.TrimRight(env.Arena().Tree(v.Prov), "\n")
+	if tree == "" {
+		return "no provenance was recorded for this expression", 1
+	}
+	return tree, 0
+}
+
+func render(l doc.Line, style format.Style, asJSON bool, arena *prov.Arena) (string, int) {
 	if l.Err != nil {
 		return l.Err.Error(), 1
 	}
 	if asJSON {
-		b, err := format.JSON(l.Src, l.Value, l.Notes)
+		b, err := format.JSONDetail(l.Src, l.Value, l.Notes, format.Detail{Arena: arena, Warning: l.Warning})
 		if err != nil {
 			return err.Error(), 1
 		}
 		return string(b), 0
 	}
-	return style.Text(l.Value, l.Notes), 0
+	out := style.Text(l.Value, l.Notes)
+	if l.Warning != "" {
+		out += "\n  " + l.Warning
+	}
+	return out, 0
 }
 
 func runFile(path string, style format.Style, asJSON bool) (string, int) {
@@ -87,11 +122,12 @@ func runFile(path string, style format.Style, asJSON bool) (string, int) {
 	}
 	var out []string
 	code := 0
-	for _, l := range doc.New().SetLines(src) {
+	sheet := doc.New()
+	for _, l := range sheet.SetLines(src) {
 		if doc.Blank(l.Src) {
 			continue
 		}
-		text, c := render(l, style, asJSON)
+		text, c := render(l, style, asJSON, sheet.Arena())
 		if c != 0 {
 			code = c
 			text = fmt.Sprintf("line %d: %s", l.N+1, text)

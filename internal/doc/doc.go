@@ -5,6 +5,7 @@ import (
 
 	"github.com/rahuldr07/go-calc/internal/eval"
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/prov"
 	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
@@ -43,12 +44,15 @@ type Doc struct {
 	lines     []*entry
 	defs      map[string][]int
 	table     *unc.Table
+	arena     *prov.Arena
 	evaluator func(*eval.Env, parse.Node) (value.Value, error)
 }
 
 func New() *Doc {
-	return &Doc{defs: map[string][]int{}, table: unc.NewTable(), evaluator: evalNode}
+	return &Doc{defs: map[string][]int{}, table: unc.NewTable(), arena: prov.NewArena(), evaluator: evalNode}
 }
+
+func (d *Doc) Arena() *prov.Arena { return d.arena }
 
 func evalNode(env *eval.Env, n parse.Node) (value.Value, error) { return env.Eval(n) }
 
@@ -160,6 +164,9 @@ func (d *Doc) evaluate(i int) {
 		env := d.env(i)
 		e.value, e.err = d.evaluator(env, e.node)
 		e.notes = append(append([]parse.Note{}, e.read...), env.Notes()...)
+		if e.err == nil {
+			e.warning = env.Warning(e.node, e.value)
+		}
 	}
 }
 
@@ -178,6 +185,7 @@ func (d *Doc) brokenInputs(i int) error {
 
 func (d *Doc) env(i int) *eval.Env {
 	env := eval.NewEnvWith(d.table)
+	env.SetArena(d.arena)
 	env.SetLine(i + 1)
 	for _, j := range d.lines[i].deps {
 		bind(env, d.lines[j])

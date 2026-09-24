@@ -568,3 +568,49 @@ func TestAFailedLineDropsItsOldEvaluatorNotes(t *testing.T) {
 		t.Errorf("notes on the failed line = %q, want none", got)
 	}
 }
+
+func TestWarningLandsOnTheLineThatLosesDigits(t *testing.T) {
+	d := New()
+	lines := d.SetLines([]string{"fine = 2 + 2", "lost = (1e16 + 1) - 1e16"})
+	if lines[0].Warning != "" {
+		t.Errorf("line 1 warned %q", lines[0].Warning)
+	}
+	if !strings.Contains(lines[1].Warning, "float64") {
+		t.Errorf("line 2 warning = %q", lines[1].Warning)
+	}
+	if !strings.Contains(lines[1].Warning, "at 2:") {
+		t.Errorf("line 2 warning = %q, want it to name the sheet line", lines[1].Warning)
+	}
+}
+
+func TestEditClearsAWarningThatNoLongerApplies(t *testing.T) {
+	d := New()
+	d.SetLines([]string{"x = (1e16 + 1) - 1e16"})
+	changed := d.Edit(0, "x = 2 + 2")
+	if len(changed) != 1 {
+		t.Fatalf("changed = %d lines", len(changed))
+	}
+	if changed[0].Warning != "" {
+		t.Errorf("warning survived the edit: %q", changed[0].Warning)
+	}
+}
+
+func TestEveryLineCarriesProvenance(t *testing.T) {
+	d := New()
+	lines := d.SetLines([]string{"h = 12.3 ± 0.2 m", "", "# note", "t = sqrt(2h / g0)"})
+	for _, l := range lines {
+		if Blank(l.Src) {
+			continue
+		}
+		if l.Err != nil {
+			t.Fatalf("line %d: %v", l.N, l.Err)
+		}
+		if tree := d.Arena().Tree(l.Value.Prov); tree == "" {
+			t.Errorf("line %d has no trace", l.N)
+		}
+	}
+	tree := d.Arena().Tree(lines[3].Value.Prov)
+	if !strings.Contains(tree, "line 1") {
+		t.Errorf("trace does not point back at the input line:\n%s", tree)
+	}
+}

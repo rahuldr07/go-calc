@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/prov"
 	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
@@ -24,7 +25,9 @@ type pass struct {
 	ctx       *Ctx
 	uncertain bool
 	naming    string
+	assigned  bool
 	notes     []parse.Note
+	prov      map[parse.Node]prov.NodeID
 }
 
 func (p *pass) prec() uint { return p.ctx.Prec }
@@ -78,9 +81,15 @@ func (e *Env) evalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
 	if ctx.MaxPrec < ctx.Prec {
 		ctx.MaxPrec = ctx.Prec
 	}
+	mark := e.arena.Len()
+	reclaim := true
 	for {
-		p := &pass{ctx: ctx}
+		if reclaim {
+			e.arena.Truncate(mark)
+		}
+		p := &pass{ctx: ctx, prov: map[parse.Node]prov.NodeID{}}
 		v, err := e.eval(n, p)
+		reclaim = reclaim && !p.assigned
 		e.notes = distinct(p.notes)
 		if err != nil {
 			return value.Value{}, err
