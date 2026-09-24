@@ -2,9 +2,11 @@ package format
 
 import (
 	"math/big"
+	"strconv"
 	"strings"
 
 	"github.com/rahuldr07/go-calc/internal/num"
+	"github.com/rahuldr07/go-calc/internal/value"
 )
 
 const BallPrec = 256
@@ -36,6 +38,9 @@ func provenDecimal(b num.Ball, limit int) (string, int) {
 		}
 		return text, digits
 	}
+	if b.ContainsZero() {
+		return "0", 0
+	}
 	return b.String(), 0
 }
 
@@ -58,4 +63,33 @@ func unsignZero(text string) string {
 		return strings.TrimPrefix(text, "-")
 	}
 	return text
+}
+
+func (s Style) precisionNote(v value.Value) string {
+	if v.Num.IsExact() {
+		return ""
+	}
+	b := v.Num.Ball(BallPrec)
+	_, digits, capped := s.NumberBall(b)
+	if !capped {
+		return ""
+	}
+	if digits == 0 && b.ContainsZero() {
+		return "zero to " + strconv.Itoa(b.GuaranteedPlaces()) + " decimal places, the precision available"
+	}
+	return strconv.Itoa(digits) + " digits guaranteed" + becauseOf(v.Stopped)
+}
+
+func becauseOf(stop value.Stop) string {
+	switch stop {
+	case value.StopPrecisionCap:
+		return " (precision cap reached)"
+	case value.StopNoProgress:
+		return " (more precision did not help)"
+	case value.StopUncertainInput:
+		return " (an input carries uncertainty)"
+	case value.StopDeadline:
+		return " (time limit reached)"
+	}
+	return ""
 }

@@ -223,3 +223,16 @@ func (b Ball) DecimalScale() int {
 	}
 	return decimalExponent(widest)
 }
+
+func (b Ball) GuaranteedPlaces() int {
+	rad := b.Rad.float()
+	if rad.IsInf() {
+		return 0
+	}
+	if b.Rad.IsZero() {
+		return clampDigits(decimalDigits(b.mid().Prec()) - decimalExponent(b.mid()))
+	}
+	return clampDigits(-decimalExponent(newMag().Add(rad, rad)) - 1)
+}
+
+func (b Ball) ContainsZero() bool { return b.Lo().Sign() <= 0 && b.Hi().Sign() >= 0 }

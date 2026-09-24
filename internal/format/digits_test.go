@@ -107,14 +107,42 @@ func TestGuaranteedDigitsIsRelativeAccuracy(t *testing.T) {
 	}
 }
 
-func TestTextSaysWhenTheBallRanOutOfDigits(t *testing.T) {
-	v := value.ScalarNum(num.NumBall(num.NewBall(big.NewFloat(2.5), num.MagFromFloat(1e-3))))
-	got := Text(v, nil)
-	if !strings.HasPrefix(got, "2.5") {
-		t.Fatalf("Text = %q, want it to open with 2.5", got)
+func TestTextNamesWhyTheDigitsRanOut(t *testing.T) {
+	cases := []struct {
+		stop value.Stop
+		want string
+	}{
+		{value.StopPrecisionCap, "3 digits guaranteed (precision cap reached)"},
+		{value.StopNoProgress, "3 digits guaranteed (more precision did not help)"},
+		{value.StopUncertainInput, "3 digits guaranteed (an input carries uncertainty)"},
+		{value.StopNone, "3 digits guaranteed"},
 	}
-	if !strings.Contains(got, "3 digits guaranteed (precision cap reached)") {
-		t.Fatalf("Text = %q, want it to say how many digits are guaranteed", got)
+	for _, c := range cases {
+		v := value.ScalarNum(num.NumBall(num.NewBall(big.NewFloat(2.5), num.MagFromFloat(1e-3))))
+		v.Stopped = c.stop
+		got := Text(v, nil)
+		if !strings.HasPrefix(got, "2.5\n  ") {
+			t.Fatalf("Text = %q, want it to open with 2.5 and a note", got)
+		}
+		if strings.TrimPrefix(got, "2.5\n  ") != c.want {
+			t.Errorf("note for stop %d = %q, want %q", c.stop, strings.TrimPrefix(got, "2.5\n  "), c.want)
+		}
+	}
+}
+
+func TestProvablyZeroPrintsZeroAndSaysHowFar(t *testing.T) {
+	v := value.ScalarNum(num.NumBall(num.NewBall(new(big.Float), num.MagFromFloat(1e-30))))
+	v.Stopped = value.StopNoProgress
+	got := Text(v, nil)
+	if !strings.HasPrefix(got, "0\n  ") {
+		t.Fatalf("Text = %q, want a bare 0 and a note", got)
+	}
+	note := strings.TrimPrefix(got, "0\n  ")
+	if note != "zero to 29 decimal places, the precision available" {
+		t.Errorf("note = %q, want it to say how far the zero is proven", note)
+	}
+	if strings.Contains(got, "precision cap") {
+		t.Errorf("note = %q, must not name a cap that was never reached", got)
 	}
 }
 
@@ -122,5 +150,73 @@ func TestTextStaysQuietWhenEveryRequestedDigitIsProven(t *testing.T) {
 	v := value.ScalarNum(num.NumBall(num.NewBall(big.NewFloat(2.5), num.MagFromFloat(1e-30))))
 	if got := Text(v, nil); got != "2.5" {
 		t.Fatalf("Text = %q, want a bare 2.5", got)
+	}
+}
+
+func TestNonTerminatingRationalsShowSignificantDigits(t *testing.T) {
+	cases := []struct {
+		src  string
+		want string
+	}{
+		{"462500/3", "462500/3  \u2248 154166.666667"},
+		{"1/3", "1/3  \u2248 0.333333333333"},
+		{"-2/3", "-2/3  \u2248 -0.666666666667"},
+		{"1/300000", "1/300000  \u2248 0.00000333333333333"},
+	}
+	for _, c := range cases {
+		r, err := num.ParseExact(c.src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := Text(value.Scalar(r), nil); got != c.want {
+			t.Errorf("Text(%s) = %q, want %q", c.src, got, c.want)
+		}
+	}
+}
+
+func TestTerminatingRationalsPrintInFull(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{"3/10", "0.3"},
+		{"1/1024", "0.0009765625"},
+		{"1/16384", "0.00006103515625"},
+	} {
+		r, err := num.ParseExact(c.src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := Text(value.Scalar(r), nil); got != c.want {
+			t.Errorf("Text(%s) = %q, want %q", c.src, got, c.want)
+		}
+	}
+}
+
+func countSignificant(text string) int {
+	seen, started := 0, false
+	for _, r := range text {
+		if r < '0' || r > '9' {
+			continue
+		}
+		if r != '0' {
+			started = true
+		}
+		if started {
+			seen++
+		}
+	}
+	return seen
+}
+
+func TestDefaultBudgetIsTwelveSignificantDigitsInBothTiers(t *testing.T) {
+	r, err := num.ParseExact("462500/3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	exact := strings.TrimPrefix(Text(value.Scalar(r), nil), "462500/3  \u2248 ")
+	if got := countSignificant(exact); got != Digits {
+		t.Errorf("exact tier printed %d significant digits (%s), want %d", got, exact, Digits)
+	}
+	b := num.NewBall(big.NewFloat(154166.666666666666), num.MagFromFloat(1e-30))
+	if got := countSignificant(Default.Number(value.ScalarNum(num.NumBall(b)))); got != Digits {
+		t.Errorf("ball tier printed %d significant digits, want %d", got, Digits)
 	}
 }

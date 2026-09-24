@@ -27,10 +27,8 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 	if v.Unit != "" {
 		b.WriteString(" " + v.Unit)
 	}
-	if !v.Num.IsExact() {
-		if _, digits, capped := s.NumberBall(v.Num.Ball(BallPrec)); capped {
-			b.WriteString("\n  " + strconv.Itoa(digits) + " digits guaranteed (precision cap reached)")
-		}
+	if note := s.precisionNote(v); note != "" {
+		b.WriteString("\n  " + note)
 	}
 	for _, n := range notes {
 		b.WriteString("\n  read as " + strings.TrimPrefix(n.Msg, "read as "))
@@ -47,11 +45,10 @@ func (s Style) Number(v value.Value) string {
 	if r.IsInt() {
 		return s.group(r.Num().String())
 	}
-	dec := trimDecimal(r.FloatString(s.digitBudget()))
-	if terminates(r) {
-		return s.groupDecimal(dec)
+	if places, ok := terminatingPlaces(r); ok {
+		return s.groupDecimal(trimDecimal(r.FloatString(places)))
 	}
-	return r.RatString() + "  ≈ " + s.groupDecimal(dec)
+	return r.RatString() + "  ≈ " + s.groupDecimal(significantRat(r, s.digitBudget()))
 }
 
 func trimDecimal(s string) string {
@@ -114,9 +111,10 @@ func groupIndian(d string) string {
 	return strings.Join(parts, ",") + "," + tail
 }
 
-func terminates(r *big.Rat) bool {
+func terminatingPlaces(r *big.Rat) (int, bool) {
 	d := new(big.Int).Set(r.Denom())
-	for _, p := range []int64{2, 5} {
+	counts := [2]int{}
+	for i, p := range []int64{2, 5} {
 		bp := big.NewInt(p)
 		for {
 			q, m := new(big.Int).QuoRem(d, bp, new(big.Int))
@@ -124,7 +122,91 @@ func terminates(r *big.Rat) bool {
 				break
 			}
 			d = q
+			counts[i]++
 		}
 	}
-	return d.Cmp(big.NewInt(1)) == 0
+	if d.Cmp(bigOne) != 0 {
+		return 0, false
+	}
+	if counts[0] > counts[1] {
+		return counts[0], true
+	}
+	return counts[1], true
 }
+
+var bigOne = big.NewInt(1)
+
+func significantRat(r *big.Rat, digits int) string {
+	scale := ratScale(r)
+	if places := digits - 1 - scale; places >= 0 {
+		return trimDecimal(r.FloatString(places))
+	}
+	mantissa, scale := ratMantissa(r, scale, digits)
+	return mantissa + exponentSuffix(scale)
+}
+
+func ratMantissa(r *big.Rat, scale, digits int) (string, int) {
+	text := trimDecimal(new(big.Rat).Quo(r, ratPow10(scale)).FloatString(digits - 1))
+	if len(strings.TrimLeft(text, "-0.")) == 0 {
+		return text, scale
+	}
+	if whole := strings.TrimPrefix(text, "-"); len(whole) > 1 && whole[1] != '.' {
+		scale++
+		text = trimDecimal(new(big.Rat).Quo(r, ratPow10(scale)).FloatString(digits - 1))
+	}
+	return text, scale
+}
+
+func exponentSuffix(scale int) string {
+	sign := "+"
+	if scale < 0 {
+		sign = "-"
+		scale = -scale
+	}
+	text := strconv.Itoa(scale)
+	if len(text) < 2 {
+		text = "0" + text
+	}
+	return "e" + sign + text
+}
+
+func ratPow10(k int) *big.Rat {
+	p := new(big.Int).Exp(bigTen, big.NewInt(int64(abs(k))), nil)
+	if k < 0 {
+		return new(big.Rat).SetFrac(bigOne, p)
+	}
+	return new(big.Rat).SetInt(p)
+}
+
+func ratScale(r *big.Rat) int {
+	n := new(big.Int).Abs(r.Num())
+	if n.Sign() == 0 {
+		return 0
+	}
+	d := r.Denom()
+	k := len(n.String()) - len(d.String())
+	for cmpPow10(n, d, k) < 0 {
+		k--
+	}
+	for cmpPow10(n, d, k+1) >= 0 {
+		k++
+	}
+	return k
+}
+
+func cmpPow10(n, d *big.Int, k int) int {
+	p := new(big.Int).Exp(bigTen, big.NewInt(int64(abs(k))), nil)
+	if k >= 0 {
+		return n.Cmp(new(big.Int).Mul(d, p))
+	}
+	return new(big.Int).Mul(n, p).Cmp(d)
+}
+
+func abs(k int) int {
+	if k < 0 {
+		return -k
+	}
+	return k
+}
+
+var bigTen = big.NewInt(10)

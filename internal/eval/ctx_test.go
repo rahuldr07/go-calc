@@ -220,4 +220,47 @@ func TestRetryGivesUpWhenPrecisionStopsHelping(t *testing.T) {
 	if got := format.GuaranteedDigits(b); got != 0 {
 		t.Fatalf("guaranteed %d significant digits for a ball straddling zero, want 0", got)
 	}
+	if v.Stopped != value.StopNoProgress {
+		t.Fatalf("stop reason = %d, want StopNoProgress", v.Stopped)
+	}
+	text := format.Default.Text(v, nil)
+	if !strings.HasPrefix(text, "0\n  zero to ") {
+		t.Fatalf("text = %q, want a bare zero and a note saying how far it is proven", text)
+	}
+	if strings.Contains(text, "precision cap") {
+		t.Fatalf("text = %q, names a cap the retry loop never reached", text)
+	}
+}
+
+func TestCapReachedIsNamedOnlyWhenItIs(t *testing.T) {
+	env := NewEnv()
+	ctx := DefaultCtx()
+	ctx.Digits = 400
+	ctx.MaxPrec = 160
+	n, _, _ := parse.Parse("sqrt(2)")
+	v, err := env.EvalCtx(n, ctx)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v.Stopped != value.StopPrecisionCap {
+		t.Fatalf("stop reason = %d, want StopPrecisionCap", v.Stopped)
+	}
+	if !strings.Contains(format.Style{Digits: 400}.Text(v, nil), "digits guaranteed (precision cap reached)") {
+		t.Fatalf("text = %q, want the cap named", format.Style{Digits: 400}.Text(v, nil))
+	}
+}
+
+func TestExactTierHonoursTheSameDigitBudget(t *testing.T) {
+	env := NewEnv()
+	n, _, err := parse.Parse("18,50,000 / 12")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	v, err := env.EvalCtx(n, DefaultCtx())
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if got := format.Text(v, nil); got != "462500/3  \u2248 154166.666667" {
+		t.Fatalf("text = %q, want 12 significant digits after the fraction", got)
+	}
 }

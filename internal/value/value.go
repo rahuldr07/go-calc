@@ -6,11 +6,12 @@ import (
 )
 
 type Value struct {
-	Num    num.Number
-	Dim    units.Dim
-	Unit   string
-	Factor num.Exact
-	Offset num.Exact
+	Num     num.Number
+	Dim     units.Dim
+	Unit    string
+	Factor  num.Exact
+	Offset  num.Exact
+	Stopped Stop
 }
 
 func Scalar(n num.Exact) Value { return ScalarNum(num.NumExact(n)) }
@@ -43,3 +44,13 @@ func (v Value) FactorOrOne() num.Exact {
 func (v Value) SI(prec uint) num.Number {
 	return v.Num.Mul(num.NumExact(v.FactorOrOne()), prec).Add(num.NumExact(v.Offset), prec)
 }
+
+type Stop int
+
+const (
+	StopNone Stop = iota
+	StopPrecisionCap
+	StopNoProgress
+	StopUncertainInput
+	StopDeadline
+)

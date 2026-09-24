@@ -52,17 +52,27 @@ func (e *Env) EvalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
 		if err != nil {
 			return value.Value{}, err
 		}
-		if v.Num.IsExact() || p.uncertain || ctx.Prec >= ctx.MaxPrec {
+		if v.Num.IsExact() {
 			return v, nil
 		}
 		digits := v.Num.Ball(ctx.Prec).GuaranteedDigits()
-		if digits >= ctx.Digits || digits <= best {
+		switch {
+		case digits >= ctx.Digits:
+			return v, nil
+		case p.uncertain:
+			v.Stopped = value.StopUncertainInput
+			return v, nil
+		case ctx.Prec >= ctx.MaxPrec:
+			v.Stopped = value.StopPrecisionCap
+			return v, nil
+		case digits <= best:
+			v.Stopped = value.StopNoProgress
+			return v, nil
+		case !ctx.Deadline.IsZero() && !time.Now().Before(ctx.Deadline):
+			v.Stopped = value.StopDeadline
 			return v, nil
 		}
 		best = digits
-		if !ctx.Deadline.IsZero() && !time.Now().Before(ctx.Deadline) {
-			return v, nil
-		}
 		if next := ctx.Prec * 2; next < ctx.MaxPrec {
 			ctx.Prec = next
 		} else {
