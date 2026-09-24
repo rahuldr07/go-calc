@@ -18,14 +18,14 @@ func NewBall(mid *big.Float, rad Mag) Ball {
 
 func BallFromExact(e Exact, prec uint) Ball {
 	mid := new(big.Float).SetPrec(prec).SetRat(e.Rat())
-	return Ball{Mid: mid, Rad: roundingError(mid, prec)}
+	return Ball{Mid: mid, Rad: RoundingError(mid, prec)}
 }
 
 func oneBall(prec uint) Ball {
 	return Ball{Mid: new(big.Float).SetPrec(prec).SetInt64(1)}
 }
 
-func roundingError(mid *big.Float, prec uint) Mag {
+func RoundingError(mid *big.Float, prec uint) Mag {
 	if mid.Acc() == big.Exact || mid.Sign() == 0 {
 		return Mag{}
 	}
@@ -46,12 +46,12 @@ func (b Ball) mid() *big.Float {
 
 func (b Ball) Add(o Ball, prec uint) Ball {
 	mid := new(big.Float).SetPrec(prec).Add(b.mid(), o.mid())
-	return Ball{Mid: mid, Rad: b.Rad.Add(o.Rad).Add(roundingError(mid, prec))}
+	return Ball{Mid: mid, Rad: b.Rad.Add(o.Rad).Add(RoundingError(mid, prec))}
 }
 
 func (b Ball) Sub(o Ball, prec uint) Ball {
 	mid := new(big.Float).SetPrec(prec).Sub(b.mid(), o.mid())
-	return Ball{Mid: mid, Rad: b.Rad.Add(o.Rad).Add(roundingError(mid, prec))}
+	return Ball{Mid: mid, Rad: b.Rad.Add(o.Rad).Add(RoundingError(mid, prec))}
 }
 
 func (b Ball) Mul(o Ball, prec uint) Ball {
@@ -59,7 +59,7 @@ func (b Ball) Mul(o Ball, prec uint) Ball {
 	rad := b.Rad.MulFloat(o.mid()).
 		Add(o.Rad.MulFloat(b.mid())).
 		Add(b.Rad.Mul(o.Rad)).
-		Add(roundingError(mid, prec))
+		Add(RoundingError(mid, prec))
 	return Ball{Mid: mid, Rad: rad}
 }
 
@@ -73,7 +73,7 @@ func (b Ball) Div(o Ball, prec uint) (Ball, error) {
 	gap := newMagDown().Sub(absDen, o.Rad.float())
 	den := newMagDown().Mul(absDen, gap)
 	rad := Mag{newMag().Quo(num.float(), den)}
-	return Ball{Mid: mid, Rad: rad.Add(roundingError(mid, prec))}, nil
+	return Ball{Mid: mid, Rad: rad.Add(RoundingError(mid, prec))}, nil
 }
 
 func (b Ball) Pow(n int, prec uint) (Ball, error) {

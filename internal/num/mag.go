@@ -26,7 +26,7 @@ func MagFromFloat(f float64) Mag {
 	return Mag{newMag().SetFloat64(math.Abs(f))}
 }
 
-func magFromBigFloat(x *big.Float) Mag {
+func MagFromBigFloat(x *big.Float) Mag {
 	m := newMag()
 	m.Abs(x)
 	return Mag{m}

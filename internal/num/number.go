@@ -49,7 +49,7 @@ func (n Number) Ball(prec uint) Ball {
 		center := FromRat(new(big.Rat).Mul(new(big.Rat).Add(n.lo.Rat(), n.hi.Rat()), half))
 		spread := FromRat(new(big.Rat).Mul(new(big.Rat).Sub(n.hi.Rat(), n.lo.Rat()), half))
 		mid := new(big.Float).SetPrec(prec).SetRat(center.Rat())
-		return Ball{Mid: mid, Rad: magFromExact(spread).Add(roundingError(mid, prec))}
+		return Ball{Mid: mid, Rad: magFromExact(spread).Add(RoundingError(mid, prec))}
 	}
 	return BallFromExact(n.ex, prec)
 }
