@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/rahuldr07/go-calc/internal/consts"
+	"github.com/rahuldr07/go-calc/internal/lex"
 	"github.com/rahuldr07/go-calc/internal/parse"
 	"github.com/rahuldr07/go-calc/internal/prov"
 	"github.com/rahuldr07/go-calc/internal/units"
@@ -14,6 +15,9 @@ func (e *Env) eval(n parse.Node, p *pass) (value.Value, error) {
 	v, err := e.evalNode(n, p)
 	if err != nil {
 		return value.Value{}, err
+	}
+	if beyondWritableWidth(v.Num.RoughWidth()) {
+		return value.Value{}, &lex.Error{Pos: n.Pos(), Msg: TooLargeMessage}
 	}
 	v.Prov = e.stamp(n, p)
 	return v, nil

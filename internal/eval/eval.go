@@ -586,6 +586,12 @@ func divisionMessage(err error) string {
 	return "division by zero"
 }
 
+const maxWritableDigits = 10000
+
+const TooLargeMessage = "too large to work with: writing this number would take more than 10000 digits"
+
+func beyondWritableWidth(digits float64) bool { return digits > maxWritableDigits }
+
 func power(t *parse.Binary, l, r value.Value, prec uint) (value.Value, error) {
 	if r.IsScalar() && isWhole(r) {
 		exp64 := r.Num.Exact().Rat().Num().Int64()
@@ -601,6 +607,9 @@ func power(t *parse.Binary, l, r value.Value, prec uint) (value.Value, error) {
 			return l.WithJet(j), nil
 		}
 		base := absolute(l, prec)
+		if beyondWritableWidth(base.Num.RoughWidth() * math.Abs(float64(exp))) {
+			return value.Value{}, &lex.Error{Pos: t.P, Msg: TooLargeMessage}
+		}
 		raised, err := base.Num.Pow(exp, prec)
 		if err != nil {
 			return value.Value{}, &lex.Error{Pos: t.P, Msg: err.Error()}

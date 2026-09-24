@@ -1,6 +1,9 @@
 package num
 
-import "math/big"
+import (
+	"math"
+	"math/big"
+)
 
 type Kind int
 
@@ -145,4 +148,18 @@ func (n Number) Abs() Number {
 		return NumExact(n.ex.Neg())
 	}
 	return n
+}
+
+func (n Number) RoughWidth() float64 {
+	switch n.kind {
+	case KindBall:
+		return math.Abs(n.ball.RoughLog10())
+	case KindInterval:
+		lo, hi := n.lo.RoughWidth(), n.hi.RoughWidth()
+		if hi > lo {
+			return hi
+		}
+		return lo
+	}
+	return n.ex.RoughWidth()
 }

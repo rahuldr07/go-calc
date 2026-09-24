@@ -237,3 +237,11 @@ func (b Ball) GuaranteedPlaces() int {
 }
 
 func (b Ball) ContainsZero() bool { return b.Lo().Sign() <= 0 && b.Hi().Sign() >= 0 }
+
+func (b Ball) RoughLog10() float64 {
+	widest := newMag().Add(newMag().Abs(b.mid()), b.Rad.float())
+	if widest.IsInf() || widest.Sign() == 0 {
+		return 0
+	}
+	return float64(widest.MantExp(nil)) * log2Of10Inverse
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahuldr07/go-calc/internal/eval"
 	"github.com/rahuldr07/go-calc/internal/parse"
@@ -40,6 +41,9 @@ func FuzzEvalRequest(f *testing.F) {
 	f.Add(`{"lines":["a = b","b = a"]}`)
 	f.Add(`{"lines":["f(x) = 2x","f(3)"],"angle":"rad"}`)
 	f.Add(`{"lines":["1/0"],"digits":-4}`)
+	for _, huge := range tooLargeToWrite {
+		f.Add(`{"lines":["` + huge + `"]}`)
+	}
 	f.Fuzz(func(t *testing.T, s string) {
 		out := EvalRequest([]byte(s))
 		var back wireSheet
@@ -64,8 +68,12 @@ func FuzzEvalRequestLine(f *testing.F) {
 	for _, seed := range []string{
 		"1+1", "", "sqrt(2)", "x = 1 ± 0.1", "f(x) = 2x", "60 km/h to m/s",
 		"1/2 x", "corr(a, b) = 0.5", "# note", "2^10000000000", "sin(30)",
+		"sqrt(1e100000)", "10^100000",
 	} {
 		f.Add(seed)
+	}
+	for _, huge := range tooLargeToWrite {
+		f.Add(huge)
 	}
 	f.Fuzz(func(t *testing.T, line string) {
 		req, err := json.Marshal(sheetRequest{Lines: []string{line}, Digits: 12})
@@ -507,13 +515,63 @@ func TestOneLineDoesNotSpendAnotherLinesPrecision(t *testing.T) {
 	}
 }
 
-func TestAHugeFractionalPowerStillAnswers(t *testing.T) {
-	line := last(document(t, "2^1000000.5"))
-	if line.Status != StatusProven {
-		t.Fatalf("2^1000000.5 answered %+v", line)
+var tooLargeToWrite = []string{
+	"2^10000000.10",
+	"2^1000000.5",
+	"1e300^100000",
+	"exp(1000000)",
+	"10^100000 * 10^100000",
+	"sqrt(1e300^100000)",
+	"sin(pi) * 10^9999 * 10^9999",
+	"R^8000",
+	"10^100000",
+	"20000!",
+}
+
+func TestAMagnitudeTooLargeToWriteIsRefusedQuicklyThroughTheSheet(t *testing.T) {
+	start := time.Now()
+	for _, src := range tooLargeToWrite {
+		line := last(document(t, src))
+		if line.Status != StatusError {
+			t.Errorf("%s answered %+v instead of being refused", src, line)
+			continue
+		}
+		if !strings.Contains(line.Error, "too large to work with") {
+			t.Errorf("%s was refused with %q", src, line.Error)
+		}
+		if line.Column <= 0 {
+			t.Errorf("%s was refused without pointing anywhere: %+v", src, line)
+		}
 	}
-	if !strings.Contains(line.Text, "e+301030") {
-		t.Errorf("2^1000000.5 answered %q", line.Text)
+	if spent := time.Since(start); spent > 2*time.Second {
+		t.Errorf("refusing %d magnitudes through the sheet took %v", len(tooLargeToWrite), spent)
+	}
+}
+
+func TestAWholeDocumentOfHugeMagnitudesIsStillQuick(t *testing.T) {
+	start := time.Now()
+	got := document(t, tooLargeToWrite...)
+	for i, l := range got.Lines {
+		if l.Status != StatusError {
+			t.Errorf("line %d answered %+v", i, l)
+		}
+	}
+	if spent := time.Since(start); spent > 2*time.Second {
+		t.Errorf("a document of %d huge magnitudes took %v", len(tooLargeToWrite), spent)
+	}
+}
+
+func TestARootTooWideForAnExactAnswerIsStillProvenQuickly(t *testing.T) {
+	start := time.Now()
+	line := last(document(t, "sqrt(1e9998)"))
+	if line.Status != StatusProven {
+		t.Fatalf("sqrt(1e9998) answered %+v", line)
+	}
+	if !strings.Contains(line.Text, "e+4999") {
+		t.Errorf("sqrt(1e9998) answered %q", line.Text)
+	}
+	if spent := time.Since(start); spent > 2*time.Second {
+		t.Errorf("sqrt(1e9998) took %v", spent)
 	}
 }
 

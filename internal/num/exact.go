@@ -2,6 +2,7 @@ package num
 
 import (
 	"errors"
+	"math"
 	"math/big"
 	"strings"
 )
@@ -94,8 +95,35 @@ func (e Exact) Pow(n int) Exact {
 	return Exact{out}
 }
 
+func (e Exact) RoughWidth() float64 {
+	r := e.rat()
+	if r.Sign() == 0 {
+		return 0
+	}
+	whole := intRoughLog10(r.Num())
+	if part := intRoughLog10(r.Denom()); part > whole {
+		return part
+	}
+	return whole
+}
+
+func intRoughLog10(x *big.Int) float64 {
+	if x.Sign() == 0 {
+		return 0
+	}
+	mant := new(big.Float).SetPrec(64)
+	exp := new(big.Float).SetPrec(64).SetInt(x).MantExp(mant)
+	m, _ := mant.Float64()
+	return (float64(exp) + math.Log2(math.Abs(m))) * log2Of10Inverse
+}
+
+const maxRootBits = 8192
+
 func Root(x Exact, n int) (Exact, bool) {
 	if n <= 0 || x.Sign() < 0 {
+		return Exact{}, false
+	}
+	if x.rat().Num().BitLen() > maxRootBits || x.rat().Denom().BitLen() > maxRootBits {
 		return Exact{}, false
 	}
 	num, ok := intRoot(x.rat().Num(), n)
