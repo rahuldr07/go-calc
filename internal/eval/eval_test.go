@@ -568,3 +568,21 @@ func TestTheShadowReadsAUnitPositionTheSameWay(t *testing.T) {
 		}
 	}
 }
+
+func TestDefiningAFunctionAnswersWithItsDefinition(t *testing.T) {
+	env := NewEnv()
+	v, err := env.Eval(mustParse(t, "f(x) = x^2 + 1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !v.IsDefinition() || v.Def != "f(x)" {
+		t.Errorf("Def = %q, IsDefinition = %v", v.Def, v.IsDefinition())
+	}
+	out, err := env.Eval(mustParse(t, "f(3)"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Num.Exact().String() != "10" {
+		t.Errorf("f(3) = %s, want 10", out.Num.Exact().String())
+	}
+}

@@ -49,7 +49,8 @@ type uncertaintyOut struct {
 type result struct {
 	Schema      string          `json:"schema"`
 	Input       string          `json:"input"`
-	Value       valueOut        `json:"value"`
+	Definition  string          `json:"definition,omitempty"`
+	Value       *valueOut       `json:"value,omitempty"`
 	Unit        *unitOut        `json:"unit,omitempty"`
 	Uncertainty *uncertaintyOut `json:"uncertainty,omitempty"`
 	Provenance  *prov.Export    `json:"provenance,omitempty"`
@@ -73,6 +74,9 @@ func JSONDetail(input string, v value.Value, notes []parse.Note, d Detail) ([]by
 	for _, n := range notes {
 		msgs = append(msgs, n.Msg)
 	}
+	if v.IsDefinition() {
+		return json.MarshalIndent(result{Schema: Schema, Input: input, Definition: v.Def, Notes: msgs}, "", "  ")
+	}
 	out := valueOut{}
 	if v.Num.IsExact() {
 		out.Exact = v.Num.Exact().String()
@@ -83,7 +87,7 @@ func JSONDetail(input string, v value.Value, notes []parse.Note, d Detail) ([]by
 		out.Ball = tightBounds(b)
 		out.Decimal, out.Digits = Default.provenBall(b)
 	}
-	r := result{Schema: Schema, Input: input, Value: out, Notes: msgs, Uncertainty: uncertainty(v), Warning: d.Warning}
+	r := result{Schema: Schema, Input: input, Value: &out, Notes: msgs, Uncertainty: uncertainty(v), Warning: d.Warning}
 	if d.Arena != nil && d.Arena.Has(v.Prov) {
 		trace := d.Arena.Export(v.Prov)
 		r.Provenance = &trace

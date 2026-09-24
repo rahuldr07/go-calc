@@ -1,6 +1,8 @@
 package value
 
 import (
+	"strings"
+
 	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/prov"
 	"github.com/rahuldr07/go-calc/internal/unc"
@@ -18,7 +20,16 @@ type Value struct {
 	Curv    unc.Curv
 	Unc     unc.Report
 	Prov    prov.NodeID
+	Def     string
 }
+
+func Definition(name string, params []string) Value {
+	v := Scalar(num.FromInt(0))
+	v.Def = name + "(" + strings.Join(params, ", ") + ")"
+	return v
+}
+
+func (v Value) IsDefinition() bool { return v.Def != "" }
 
 func (v Value) Jet() unc.Jet { return unc.Jet{Grad: v.Sens, Hess: v.Curv} }
 

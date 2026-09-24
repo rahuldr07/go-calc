@@ -23,7 +23,12 @@ var Default = Style{Digits: Digits}
 
 func Text(v value.Value, notes []parse.Note) string { return Default.Text(v, notes) }
 
+const definedSuffix = " defined"
+
 func (s Style) Text(v value.Value, notes []parse.Note) string {
+	if v.IsDefinition() {
+		return v.Def + definedSuffix
+	}
 	var b strings.Builder
 	mid, u, rounded := s.Uncertain(v)
 	switch {

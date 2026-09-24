@@ -107,7 +107,7 @@ func (e *Env) evalAssign(t *parse.Assign, p *pass) (value.Value, error) {
 	}
 	if len(t.Params) > 0 {
 		e.funcs[t.Name] = fn{params: t.Params, body: t.Body}
-		return value.Scalar(num.FromInt(0)), nil
+		return value.Definition(t.Name, t.Params), nil
 	}
 	outer := p.naming
 	if countMeasurements(t.Body) == 1 {

@@ -318,3 +318,47 @@ func TestProvenanceNeverBorrowsThePlusMinusSign(t *testing.T) {
 		t.Errorf("a unit node borrowed ±:\n%s", a.Tree(id))
 	}
 }
+
+func TestDefinitionPrintsWhatWasDefined(t *testing.T) {
+	v := value.Definition("f", []string{"x"})
+	if got := Default.Text(v, nil); got != "f(x) defined" {
+		t.Errorf("Text = %q, want %q", got, "f(x) defined")
+	}
+	if got := Default.Text(value.Definition("g", []string{"a", "b"}), nil); got != "g(a, b) defined" {
+		t.Errorf("Text = %q, want %q", got, "g(a, b) defined")
+	}
+}
+
+func TestDefinitionJSONCarriesNoValue(t *testing.T) {
+	raw, err := JSON("f(x) = x", value.Definition("f", []string{"x"}), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("invalid JSON %s: %v", raw, err)
+	}
+	if out["definition"] != "f(x)" {
+		t.Errorf("definition = %v, want f(x)", out["definition"])
+	}
+	if _, ok := out["value"]; ok {
+		t.Errorf("a definition carried a value: %s", raw)
+	}
+}
+
+func TestOrdinaryResultStillCarriesAValue(t *testing.T) {
+	raw, err := JSON("2 + 3", value.Scalar(num.FromInt(5)), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("invalid JSON %s: %v", raw, err)
+	}
+	if _, ok := out["value"]; !ok {
+		t.Errorf("an ordinary result lost its value: %s", raw)
+	}
+	if _, ok := out["definition"]; ok {
+		t.Errorf("an ordinary result claimed to be a definition: %s", raw)
+	}
+}
