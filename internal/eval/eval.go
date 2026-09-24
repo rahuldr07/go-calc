@@ -123,7 +123,29 @@ func (e *Env) evalAssign(t *parse.Assign, p *pass) (value.Value, error) {
 	return v, nil
 }
 
+var namedArguments = map[string]map[string]int{"expand": {"k": 1}}
+
+func namedArgumentError(t *parse.Call) error {
+	allowed := namedArguments[t.Fn]
+	for i, key := range t.Keys {
+		if key == "" {
+			continue
+		}
+		at, ok := allowed[key]
+		if !ok {
+			return &lex.Error{Pos: t.P, Msg: t.Fn + " takes no argument called " + key}
+		}
+		if at != i {
+			return &lex.Error{Pos: t.P, Msg: key + " is argument " + strconv.Itoa(at+1) + " of " + t.Fn}
+		}
+	}
+	return nil
+}
+
 func (e *Env) evalCall(t *parse.Call, p *pass) (value.Value, error) {
+	if err := namedArgumentError(t); err != nil {
+		return value.Value{}, err
+	}
 	if f, ok := e.funcs[t.Fn]; ok {
 		if len(f.params) != len(t.Args) {
 			return value.Value{}, &lex.Error{Pos: t.P, Msg: "wrong number of arguments for " + t.Fn}
@@ -222,6 +244,9 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 				return value.ScalarNum(n).WithJet(j)
 			}
 			return value.WithUnitNum(n, units.SIUnit(half)).WithJet(j)
+		}
+		if inner.IsExact() && inner.Exact().Sign() < 0 {
+			return fail("sqrt: square root of a negative number")
 		}
 		if inner.IsExact() {
 			if r, ok := num.Root(inner.Exact(), 2); ok {
@@ -356,6 +381,9 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		if err != nil {
 			return fail(err.Error())
 		}
+		if msg := certainDomainFailure(t.Fn, args[0]); msg != "" {
+			return fail(t.Fn + ": " + msg)
+		}
 		b, err := f(x, prec)
 		if err != nil {
 			return fail(t.Fn + ": " + err.Error())
@@ -413,6 +441,21 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		return angleOut(b, j, p, fail)
 	}
 	return value.Value{}, nil, false
+}
+
+var logarithms = map[string]bool{"ln": true, "log": true, "log10": true, "log2": true}
+
+func certainDomainFailure(name string, arg value.Value) string {
+	if !logarithms[name] || !arg.Num.IsExact() {
+		return ""
+	}
+	switch arg.Num.Exact().Sign() {
+	case 0:
+		return "log of zero"
+	case -1:
+		return "log of a negative number"
+	}
+	return ""
 }
 
 func angleOut(b num.Ball, j unc.Jet, p *pass, fail func(string) (value.Value, error, bool)) (value.Value, error, bool) {

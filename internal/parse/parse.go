@@ -155,6 +155,19 @@ func (p *parser) parseExpr(min int) (Node, error) {
 	}
 }
 
+func (p *parser) namedArgument() string {
+	if p.peek().Kind != lex.Ident || p.i+1 >= len(p.toks) {
+		return ""
+	}
+	next := p.toks[p.i+1]
+	if next.Kind != lex.Op || next.Text != "=" {
+		return ""
+	}
+	name := p.next().Text
+	p.next()
+	return name
+}
+
 func (p *parser) implicitFollows(t lex.Token) bool {
 	switch t.Kind {
 	case lex.Num, lex.LParen:
@@ -213,13 +226,18 @@ func (p *parser) parsePrimary() (Node, error) {
 		if p.peek().Kind == lex.LParen {
 			p.next()
 			var args []Node
+			var keys []string
+			named := false
 			if p.peek().Kind != lex.RParen {
 				for {
+					key := p.namedArgument()
 					a, err := p.parseExpr(0)
 					if err != nil {
 						return nil, err
 					}
 					args = append(args, a)
+					keys = append(keys, key)
+					named = named || key != ""
 					if p.peek().Kind == lex.Comma {
 						p.next()
 						continue
@@ -231,7 +249,10 @@ func (p *parser) parsePrimary() (Node, error) {
 				return nil, p.errorAt(p.peek(), "expected )")
 			}
 			p.next()
-			return &Call{Fn: t.Text, Args: args, P: t.Pos}, nil
+			if !named {
+				keys = nil
+			}
+			return &Call{Fn: t.Text, Args: args, Keys: keys, P: t.Pos}, nil
 		}
 		return &Name{Text: t.Text, P: t.Pos}, nil
 	case lex.LParen:

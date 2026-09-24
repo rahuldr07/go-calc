@@ -161,7 +161,7 @@ func TestNonTerminatingRationalsShowSignificantDigits(t *testing.T) {
 		{"462500/3", "462500/3  \u2248 154166.666667"},
 		{"1/3", "1/3  \u2248 0.333333333333"},
 		{"-2/3", "-2/3  \u2248 -0.666666666667"},
-		{"1/300000", "1/300000  \u2248 0.00000333333333333"},
+		{"1/300000", "1/300000  \u2248 3.33333333333e-06"},
 	}
 	for _, c := range cases {
 		r, err := num.ParseExact(c.src)
@@ -203,10 +203,11 @@ func TestLongTerminatingDecimalsRoundToTheBudget(t *testing.T) {
 		t.Fatalf("Text = %q, want a rounded decimal marked approximate", got)
 	}
 	decimal := got[i+len(marker):]
-	if want := "0." + strings.Repeat("0", 150) + "30549363635"; decimal != want {
+	if want := "3.0549363635e-151"; decimal != want {
 		t.Fatalf("decimal = %q, want %q", decimal, want)
 	}
-	if n := significantDigits(decimal); n > Digits {
+	mantissa, _, _ := strings.Cut(decimal, "e")
+	if n := significantDigits(mantissa); n > Digits {
 		t.Fatalf("decimal carries %d significant digits, want at most %d", n, Digits)
 	}
 	if !strings.HasPrefix(got, "1/") {
@@ -370,5 +371,45 @@ func TestLopsidedBallAroundZeroIsNotCalledZero(t *testing.T) {
 	v := value.ScalarNum(num.NumBall(b))
 	if note := Default.precisionNote(v); strings.HasPrefix(note, "zero to ") {
 		t.Errorf("note = %q, but the ball reaches %s", note, b.Lo().Text('g', 6))
+	}
+}
+
+func TestSmallMagnitudesAreWrittenInScientificForm(t *testing.T) {
+	cases := []struct{ src, want string }{
+		{"1/16384", "0.00006103515625"},
+		{"1/100000", "0.00001"},
+		{"1/1000000", "1e-06"},
+		{"662607015/1000000000000000000000000000000000000000000", "6.62607015e-34"},
+		{"-1/1000000", "-1e-06"},
+		{"1/10", "0.1"},
+		{"0", "0"},
+	}
+	for _, c := range cases {
+		r, err := num.ParseExact(c.src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := Text(value.Scalar(r), nil); got != c.want {
+			t.Errorf("Text(%s) = %q, want %q", c.src, got, c.want)
+		}
+	}
+}
+
+func TestNoAnswerIsWiderThanAScreenful(t *testing.T) {
+	wide := []string{
+		"662607015/1000000000000000000000000000000000000000000",
+		"1/1000000000000000000000000000000000000000000000000",
+		"-1/1000000000000000000000000000000000000000000000000",
+	}
+	for _, src := range wide {
+		r, err := num.ParseExact(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(Text(value.Scalar(r), nil), "\n") {
+			if len(line) > 80 {
+				t.Errorf("Text(%s) wrote a %d-character line: %s", src, len(line), line)
+			}
+		}
 	}
 }

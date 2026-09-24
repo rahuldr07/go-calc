@@ -152,7 +152,7 @@ func UncertaintyOf(v value.Value) *Uncertainty {
 		Factor:     v.Unc.Cover.K,
 		Warning:    v.Unc.Warning,
 	}
-	if !v.Unc.Degenerate {
+	if !v.Unc.Degenerate && (ok || v.IsMeasured()) {
 		standard := v.Unc.Sigma / scale
 		out.Standard = &standard
 	}

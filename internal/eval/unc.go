@@ -76,8 +76,8 @@ func (e *Env) measure(t *parse.Binary, p *pass) (value.Value, error) {
 	if measured(l, r) {
 		return value.Value{}, &lex.Error{Pos: t.P, Msg: "a measurement carries one ± only"}
 	}
-	if l.IsAffine() || r.IsAffine() {
-		return value.Value{}, &lex.Error{Pos: t.P, Msg: "± needs a temperature difference, not an absolute temperature"}
+	if r.IsAffine() {
+		return value.Value{}, &lex.Error{Pos: t.P, Msg: "the ± must be a temperature difference such as 0.5 K, not the absolute temperature " + unitOrNone(r)}
 	}
 	out := l
 	switch {

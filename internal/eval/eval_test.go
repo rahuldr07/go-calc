@@ -614,3 +614,124 @@ func TestUnsetForgetsNamesAndFunctions(t *testing.T) {
 		t.Error("the function survived unset")
 	}
 }
+
+func TestAnExactDomainFailureStatesTheFactAndABallHedges(t *testing.T) {
+	certain := map[string]string{
+		"sqrt(-1)":     "square root of a negative number",
+		"sqrt(-1.5)":   "square root of a negative number",
+		"sqrt(0 - 4)":  "square root of a negative number",
+		"sqrt(-1 m^2)": "square root of a negative number",
+		"ln(0)":        "log of zero",
+		"log(0)":       "log of zero",
+		"log10(0)":     "log of zero",
+		"log2(-2)":     "log of a negative number",
+		"ln(-2)":       "log of a negative number",
+	}
+	for src, want := range certain {
+		_, err := answer(t, src)
+		if err == nil {
+			t.Errorf("%s was answered", src)
+			continue
+		}
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%s = %q, want %q", src, err, want)
+		}
+		if strings.Contains(err.Error(), "may ") {
+			t.Errorf("%s hedged about an exact value: %q", src, err)
+		}
+	}
+	hedged := []string{"ln(sqrt(2) - sqrt(2))", "sqrt(sin(pi))", "sqrt(0 - sin(pi))"}
+	for _, src := range hedged {
+		_, err := answer(t, src)
+		if err == nil || !strings.Contains(err.Error(), "may ") {
+			t.Errorf("%s = %v, want the hedge a ball earns", src, err)
+		}
+	}
+}
+
+func TestAnUncertaintyMayBeGivenAsATemperatureDifference(t *testing.T) {
+	v, err := answer(t, "20 degC ± 0.5 K")
+	if err != nil {
+		t.Fatalf("20 degC ± 0.5 K: %v", err)
+	}
+	if got := format.Text(v, nil); got != "20.00 ± 0.50 degC" {
+		t.Errorf("= %q, want 20.00 ± 0.50 degC", got)
+	}
+	converted, err := answer(t, "(20 degC ± 0.5 K) to K")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := format.Text(converted, nil); got != "293.15 ± 0.50 K" {
+		t.Errorf("to K = %q, want 293.15 ± 0.50 K", got)
+	}
+	_, err = answer(t, "20 degC ± 0.5 degC")
+	if err == nil {
+		t.Fatal("an absolute temperature was accepted as an uncertainty")
+	}
+	if !strings.Contains(err.Error(), "0.5 K") || !strings.Contains(err.Error(), "degC") {
+		t.Errorf("= %q, want the right operand blamed with a difference to use instead", err)
+	}
+}
+
+func TestNamedArgumentsAreAcceptedWhereTheSpecSpellsThem(t *testing.T) {
+	spelt, err := answer(t, "expand(12.3 ± 0.2, k=2)")
+	if err != nil {
+		t.Fatalf("expand(x, k=2): %v", err)
+	}
+	positional, err := answer(t, "expand(12.3 ± 0.2, 2)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if format.Text(spelt, nil) != format.Text(positional, nil) {
+		t.Errorf("k=2 gives %q, 2 gives %q", format.Text(spelt, nil), format.Text(positional, nil))
+	}
+	for _, src := range []string{"expand(12.3 ± 0.2, j=2)", "sqrt(k=4)", "expand(k=2, 12.3 ± 0.2)"} {
+		if _, err := answer(t, src); err == nil {
+			t.Errorf("%s was accepted", src)
+		}
+	}
+}
+
+func TestOfIsTheMultiplicationItIs(t *testing.T) {
+	for src, want := range map[string]string{
+		"18% of 500": "90",
+		"15% of 80":  "12",
+		"50% of 2 m": "1 m",
+		"10% of 10%": "0.01",
+	} {
+		v, err := answer(t, src)
+		if err != nil {
+			t.Fatalf("%s: %v", src, err)
+		}
+		if got := format.Text(v, nil); got != want {
+			t.Errorf("%s = %q, want %q", src, got, want)
+		}
+	}
+}
+
+func TestASmallProvenMagnitudeIsWrittenInScientificForm(t *testing.T) {
+	for _, src := range []string{"sin(1) * 1e-30", "sin(1e400) * 1e-3000", "pi * 1e-40", "exp(-100)", "-pi * 1e-40"} {
+		v, err := answer(t, src)
+		if err != nil {
+			t.Fatalf("%s: %v", src, err)
+		}
+		got := format.Text(v, nil)
+		for _, line := range strings.Split(got, "\n") {
+			if len(line) > 80 {
+				t.Errorf("%s wrote a %d-character line", src, len(line))
+			}
+		}
+		if !strings.Contains(got, "e-") {
+			t.Errorf("%s = %q, want scientific form", src, got)
+		}
+	}
+	for _, c := range [][2]string{{"sqrt(2)", "1.41421356237"}, {"sin(1)", "0.841470984808"}, {"exp(1) * 1e-5", "0.0000271828182846"}} {
+		v, err := answer(t, c[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := format.Text(v, nil); got != c[1] {
+			t.Errorf("%s = %q, want %q", c[0], got, c[1])
+		}
+	}
+}

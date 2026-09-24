@@ -55,6 +55,7 @@ func (n *Binary) String() string { return "(" + n.L.String() + " " + n.Op + " " 
 type Call struct {
 	Fn   string
 	Args []Node
+	Keys []string
 	P    lex.Pos
 }
 
@@ -62,9 +63,16 @@ func (n *Call) Pos() lex.Pos { return n.P }
 func (n *Call) String() string {
 	parts := make([]string, len(n.Args))
 	for i, a := range n.Args {
-		parts[i] = a.String()
+		parts[i] = n.Key(i) + a.String()
 	}
 	return n.Fn + "(" + strings.Join(parts, ", ") + ")"
+}
+
+func (n *Call) Key(i int) string {
+	if i >= len(n.Keys) || n.Keys[i] == "" {
+		return ""
+	}
+	return n.Keys[i] + " = "
 }
 
 type Assign struct {

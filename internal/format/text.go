@@ -88,11 +88,18 @@ func (s Style) Decimal(v value.Value) (string, bool) {
 	}
 	if places, ok := terminatingPlaces(r); ok {
 		if full := trimDecimal(r.FloatString(places)); significantDigits(full) <= s.digitBudget() {
+			if tooSmallToSpellOut(ratScale(r)) {
+				return significantRat(r, s.digitBudget()), true
+			}
 			return s.groupDecimal(full), true
 		}
 	}
 	return s.groupDecimal(significantRat(r, s.digitBudget())), false
 }
+
+const smallestSpeltOutScale = -5
+
+func tooSmallToSpellOut(scale int) bool { return scale < smallestSpeltOutScale }
 
 func trimDecimal(s string) string {
 	if !strings.Contains(s, ".") {
@@ -202,7 +209,7 @@ var bigOne = big.NewInt(1)
 
 func significantRat(r *big.Rat, digits int) string {
 	scale := ratScale(r)
-	if places := digits - 1 - scale; places >= 0 {
+	if places := digits - 1 - scale; places >= 0 && !tooSmallToSpellOut(scale) {
 		return trimDecimal(r.FloatString(places))
 	}
 	mantissa, scale := ratMantissa(r, scale, digits)

@@ -673,3 +673,18 @@ func TestReplUnsetRefusesWhatItDoesNotHold(t *testing.T) {
 		}
 	}
 }
+
+func TestInfoDescribesEveryAdvertisedFunction(t *testing.T) {
+	for _, name := range functions {
+		out := session(t, "info "+name)
+		if strings.Contains(out, "nothing is known about") {
+			t.Errorf("info %s: %q, but help advertises it", name, strings.TrimSpace(out))
+		}
+		if !strings.Contains(out, name) {
+			t.Errorf("info %s said %q", name, strings.TrimSpace(out))
+		}
+	}
+	if out := session(t, "info wibble"); !strings.Contains(out, "nothing is known about wibble") {
+		t.Errorf("info wibble = %q", out)
+	}
+}

@@ -521,8 +521,14 @@ func TestUnknownUncertaintyIsNotZeroUncertainty(t *testing.T) {
 	if certain.Unc.Degenerate {
 		t.Error("an input with no uncertainty produced an unknown result")
 	}
-	if got := format.Text(certain, nil); got != "9" {
-		t.Errorf("y * y = %q, want a bare 9", got)
+	if got := format.Text(certain, nil); got != "9 ± 0" {
+		t.Errorf("y * y = %q, want the declared zero uncertainty kept", got)
+	}
+	if got := format.Text(mustEval(t, env, "12.3 ± 0"), nil); got != "12.3 ± 0" {
+		t.Errorf("12.3 ± 0 = %q, want the ± the user typed", got)
+	}
+	if got := format.Text(mustEval(t, env, "3 + 4"), nil); got != "7" {
+		t.Errorf("3 + 4 = %q, want no invented ±", got)
 	}
 }
 

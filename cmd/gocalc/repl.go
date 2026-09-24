@@ -35,6 +35,34 @@ var functions = []string{
 	"root", "round", "sin", "sinh", "sqrt", "tan", "tanh",
 }
 
+var functionAbout = map[string]string{
+	"abs":     "abs(x) is the size of x without its sign",
+	"acos":    "acos(x) is the angle whose cosine is x, in radians unless deg is set",
+	"asin":    "asin(x) is the angle whose sine is x, in radians unless deg is set",
+	"atan":    "atan(x) is the angle whose tangent is x, in radians unless deg is set",
+	"atan2":   "atan2(y, x) is the angle from the x axis to the point (x, y)",
+	"ceil":    "ceil(x) is the whole number at or above x",
+	"cos":     "cos(x) is the cosine of x, read in radians unless deg is set",
+	"cosh":    "cosh(x) is the hyperbolic cosine of x",
+	"exp":     "exp(x) is e raised to the power x",
+	"expand":  "expand(x, k=2) widens an uncertainty by a coverage factor; expand(x, 95%) by a probability",
+	"floor":   "floor(x) is the whole number at or below x",
+	"gcd":     "gcd(a, b) is the greatest common divisor of two whole numbers",
+	"isprime": "isprime(n) answers 1 when n is prime and 0 when it is not",
+	"lcm":     "lcm(a, b) is the least common multiple of two whole numbers",
+	"ln":      "ln(x) is the natural logarithm of x",
+	"log":     "log(x) is the natural logarithm of x; log10 and log2 are the other bases",
+	"log10":   "log10(x) is the base-10 logarithm of x",
+	"log2":    "log2(x) is the base-2 logarithm of x",
+	"root":    "root(x, n) is the nth root of x, for a whole n",
+	"round":   "round(x) is x rounded to the nearest whole number, halves going up",
+	"sin":     "sin(x) is the sine of x, read in radians unless deg is set",
+	"sinh":    "sinh(x) is the hyperbolic sine of x",
+	"sqrt":    "sqrt(x) is the square root of x, exact when x is a perfect square",
+	"tan":     "tan(x) is the tangent of x, read in radians unless deg is set",
+	"tanh":    "tanh(x) is the hyperbolic tangent of x",
+}
+
 type repler struct {
 	env     *eval.Env
 	style   format.Style
@@ -251,6 +279,11 @@ func (r *repler) info(out io.Writer, name string) bool {
 	}
 	v, _, err := r.value(name)
 	if err != nil {
+		if about, ok := functionAbout[name]; ok {
+			fmt.Fprintln(out, name+"  [function]  built in")
+			fmt.Fprintln(out, "  "+about)
+			return false
+		}
 		return r.fail(out, "nothing is known about "+name)
 	}
 	if c, ok := consts.Lookup(name); ok {

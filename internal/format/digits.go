@@ -101,7 +101,7 @@ func outward(r *big.Rat, decimals int, up bool) *big.Rat {
 }
 
 func significantText(x *big.Float, digits, scale int) string {
-	if places := digits - 1 - scale; places >= 0 {
+	if places := digits - 1 - scale; places >= 0 && !tooSmallToSpellOut(scale) {
 		return tidy(x.Text('f', places))
 	}
 	return tidy(x.Text('e', digits-1))

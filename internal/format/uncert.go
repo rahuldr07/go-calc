@@ -18,6 +18,13 @@ func (s Style) Uncertain(v value.Value) (string, string, bool) {
 	if !ok {
 		return "", "", false
 	}
+	if u == 0 {
+		text, complete := s.Decimal(v)
+		if !complete {
+			return "", "", false
+		}
+		return text, "0", true
+	}
 	decimals := placesFor(u)
 	if !provenTo(v, decimals) {
 		return "", "", false
@@ -33,7 +40,10 @@ func reported(v value.Value) (float64, bool) {
 	if f, _ := v.FactorOrOne().Rat().Float64(); f != 0 {
 		u /= math.Abs(f)
 	}
-	if u <= 0 || math.IsInf(u, 0) || math.IsNaN(u) {
+	if u < 0 || math.IsInf(u, 0) || math.IsNaN(u) {
+		return 0, false
+	}
+	if u == 0 && !v.IsMeasured() {
 		return 0, false
 	}
 	return u, true
