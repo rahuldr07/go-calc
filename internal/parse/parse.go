@@ -108,7 +108,7 @@ var binPower = map[string]int{
 }
 
 const (
-	implicitPower = 25
+	implicitPower = 20
 	powerPower    = 30
 )
 

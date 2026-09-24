@@ -348,7 +348,7 @@ func TestAnUnknownAngleModeIsRefused(t *testing.T) {
 }
 
 func TestNotesSayWhetherTheParserOrTheEvaluatorSpoke(t *testing.T) {
-	got := document(t, "m = 3", "1/2 m")
+	got := document(t, "m = 3", "2 m^2")
 	notes := got.Lines[1].Notes
 	if len(notes) < 2 {
 		t.Fatalf("wanted a reading from each of the parser and the evaluator, got %+v", notes)
@@ -369,10 +369,25 @@ func TestNotesSayWhetherTheParserOrTheEvaluatorSpoke(t *testing.T) {
 }
 
 func TestOnlyTheParserSpeaksWhenNothingWasAmbiguous(t *testing.T) {
-	got := document(t, "1/2 x", "x = 1")
+	got := document(t, "2 m^2")
+	if len(got.Lines[0].Notes) == 0 {
+		t.Fatal("wanted the power regrouping announced")
+	}
 	for _, n := range got.Lines[0].Notes {
 		if n.Source != FromParser {
 			t.Errorf("a plain reading was credited to %q: %+v", n.Source, n)
+		}
+	}
+}
+
+func TestOnlyTheEvaluatorSpeaksWhenTheReadingNeedsTheEnvironment(t *testing.T) {
+	got := document(t, "x = 3", "1/2 x")
+	if len(got.Lines[1].Notes) == 0 {
+		t.Fatal("wanted the division reading announced")
+	}
+	for _, n := range got.Lines[1].Notes {
+		if n.Source != FromEvaluator {
+			t.Errorf("a reading that turns on what x is was credited to %q: %+v", n.Source, n)
 		}
 	}
 }

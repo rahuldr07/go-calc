@@ -111,8 +111,11 @@ func collectRegroupings(n Node, out []Note) []Note {
 	case *Assign:
 		return collectRegroupings(t.Body, out)
 	case *Binary:
+		if t.Implicit && InDenominator(t.L) {
+			return out
+		}
 		if regrouped(t) {
-			return append(out, Note{Pos: t.P, Msg: "read as " + reading(t)})
+			return append(out, Note{Pos: t.P, Msg: "read as " + Reading(t)})
 		}
 		out = collectRegroupings(t.L, out)
 		return collectRegroupings(t.R, out)
@@ -120,16 +123,26 @@ func collectRegroupings(n Node, out []Note) []Note {
 	return out
 }
 
+func InDenominator(n Node) bool {
+	b, ok := n.(*Binary)
+	if !ok {
+		return false
+	}
+	if b.Op == "/" || b.Op == "÷" {
+		return !b.Grouped
+	}
+	return b.Implicit && InDenominator(b.L)
+}
+
 func regrouped(t *Binary) bool {
 	r, ok := t.R.(*Binary)
 	if !ok || r.Grouped {
 		return false
 	}
-	if t.Op == "/" || t.Op == "÷" {
-		return r.Implicit
-	}
 	return t.Implicit && r.Op == "^"
 }
+
+func Reading(n Node) string { return reading(n) }
 
 func reading(n Node) string {
 	t, ok := n.(*Binary)

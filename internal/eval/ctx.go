@@ -29,6 +29,7 @@ type pass struct {
 	notes     []parse.Note
 	prov      map[parse.Node]prov.NodeID
 	units     unitScope
+	divisor   map[parse.Node]bool
 }
 
 func (p *pass) prec() uint { return p.ctx.Prec }
@@ -88,9 +89,12 @@ func (e *Env) evalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
 		if reclaim {
 			e.arena.Truncate(mark)
 		}
-		p := &pass{ctx: ctx, prov: map[parse.Node]prov.NodeID{}}
+		p := &pass{ctx: ctx, prov: map[parse.Node]prov.NodeID{}, divisor: map[parse.Node]bool{}}
 		v, err := e.eval(n, p)
 		reclaim = reclaim && !p.assigned
+		if err == nil {
+			p.announceRegroupings(n)
+		}
 		e.notes = distinct(p.notes)
 		if err != nil {
 			return value.Value{}, err

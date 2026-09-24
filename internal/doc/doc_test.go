@@ -660,7 +660,7 @@ var implicitShapes = []struct{ src, same string }{
 	{"100 km / 2 h", "(100 * km) / (2 * h)"},
 	{"3 m / 2 s / 4 s", "((3 * m) / (2 * s)) / (4 * s)"},
 	{"100 W / 2 m^2", "(100 * W) / (2 * (m^2))"},
-	{"1 / 2 x", "1 / (2 * x)"},
+	{"1 / 2 x", "(1 / 2) * x"},
 	{"60 km/h", "(60 * km) / h"},
 	{"9.8 m/s^2", "(9.8 * m) / (s^2)"},
 	{"3 m^2 + 1 m^2", "(3 * (m^2)) + (1 * (m^2))"},
@@ -723,4 +723,91 @@ func sheetTexts(t *testing.T, lines []string) []string {
 		got[i] = l.Text + l.Error
 	}
 	return got
+}
+
+var denominatorUnits = []string{"m", "km", "s", "h", "mol", "W", "lakh"}
+
+var denominatorNotUnits = []string{"x", "q", "sqrt(x)", "(x + 1)", "pi"}
+
+func TestANumeralTermAfterDivisionSplitsOnWhatTheNameIs(t *testing.T) {
+	preamble := []string{"x = 3", "q = 4"}
+	for _, n := range []string{"2", "0.5", "100"} {
+		for _, tail := range []string{"", "^2", "^-1"} {
+			for _, unit := range denominatorUnits {
+				src := "1000 J / " + n + " " + unit + tail
+				got := numbers(New().SetLines(append(preamble, src)))[2]
+				want := numbers(New().SetLines(append(preamble, "1000 J / ("+n+" "+unit+tail+")")))[2]
+				if got != want {
+					t.Errorf("%q = %q, want the denominator reading %q", src, got, want)
+				}
+			}
+			for _, name := range denominatorNotUnits {
+				src := "1000 / " + n + " " + name + tail
+				got := numbers(New().SetLines(append(preamble, src)))[2]
+				want := numbers(New().SetLines(append(preamble, "(1000 / "+n+") ("+name+tail+")")))[2]
+				if got != want {
+					t.Errorf("%q = %q, want the documented product reading %q", src, got, want)
+				}
+			}
+		}
+	}
+}
+
+func TestAVariableDecidesTheDenominatorWhenItShadowsAUnitName(t *testing.T) {
+	cases := []struct{ binding, want, note string }{
+		{"h = 3", "1/7200  ≈ 0.000138888888889 1/s", "read as 1/(2·h)"},
+		{"h = 12.3 ± 0.2 m", "6.15 ± 0.10 m", "read as (1/2)·h"},
+		{"h = 5 s", "2.5 s", "read as (1/2)·h"},
+	}
+	for _, c := range cases {
+		lines := New().SetLines([]string{c.binding, "1/2 h"})
+		if got := numbers(lines)[1]; got != c.want {
+			t.Errorf("%s then 1/2 h = %q, want %q", c.binding, got, c.want)
+		}
+		found := false
+		for _, n := range lines[1].Notes {
+			if n.Msg == c.note {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s then 1/2 h: notes %v, want %q", c.binding, lines[1].Notes, c.note)
+		}
+	}
+}
+
+func TestBothReadingsAfterADivisionAreAnnounced(t *testing.T) {
+	spoken := map[string]string{
+		"100 km / 2 h":    "read as (100·km)/(2·h)",
+		"100 W / 2 m^2":   "read as (100·W)/(2·(m^2))",
+		"3 m / 2 s / 4 s": "read as ((3·m)/(2·s))/(4·s)",
+		"100 J / 2 mol K": "read as (100·J)/((2·mol)·K)",
+		"1/2 x":           "read as (1/2)·x",
+		"100 / 2 x":       "read as (100/2)·x",
+		"1/2 x^2":         "read as (1/2)·(x^2)",
+	}
+	for src, want := range spoken {
+		lines := New().SetLines([]string{"x = 3", src})
+		var said []string
+		for _, n := range lines[1].Notes {
+			said = append(said, n.Msg)
+		}
+		found := false
+		for _, msg := range said {
+			if msg == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%q said %v, want %q", src, said, want)
+		}
+	}
+	for _, src := range []string{"60 km/h", "9.8 m/s^2", "3 m/(2 s)", "(1/2) x", "2 m"} {
+		lines := New().SetLines([]string{"x = 3", src})
+		for _, n := range lines[1].Notes {
+			if strings.HasPrefix(n.Msg, "read as (") || strings.HasPrefix(n.Msg, "read as 1/") {
+				t.Errorf("%q announced %q, want silence", src, n.Msg)
+			}
+		}
+	}
 }

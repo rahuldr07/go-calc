@@ -92,7 +92,7 @@ Options are the two-dashed names only, so a leading `-` begins an expression: `g
 
 **The float64 shadow.** Every expression is also evaluated in float64. `gocalc why` shows the proven answer beside the float64 one, how many digits they agree to, how many of float64's printed digits are wrong, and which operator lost the bits.
 
-**Units.** SI prefixes, binary prefixes, imperial, time, force, energy, power and pressure, converted through exact rational factors (`inch` is exactly 127/5000 m). Affine temperature: `20 degC to K` is `293.15 K`, `20 degC + 5 K` is `25 degC`, and adding two absolute temperatures is refused. Compound units: `60 km/h`, `9.8 m/s^2`, `1 J/(mol·K)`, `100 W / 2 m^2` (`50 W/m^2`). `^` binds tighter than an implicit product, so `2 m^2` is two square metres, and a numeral-bearing term after `/` stays in the denominator; where that grouping changes the value the calculator prints the reading it took. A name straight after a number is a unit, so `5 h` is five hours even when `h` is a variable — and the calculator says so when a variable of that name could have been meant instead. Long-form names: `hour`, `metre`, `gram`, `litre`, `tonne`.
+**Units.** SI prefixes, binary prefixes, imperial, time, force, energy, power and pressure, converted through exact rational factors (`inch` is exactly 127/5000 m). Affine temperature: `20 degC to K` is `293.15 K`, `20 degC + 5 K` is `25 degC`, and adding two absolute temperatures is refused. Compound units: `60 km/h`, `9.8 m/s^2`, `1 J/(mol·K)`, `100 W / 2 m^2` (`50 W/m^2`). `^` binds tighter than an implicit product, so `2 m^2` is two square metres. A numeral-bearing term after `/` stays in the denominator when it names a unit — `100 km / 2 h` is a speed, `3 m / 2 s / 4 s` is an acceleration — while a term whose name is a variable keeps the documented product reading, so `1/2 x` is `(1/2)·x`. Whether a name is a unit can depend on what you have defined, so the calculator prints the reading it took either way. A name straight after a number is a unit, so `5 h` is five hours even when `h` is a variable — and the calculator says so when a variable of that name could have been meant instead. Long-form names: `hour`, `metre`, `gram`, `litre`, `tonne`.
 
 **Constants.** CODATA 2022 with citations, pinned by checksum so the table cannot drift silently.
 
@@ -163,7 +163,7 @@ go test ./internal/parse/ -run XXX -fuzz '^FuzzParse$' -fuzztime 120s
 go test ./internal/doc/ -run XXX -fuzz '^FuzzEvalRequest$' -fuzztime 120s
 ```
 
-455 test functions, 507 cases, green across twelve packages. Four fuzz targets, all clean on the runs recorded here:
+459 test functions, 511 cases, green across twelve packages. Four fuzz targets, all clean on the runs recorded here:
 
 | Target | What it checks | Executions |
 | --- | --- | --- |

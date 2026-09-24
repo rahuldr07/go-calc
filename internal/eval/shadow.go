@@ -58,6 +58,7 @@ type shadowPass struct {
 	degrees bool
 	lost    []LossSite
 	units   unitScope
+	divisor map[parse.Node]bool
 }
 
 type shown struct {
@@ -219,6 +220,9 @@ func (s *shadowPass) binary(t *parse.Binary, sc scope, depth int) (shown, bool) 
 	if t.Op == "±" || t.Op == "+-" {
 		return l, true
 	}
+	if t.Implicit && parse.InDenominator(t.L) {
+		return s.implicitAfterDivision(t, l, sc, depth)
+	}
 	if t.Implicit {
 		if x, ok, handled := s.attach(t, l, sc); handled {
 			return x, ok
@@ -227,6 +231,9 @@ func (s *shadowPass) binary(t *parse.Binary, sc scope, depth int) (shown, bool) 
 	r, ok := s.walkPositioned(t.R, sc, depth+1, rightUnitPosition(t, inherited, !l.dimless() || l.factor != 1))
 	if !ok {
 		return shown{}, false
+	}
+	if (t.Op == "/" || t.Op == "÷") && !t.Grouped {
+		s.markDivisor(t)
 	}
 	switch t.Op {
 	case "+", "-":
@@ -256,11 +263,47 @@ func (s *shadowPass) binary(t *parse.Binary, sc scope, depth int) (shown, bool) 
 	return shown{}, false
 }
 
+func (s *shadowPass) implicitAfterDivision(t *parse.Binary, l shown, sc scope, depth int) (shown, bool) {
+	r, ok := s.walkPositioned(t.R, sc, depth+1, true)
+	if !ok {
+		return shown{}, false
+	}
+	if s.divides(t.L) && s.env.readsAsUnit(t.R) {
+		s.markDivisor(t)
+		if r.si() == 0 {
+			return shown{}, false
+		}
+		return joined(l.si()/r.si(), l.dim.Sub(r.dim)), true
+	}
+	if x, ok := worn(l, r); ok {
+		return x, true
+	}
+	return joined(l.si()*r.si(), l.dim.Add(r.dim)), true
+}
+
+func (s *shadowPass) divides(n parse.Node) bool {
+	b, ok := n.(*parse.Binary)
+	if !ok {
+		return false
+	}
+	if b.Op == "/" || b.Op == "÷" {
+		return !b.Grouped
+	}
+	return b.Implicit && s.divisor[b]
+}
+
 func worn(l, r shown) (shown, bool) {
 	if !l.dimless() || l.factor != 1 || r.dimless() || r.num != 1 {
 		return shown{}, false
 	}
 	return wearing(l.num, r.factor, r.dim), true
+}
+
+func (s *shadowPass) markDivisor(n parse.Node) {
+	if s.divisor == nil {
+		s.divisor = map[parse.Node]bool{}
+	}
+	s.divisor[n] = true
 }
 
 func joined(x float64, dim units.Dim) shown {

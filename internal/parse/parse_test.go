@@ -18,15 +18,15 @@ func TestPrecedence(t *testing.T) {
 		"-2 ^ 2":          "(-(2 ^ 2))",
 		"2x":              "(2 * x)",
 		"2(x + 1)":        "(2 * (x + 1))",
-		"1/2x":            "(1 / (2 * x))",
+		"1/2x":            "((1 / 2) * x)",
 		"2 m^2":           "(2 * (m ^ 2))",
 		"2 pi^2":          "(2 * (pi ^ 2))",
 		"2 (3)^2":         "(2 * (3 ^ 2))",
 		"2^2 m":           "((2 ^ 2) * m)",
-		"100 km / 2 h":    "((100 * km) / (2 * h))",
+		"100 km / 2 h":    "(((100 * km) / 2) * h)",
 		"60 km/h":         "((60 * km) / h)",
 		"9.8 m/s^2":       "((9.8 * m) / (s ^ 2))",
-		"3 m / 2 s / 4 s": "(((3 * m) / (2 * s)) / (4 * s))",
+		"3 m / 2 s / 4 s": "(((((3 * m) / 2) * s) / 4) * s)",
 		"18% of 500":      "((18 %) of 500)",
 		"5 m + 3 s":       "((5 * m) + (3 * s))",
 		"17 mod 5":        "(17 mod 5)",
@@ -40,16 +40,28 @@ func TestPrecedence(t *testing.T) {
 	}
 }
 
-func TestImplicitOverDivisionEmitsNote(t *testing.T) {
-	_, notes, err := Parse("1/2x")
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
+func TestTheParserLeavesADivisionsImplicitTermForTheEvaluator(t *testing.T) {
+	for _, src := range []string{"1/2x", "100 km / 2 h", "100 W / 2 m^2", "3 m / 2 s / 4 s"} {
+		n, notes, err := Parse(src)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", src, err)
+		}
+		if len(notes) != 0 {
+			t.Errorf("Parse(%q) announced %v; the reading turns on whether the name is a unit, which only the evaluator knows", src, notes)
+		}
+		b, ok := n.(*Binary)
+		if !ok || !b.Implicit || !InDenominator(b.L) {
+			t.Errorf("Parse(%q) = %s, want the flat form with the implicit term reachable from a division", src, n)
+		}
 	}
-	if len(notes) != 1 {
-		t.Fatalf("got %d notes, want 1", len(notes))
-	}
-	if notes[0].Msg != "read as 1/(2·x)" {
-		t.Errorf("note = %q", notes[0].Msg)
+	for _, src := range []string{"(1/2) x", "3 m/(2 s)", "60 km/h", "2 m^2"} {
+		n, _, err := Parse(src)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", src, err)
+		}
+		if b, ok := n.(*Binary); ok && b.Implicit && InDenominator(b.L) {
+			t.Errorf("Parse(%q) = %s, want no division to reach the implicit term", src, n)
+		}
 	}
 }
 
@@ -123,12 +135,12 @@ func TestPowerBindsTighterThanImplicitMultiplication(t *testing.T) {
 	}
 }
 
-func TestANumeralTermAfterDivisionStaysInTheDenominator(t *testing.T) {
+func TestANumeralTermAfterDivisionKeepsThePowerWithItsBase(t *testing.T) {
 	for _, n := range implicitNumerals {
 		for _, operand := range implicitOperands {
 			for _, tail := range []string{"", "^2", "^-1"} {
 				src := "100 W / " + n + " " + operand + tail
-				want := parseOK(t, "100 W / ("+n+" * ("+operand+tail+"))").String()
+				want := parseOK(t, "(100 W / "+n+") ("+operand+tail+")").String()
 				if got := parseOK(t, src).String(); got != want {
 					t.Errorf("Parse(%q) = %s, want %s", src, got, want)
 				}
@@ -138,7 +150,8 @@ func TestANumeralTermAfterDivisionStaysInTheDenominator(t *testing.T) {
 }
 
 func TestEveryRegroupingIsAnnounced(t *testing.T) {
-	quiet := []string{"2 m", "60 km/h", "9.8 m/s^2", "1 J/(mol K)", "2 (m^2)", "3 m/(2 s)", "2^2 m", "1 + 2 * 3"}
+	quiet := []string{"2 m", "60 km/h", "9.8 m/s^2", "1 J/(mol K)", "2 (m^2)", "3 m/(2 s)", "2^2 m", "1 + 2 * 3",
+		"100 km / 2 h", "100 W / 2 m^2", "3 m / 2 s / 4 s", "1/2x"}
 	for _, src := range quiet {
 		_, notes, err := Parse(src)
 		if err != nil {
@@ -149,11 +162,10 @@ func TestEveryRegroupingIsAnnounced(t *testing.T) {
 		}
 	}
 	loud := map[string]string{
-		"2 m^2":           "read as 2·(m^2)",
-		"100 km / 2 h":    "read as (100·km)/(2·h)",
-		"100 W / 2 m^2":   "read as (100·W)/(2·(m^2))",
-		"3 m / 2 s / 4 s": "read as ((3·m)/(2·s))/(4·s)",
-		"1/2x":            "read as 1/(2·x)",
+		"2 m^2":       "read as 2·(m^2)",
+		"2 pi^2":      "read as 2·(pi^2)",
+		"(1/2) m^2":   "read as (1/2)·(m^2)",
+		"2 sqrt(x)^2": "read as 2·(sqrt(x)^2)",
 	}
 	for src, want := range loud {
 		_, notes, err := Parse(src)

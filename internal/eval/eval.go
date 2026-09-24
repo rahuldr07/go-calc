@@ -572,6 +572,9 @@ func (e *Env) evalBinary(t *parse.Binary, p *pass) (value.Value, error) {
 	if err != nil {
 		return value.Value{}, err
 	}
+	if t.Implicit && parse.InDenominator(t.L) {
+		return e.implicitAfterDivision(t, l, p)
+	}
 	if t.Implicit {
 		if v, err, handled := e.attachUnit(t, l, p); handled {
 			return v, err
@@ -580,6 +583,9 @@ func (e *Env) evalBinary(t *parse.Binary, p *pass) (value.Value, error) {
 	r, err := e.evalPositioned(t.R, p, rightUnitPosition(t, inherited, !l.IsScalar()))
 	if err != nil {
 		return value.Value{}, err
+	}
+	if t.Op == "/" || t.Op == "÷" {
+		p.divisor[t] = !t.Grouped
 	}
 	prec := p.prec()
 	switch t.Op {
@@ -794,11 +800,112 @@ func (e *Env) attachUnit(t *parse.Binary, l value.Value, p *pass) (value.Value, 
 	return value.WithUnitNum(l.Num, u).WithJet(scaled), nil, true
 }
 
+func (e *Env) implicitAfterDivision(t *parse.Binary, l value.Value, p *pass) (value.Value, error) {
+	r, err := e.evalPositioned(t.R, p, true)
+	if err != nil {
+		return value.Value{}, err
+	}
+	prec := p.prec()
+	if p.divides(t.L) && e.readsAsUnit(t.R) {
+		p.divisor[t] = true
+		if r.Dim.IsNone() && r.Unit != "" {
+			r = value.ScalarNum(r.SI(prec))
+		}
+		q, err := l.SI(prec).Div(r.SI(prec), prec)
+		if err != nil {
+			return value.Value{}, &lex.Error{Pos: t.P, Msg: divisionMessage(err)}
+		}
+		j, err := quotientJet(l, r, prec)
+		if err != nil {
+			return value.Value{}, &lex.Error{Pos: t.P, Msg: "the divisor may be zero, so no uncertainty can be propagated"}
+		}
+		return combine(l, r, q, l.Dim.Sub(r.Dim), "/").WithJet(j), nil
+	}
+	if v, ok := wearUnit(l, r); ok {
+		return v, nil
+	}
+	out := combine(l, r, l.SI(prec).Mul(r.SI(prec), prec), l.Dim.Add(r.Dim), "·")
+	return out.WithJet(productJet(l, r, prec)), nil
+}
+
+func (p *pass) divides(n parse.Node) bool {
+	b, ok := n.(*parse.Binary)
+	if !ok {
+		return false
+	}
+	if b.Op == "/" || b.Op == "÷" {
+		return !b.Grouped
+	}
+	return b.Implicit && p.divisor[b]
+}
+
+func (e *Env) readsAsUnit(n parse.Node) bool {
+	switch t := n.(type) {
+	case *parse.Name:
+		_, _, _, asUnit := e.implicitReading(t)
+		return asUnit
+	case *parse.Binary:
+		if isProduct(t.Op) {
+			return e.readsAsUnit(t.L) && e.readsAsUnit(t.R)
+		}
+		if t.Op == "^" {
+			return e.readsAsUnit(t.L)
+		}
+	}
+	return false
+}
+
+func isBareUnit(v value.Value) bool {
+	if v.Unit == "" || v.IsAffine() || v.IsMeasured() || !v.Num.IsExact() {
+		return false
+	}
+	return v.Num.Exact().Cmp(num.FromInt(1)) == 0
+}
+
+func (p *pass) announceRegroupings(n parse.Node) {
+	switch t := n.(type) {
+	case *parse.Unary:
+		p.announceRegroupings(t.X)
+	case *parse.Call:
+		for _, a := range t.Args {
+			p.announceRegroupings(a)
+		}
+	case *parse.Assign:
+		if len(t.Params) == 0 {
+			p.announceRegroupings(t.Body)
+		}
+	case *parse.Binary:
+		if t.Implicit && parse.InDenominator(t.L) {
+			p.notes = append(p.notes, parse.Note{Pos: t.P, Msg: "read as " + parse.Reading(p.effective(t))})
+			return
+		}
+		p.announceRegroupings(t.L)
+		p.announceRegroupings(t.R)
+	}
+}
+
+func (p *pass) effective(n parse.Node) parse.Node {
+	b, ok := n.(*parse.Binary)
+	if !ok {
+		return n
+	}
+	l, r := p.effective(b.L), p.effective(b.R)
+	if p.divisor[b] && b.Implicit {
+		if d, ok := l.(*parse.Binary); ok && (d.Op == "/" || d.Op == "÷") {
+			return &parse.Binary{Op: d.Op, L: d.L, R: &parse.Binary{Op: "*", L: d.R, R: r, Implicit: true}}
+		}
+	}
+	if l == b.L && r == b.R {
+		return b
+	}
+	return &parse.Binary{Op: b.Op, L: l, R: r, P: b.P, Implicit: b.Implicit}
+}
+
 func wearUnit(l, r value.Value) (value.Value, bool) {
 	if !l.IsScalar() || l.IsMeasured() || r.IsMeasured() {
 		return value.Value{}, false
 	}
-	if r.Unit == "" || r.IsAffine() || !r.Num.IsExact() || r.Num.Exact().Cmp(num.FromInt(1)) != 0 {
+	if !isBareUnit(r) {
 		return value.Value{}, false
 	}
 	out := r
