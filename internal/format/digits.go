@@ -46,35 +46,58 @@ func provenDecimal(b num.Ball, limit int) (string, int) {
 	return bounds(b), 0
 }
 
-func bounds(b num.Ball) string {
+func bounds(b num.Ball) string { return boundsAt(b, boundDigits) }
+
+func boundsAt(b num.Ball, digits int) string {
 	lo, _ := b.Lo().Rat(nil)
 	hi, _ := b.Hi().Rat(nil)
 	if lo == nil || hi == nil {
-		return b.String()
+		return "[" + b.Lo().Text('g', digits) + ", " + b.Hi().Text('g', digits) + "]"
 	}
 	scale := ratScale(lo)
 	if s := ratScale(hi); s > scale {
 		scale = s
 	}
-	decimals := boundDigits - 1 - scale
-	return "[" + outward(lo, decimals, false) + ", " + outward(hi, decimals, true) + "]"
+	decimals := digits - 1 - scale
+	low, high := outward(lo, decimals, false), outward(hi, decimals, true)
+	if decimals < 0 || scale < -5 {
+		return "[" + scientific(low, digits) + ", " + scientific(high, digits) + "]"
+	}
+	return "[" + tidy(at(low, decimals)) + ", " + tidy(at(high, decimals)) + "]"
 }
 
-func outward(r *big.Rat, decimals int, up bool) string {
-	text := at(r, decimals)
-	got, ok := new(big.Rat).SetString(text)
+func scientific(r *big.Rat, digits int) string {
+	if r.Sign() == 0 {
+		return "0"
+	}
+	e := ratScale(r)
+	m := new(big.Rat).Quo(r, ratPow10(e))
+	return tidy(m.FloatString(digits-1)) + "e" + strconv.Itoa(e)
+}
+
+func tightBounds(b num.Ball) string {
+	digits := b.GuaranteedDigits() + 2
+	if digits < boundDigits {
+		digits = boundDigits
+	}
+	if digits > Digits+2 {
+		digits = Digits + 2
+	}
+	return boundsAt(b, digits)
+}
+
+func outward(r *big.Rat, decimals int, up bool) *big.Rat {
+	got, ok := new(big.Rat).SetString(at(r, decimals))
 	if !ok {
-		return tidy(text)
+		return new(big.Rat).Set(r)
 	}
 	switch {
 	case up && got.Cmp(r) < 0:
 		got.Add(got, ratPow10(-decimals))
 	case !up && got.Cmp(r) > 0:
 		got.Sub(got, ratPow10(-decimals))
-	default:
-		return tidy(text)
 	}
-	return tidy(at(got, decimals))
+	return got
 }
 
 func significantText(x *big.Float, digits, scale int) string {

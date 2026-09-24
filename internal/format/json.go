@@ -68,7 +68,7 @@ func JSON(input string, v value.Value, notes []parse.Note) ([]byte, error) {
 	} else {
 		b := v.Num.Ball(ballPrec)
 		_, _, out.Capped = Default.NumberBall(b)
-		out.Ball = v.Num.String()
+		out.Ball = tightBounds(b)
 		out.Decimal, out.Digits = Default.provenBall(b)
 	}
 	r := result{Schema: Schema, Input: input, Value: out, Notes: msgs, Uncertainty: uncertainty(v)}

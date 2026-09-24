@@ -1,8 +1,10 @@
 package eval
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
+	"math/big"
 	"strings"
 	"testing"
 
@@ -777,4 +779,123 @@ func TestAGuaranteedBoundIsNotSpelledLikeAnUncertainty(t *testing.T) {
 	if strings.Contains(text, `"standard"`) {
 		t.Errorf("JSON = %s, want no standard uncertainty beside a degenerate estimate", text)
 	}
+}
+
+func TestJSONSpellsAGuaranteedBoundWithBracketsAndNeverWithAPlusMinus(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "x = 0 ± 1")
+	for _, c := range []struct {
+		src  string
+		ball bool
+	}{
+		{"sqrt(2)", true},
+		{"pi", true},
+		{"sqrt(2) * 1e60", true},
+		{"sqrt(2) * 1e-60", true},
+		{"(sqrt(2) - 1.4142135623730950488016887242096980785696718753769) * 1e36", true},
+		{"sin(1e60) + (x*x)", true},
+		{"sin(1e60) + x", true},
+		{"(10 ± 1) * 2", false},
+		{"12.3 ± 0.2 m", false},
+	} {
+		out, err := format.JSON(c.src, mustEval(t, env, c.src), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(out, &body); err != nil {
+			t.Fatalf("%s: %v", c.src, err)
+		}
+		delete(body, "input")
+		rest, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(rest), "±") {
+			t.Errorf("%s: JSON carries ± outside the echoed input: %s", c.src, rest)
+		}
+		val, _ := body["value"].(map[string]any)
+		ball, has := val["ball"].(string)
+		if has != c.ball {
+			t.Errorf("%s: value.ball present = %v, want %v", c.src, has, c.ball)
+			continue
+		}
+		if !c.ball {
+			continue
+		}
+		if !strings.HasPrefix(ball, "[") || !strings.HasSuffix(ball, "]") || !strings.Contains(ball, ", ") {
+			t.Errorf("%s: value.ball = %q, want an interval", c.src, ball)
+		}
+	}
+}
+
+func TestTheJSONBoundEnclosesTheProvenRange(t *testing.T) {
+	env := NewEnv()
+	for _, src := range []string{
+		"sqrt(2)", "pi", "exp(1)", "ln(7)", "sqrt(2) * 1e-60",
+		"(sqrt(2) - 1.4142135623730950488016887242096980785696718753769) * 1e36",
+	} {
+		v := mustEval(t, env, src)
+		out, err := format.JSON(src, v, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(out, &body); err != nil {
+			t.Fatal(err)
+		}
+		val, _ := body["value"].(map[string]any)
+		ball, _ := val["ball"].(string)
+		loText, hiText, ok := strings.Cut(strings.Trim(ball, "[]"), ", ")
+		if !ok {
+			t.Errorf("%s: value.ball = %q names no interval", src, ball)
+			continue
+		}
+		lo, okLo := new(big.Float).SetPrec(512).SetString(loText)
+		hi, okHi := new(big.Float).SetPrec(512).SetString(hiText)
+		if !okLo || !okHi {
+			t.Errorf("%s: value.ball = %q does not read back as two numbers", src, ball)
+			continue
+		}
+		b := v.Num.Ball(256)
+		if lo.Cmp(b.Lo()) > 0 || hi.Cmp(b.Hi()) < 0 {
+			t.Errorf("%s: value.ball = %q is narrower than the proven range [%s .. %s]",
+				src, ball, b.Lo().Text('g', 20), b.Hi().Text('g', 20))
+		}
+		for _, end := range [2]string{loText, hiText} {
+			if len(end) > 24 {
+				t.Errorf("%s: value.ball end %q is %d characters, want a compact bound at any magnitude",
+					src, end, len(end))
+			}
+		}
+		digits, _ := val["digits"].(float64)
+		if digits < 1 {
+			continue
+		}
+		width := new(big.Float).SetPrec(512).Sub(hi, lo)
+		size := new(big.Float).SetPrec(512).Abs(hi)
+		if l := new(big.Float).SetPrec(512).Abs(lo); l.Cmp(size) > 0 {
+			size = l
+		}
+		slack := new(big.Float).SetPrec(512).Mul(size, floatPow10(1-int(digits)))
+		if width.Cmp(slack) > 0 {
+			t.Errorf("%s: value.ball = %q is wider than the %d digits value.digits claims",
+				src, ball, int(digits))
+		}
+	}
+}
+
+func floatPow10(k int) *big.Float {
+	p := new(big.Float).SetPrec(512).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(abs(k))), nil))
+	if k < 0 {
+		return new(big.Float).SetPrec(512).Quo(new(big.Float).SetPrec(512).SetInt64(1), p)
+	}
+	return p
+}
+
+func abs(k int) int {
+	if k < 0 {
+		return -k
+	}
+	return k
 }
