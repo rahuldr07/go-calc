@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>go-calc — v3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#fafafa; --panel:#ffffff; --panel-2:#f5f6f7; --line:#e7e8ea; --line-2:#eff0f2;
+  --ink:#15171a; --ink-2:#5c626c; --ink-3:#8b919b;
+  --accent:#4f46e5; --accent-soft:#eeedfd;
+  --ok:#0f7a3d; --ok-soft:#e7f5ec;
+  --info:#1f5fd0; --info-soft:#e9f0fd;
+  --warn:#9a5b00; --warn-soft:#fdf1df;
+  --hold:#5c626c; --hold-soft:#f0f1f3;
+  --bad:#c0331f; --bad-soft:#fdecea;
+  --shadow:0 1px 2px rgba(16,18,22,.05), 0 8px 24px -12px rgba(16,18,22,.18);
+  --sans:"Schibsted Grotesk", system-ui, -apple-system, sans-serif;
+  --mono:"Spline Sans Mono", ui-monospace, SFMono-Regular, monospace;
+  --r:10px;
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#0a0b0d; --panel:#111316; --panel-2:#16181c; --line:#24262b; --line-2:#1c1e22;
+  --ink:#e9eaec; --ink-2:#9ea5b0; --ink-3:#6e7681;
+  --accent:#8b87f8; --accent-soft:#1d1b3a;
+  --ok:#4ade80; --ok-soft:#10261a;
+  --info:#7fb0ff; --info-soft:#0f1c33;
+  --warn:#f0b357; --warn-soft:#2a1e0a;
+  --hold:#9ea5b0; --hold-soft:#1b1d21;
+  --bad:#ff8b7a; --bad-soft:#2d1512;
+  --shadow:0 1px 2px rgba(0,0,0,.5), 0 12px 32px -14px rgba(0,0,0,.8);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;
+  -webkit-font-smoothing:antialiased}
+::selection{background:var(--accent-soft);color:var(--ink)}
+*{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+/* ---------- shell ---------- */
+.app{display:grid;grid-template-columns:232px minmax(0,1fr);height:100vh;overflow:hidden}
+.side{border-right:1px solid var(--line);background:var(--panel-2);display:flex;flex-direction:column;gap:2px;padding:14px 10px}
+.brand{display:flex;align-items:center;gap:9px;padding:4px 8px 14px;font-weight:600;letter-spacing:-.01em;font-size:15px}
+.mark{width:22px;height:22px;border-radius:6px;background:var(--ink);color:var(--panel);display:grid;place-items:center;flex:none}
+.mark svg{display:block}
+.search{display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;margin-bottom:12px;border-radius:8px;
+  background:var(--panel);border:1px solid var(--line);color:var(--ink-3);font-size:13px}
+.search kbd{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-3);background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:1px 4px}
+.side h3{margin:8px 8px 6px;font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.nav{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:6px 9px;border-radius:7px;color:var(--ink-2);font-size:13.5px}
+.nav:hover{background:var(--line-2);color:var(--ink)}
+.nav[aria-current="true"]{background:var(--panel);color:var(--ink);font-weight:500;box-shadow:0 1px 2px rgba(16,18,22,.06)}
+:root[data-theme="dark"] .nav[aria-current="true"]{box-shadow:none;background:var(--line-2)}
+.nav .dot{width:6px;height:6px;border-radius:50%;background:var(--ink-3);flex:none}
+.nav[aria-current="true"] .dot{background:var(--accent)}
+.side .spacer{flex:1}
+.side .foot{display:flex;gap:6px;padding:6px 4px 0;border-top:1px solid var(--line);margin-top:8px}
+.ghost{padding:6px 9px;border-radius:7px;color:var(--ink-2);font-size:13px}
+.ghost:hover{background:var(--line-2);color:var(--ink)}
+
+.main{display:flex;flex-direction:column;min-width:0}
+.top{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+.title{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.meta{color:var(--ink-3);font-size:12.5px}
+.seg{display:flex;padding:2px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);margin-left:auto}
+.seg button{padding:5px 12px;border-radius:6px;font-size:13px;color:var(--ink-2)}
+.seg button[aria-selected="true"]{background:var(--panel);color:var(--ink);font-weight:500;box-shadow:0 1px 2px rgba(16,18,22,.08)}
+:root[data-theme="dark"] .seg button[aria-selected="true"]{background:var(--line);box-shadow:none}
+.btn{padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font-size:13px;font-weight:500}
+.btn:hover{background:var(--panel-2)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.primary:hover{opacity:.9}
+
+.body{flex:1;display:flex;min-height:0}
+.sheet{flex:1;overflow:auto;padding:26px 0 80px}
+.sheet-inner{max-width:880px;margin:0 auto;padding:0 28px}
+
+/* ---------- lines ---------- */
+.row{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:14px;align-items:baseline;
+  padding:5px 10px;margin:0 -10px;border-radius:8px;font-family:var(--mono);font-size:14px;transition:background .12s}
+.row:hover{background:var(--line-2)}
+.row .n{color:var(--ink-3);font-size:12px;text-align:right;user-select:none}
+.expr{white-space:pre-wrap;overflow-wrap:anywhere;letter-spacing:-.01em}
+.expr .cm{color:var(--ink-3)}
+.expr .un{color:var(--ink-2)}
+.val{display:flex;align-items:baseline;gap:10px;justify-self:end;white-space:nowrap}
+.num{font-weight:500;letter-spacing:-.01em}
+.num .pm,.num .u{color:var(--ink-2);font-weight:400}
+.num.plain{font-weight:400}
+.num.dim{color:var(--ink-2);font-weight:400}
+.val[data-open]{cursor:pointer}
+.val[data-open]:hover .num{text-decoration:underline;text-decoration-color:var(--ink-3);text-underline-offset:4px}
+.row.active{background:var(--accent-soft)}
+.row.dep{background:var(--line-2)}
+.note{grid-column:2 / 4;font-family:var(--sans);font-size:12.5px;color:var(--ink-2);display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:2px}
+.note .link{color:var(--ink);text-decoration:underline;text-decoration-color:var(--ink-3);text-underline-offset:3px}
+
+/* status pills: only for the non-obvious cases */
+.pill{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:999px;
+  font-family:var(--sans);font-size:11.5px;font-weight:500;letter-spacing:.01em;white-space:nowrap}
+.pill svg{flex:none}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.info{background:var(--info-soft);color:var(--info)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.hold{background:var(--hold-soft);color:var(--hold);box-shadow:inset 0 0 0 1px var(--line)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.quiet{background:none;color:var(--ink-3)}
+
+/* graph card */
+.graph{grid-column:2 / 4;margin:8px 0 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:12px}
+.graph svg{display:block;width:100%;height:auto}
+.graph .cap{font-family:var(--sans);font-size:12px;color:var(--ink-2);display:flex;gap:16px;flex-wrap:wrap;margin-top:8px}
+.graph .cap i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:6px}
+
+/* ---------- inspector ---------- */
+.insp{width:360px;flex:none;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;
+  transform:translateX(100%);transition:transform .22s cubic-bezier(.16,1,.3,1);position:relative}
+.insp.open{transform:none}
+.insp.closed{display:none}
+.insp header{padding:16px 18px 12px;padding-right:44px;border-bottom:1px solid var(--line)}
+.insp .expr-line{font-family:var(--mono);font-size:12.5px;color:var(--ink-2);margin-bottom:8px;display:flex;justify-content:space-between;gap:10px}
+.insp .big{font-family:var(--mono);font-size:24px;font-weight:600;letter-spacing:-.02em}
+.insp .big .pm,.insp .big .u{color:var(--ink-2);font-weight:400;font-size:18px}
+.insp .sub{margin-top:6px;display:flex;gap:8px;align-items:center}
+.tabs{display:flex;gap:2px;padding:8px 12px 0;border-bottom:1px solid var(--line)}
+.tabs button{padding:6px 10px;font-size:12.5px;color:var(--ink-2);border-bottom:2px solid transparent;border-radius:6px 6px 0 0}
+.tabs button[aria-selected="true"]{color:var(--ink);font-weight:500;border-bottom-color:var(--ink)}
+.tabs button:hover{color:var(--ink)}
+.panes{padding:16px 18px;overflow:auto}
+.pane{display:none}.pane.on{display:block}
+.bud{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;margin-bottom:10px;font-size:13px}
+.bud .bar{height:6px;border-radius:999px;background:var(--line);overflow:hidden}
+.bud .bar i{display:block;height:100%;background:var(--accent);border-radius:999px}
+.bud code{font-family:var(--mono);font-size:12.5px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12.5px;color:var(--ink-2);margin-top:14px}
+.kv b{color:var(--ink);font-weight:500;font-family:var(--mono);font-size:12.5px}
+.tree{font-family:var(--mono);font-size:12.5px;color:var(--ink-2);white-space:pre;overflow:auto}
+.tree b{color:var(--ink);font-weight:500}
+.code{font-family:var(--mono);font-size:12px;color:var(--ink-2);white-space:pre-wrap;word-break:break-all;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px}
+.x{position:absolute;top:14px;right:14px;color:var(--ink-3);padding:4px;border-radius:6px}
+.x:hover{background:var(--line-2);color:var(--ink)}
+
+/* ---------- terminal ---------- */
+.term{flex:1;overflow:auto;padding:22px 0 60px;font-family:var(--mono);font-size:13.5px}
+.term .inner{max-width:880px;margin:0 auto;padding:0 28px}
+.block{border-left:2px solid var(--line);padding:2px 0 2px 14px;margin-bottom:16px}
+.block.cmd{border-left-color:var(--accent)}
+.block .in{color:var(--ink);font-weight:500}
+.block .in::before{content:"› ";color:var(--ink-3)}
+.block .out{color:var(--ink-2);white-space:pre-wrap;margin-top:4px}
+.block .out b{color:var(--ink);font-weight:600}
+.term .prompt{display:flex;align-items:center;gap:8px;max-width:880px;margin:0 auto;padding:0 28px}
+.term .prompt::before{content:"›";color:var(--ink-3)}
+.term input{flex:1;background:none;border:0;outline:0;font:inherit;color:var(--ink);padding:6px 0}
+.caret{display:inline-block;width:8px;height:16px;background:var(--ink);vertical-align:-3px;animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+
+.statusbar{display:flex;gap:18px;align-items:center;padding:7px 20px;border-top:1px solid var(--line);background:var(--panel);
+  font-size:12px;color:var(--ink-3)}
+.statusbar b{color:var(--ink-2);font-weight:500}
+.live{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:7px}
+
+/* ---------- responsive ---------- */
+@media (max-width: 900px){
+  .app{grid-template-columns:1fr}
+  .side{display:none}
+  .insp{position:fixed;inset:auto 0 0 0;width:auto;max-height:72vh;border-left:0;border-top:1px solid var(--line);
+    border-radius:16px 16px 0 0;transform:translateY(100%);box-shadow:var(--shadow);z-index:20}
+  .insp.open{transform:none}
+  .top{padding:10px 14px;gap:10px}
+  .title{font-size:14px}
+  .meta,.btn.share{display:none}
+  .sheet-inner,.term .inner,.term .prompt{padding:0 14px}
+  .row{grid-template-columns:18px minmax(0,1fr);gap:0 10px}
+  .row .val{grid-column:2;justify-self:start;padding-top:2px}
+  .note,.graph{grid-column:1 / -1}
+}
+</style>
+</head>
+<body>
+<!--
+THESIS: a calculator that shows how far to trust each answer, in the visual language of a modern pro app (Linear/Raycast class) — status lives in small semantic pills, never in chrome or costume.
+OWN-WORLD: neutral greys, one indigo accent, Geist + Geist Mono, 1px hairlines, 8-10px radii, soft single-layer shadows, light and dark from one token set.
+STORY: type a sheet, glance at pills only where trust is non-obvious, click a value to open the inspector (budget, trace, digits, JSON), switch Notepad/Terminal on the same document.
+FIRST VIEWPORT: sidebar of sheets, header with segmented Notepad/Terminal, a wide quiet sheet of expressions with right-aligned answers, inspector docked right.
+FORM: clean modern app (user-chosen after rejecting the console direction), seed key 122ff0b4.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+-->
+<div class="app">
+
+  <!-- sidebar -->
+  <aside class="side">
+    <div class="brand">
+      <span class="mark"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M2 7l3 3 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      go-calc
+    </div>
+    <button class="search" type="button">
+      <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.25" stroke="currentColor" stroke-width="1.5"/><path d="M9.5 9.5L12.5 12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Search or run
+      <kbd>⌘K</kbd>
+    </button>
+    <h3>Sheets</h3>
+    <button class="nav" aria-current="true"><span class="dot"></span>Physics lab</button>
+    <button class="nav"><span class="dot"></span>Salary &amp; EMI</button>
+    <button class="nav"><span class="dot"></span>Scratch</button>
+    <button class="nav" style="color:var(--ink-3)">
+      <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M7 2.5v9M2.5 7h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      New sheet
+    </button>
+    <div class="spacer"></div>
+    <div class="foot">
+      <button class="ghost" id="theme">Dark</button>
+      <button class="ghost">Settings</button>
+      <button class="ghost">Docs</button>
+    </div>
+  </aside>
+
+  <!-- main -->
+  <div class="main">
+    <header class="top">
+      <div>
+        <div class="title">Physics lab</div>
+        <div class="meta">12 digits · radians · saved just now</div>
+      </div>
+      <div class="seg" role="tablist" aria-label="View">
+        <button role="tab" id="tab-pad" aria-selected="true">Notepad</button>
+        <button role="tab" id="tab-term" aria-selected="false">Terminal</button>
+      </div>
+      <button class="btn share" type="button">Share</button>
+    </header>
+
+    <div class="body">
+      <!-- notepad -->
+      <main class="sheet" id="pad">
+        <div class="sheet-inner">
+
+          <div class="row" data-id="h" data-deps="t,t95">
+            <span class="n">1</span>
+            <span class="expr">h = 12.3 ± 0.2 <span class="un">m</span></span>
+            <span class="val"><span class="num">12.3 <span class="pm">±</span> 0.2 <span class="u">m</span></span></span>
+          </div>
+
+          <div class="row" data-id="g" data-deps="t,t95">
+            <span class="n">2</span>
+            <span class="expr">g = g0  <span class="cm"># standard gravity</span></span>
+            <span class="val"><span class="num">9.80665 <span class="u">m/s²</span></span></span>
+          </div>
+
+          <div class="row active" data-id="t" data-deps="t95">
+            <span class="n">3</span>
+            <span class="expr">t = sqrt(2h / g)</span>
+            <span class="val" data-open="t" tabindex="0" role="button" aria-expanded="true">
+              <span class="pill info">± estimate</span>
+              <span class="num">1.584 <span class="pm">±</span> 0.013 <span class="u">s</span></span>
+            </span>
+          </div>
+
+          <div class="row" data-id="t95">
+            <span class="n">4</span>
+            <span class="expr">expand(t, 95%)</span>
+            <span class="val"><span class="pill info">± k = 2</span><span class="num">1.584 <span class="pm">±</span> 0.026 <span class="u">s</span></span></span>
+          </div>
+
+          <div class="row">
+            <span class="n">5</span>
+            <span class="expr">(1e16 + 1) - 1e16</span>
+            <span class="val"><span class="num">1</span></span>
+            <div class="note">
+              <span class="pill warn"><svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M6 1.5l4.5 8h-9z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M6 5v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>precision</span>
+              float64 gives 0 here — all 53 bits lost in the subtraction. <button class="link" type="button">Show why</button>
+            </div>
+          </div>
+
+          <div class="row">
+            <span class="n">6</span>
+            <span class="expr">1/2x</span>
+            <span class="val"><span class="num plain">x/2</span></span>
+            <div class="note"><span class="pill quiet">read as</span> (1/2) · x — implicit multiplication binds like ×. Write 1/(2x) for the other reading.</div>
+          </div>
+
+          <div class="row" data-id="sal" data-deps="raise">
+            <span class="n">7</span>
+            <span class="expr">salary = 18,50,000 / 12</span>
+            <span class="val"><span class="num">1,54,166.67</span></span>
+          </div>
+
+          <div class="row" data-id="raise">
+            <span class="n">8</span>
+            <span class="expr">salary + 10%</span>
+            <span class="val"><span class="num">1,69,583.33</span></span>
+          </div>
+
+          <div class="row">
+            <span class="n">9</span>
+            <span class="expr">exp(pi·sqrt(163))</span>
+            <span class="val"><span class="pill ok">30 digits proven</span><span class="num">262537412640768743.999999999999</span></span>
+          </div>
+
+          <div class="row">
+            <span class="n">10</span>
+            <span class="expr">integrate(x·sin(x), x)</span>
+            <span class="val"><span class="pill ok"><svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6.3l2.6 2.6L10 3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>verified</span><span class="num plain">sin(x) − x·cos(x)</span></span>
+          </div>
+
+          <div class="row">
+            <span class="n">11</span>
+            <span class="expr">integrate(exp(-x^2)·log(x), x)</span>
+            <span class="val"><span class="pill hold">no result</span><span class="num dim">no closed form found</span></span>
+          </div>
+
+          <div class="row">
+            <span class="n">12</span>
+            <span class="expr">plot(sin(x)/x, x, -10, 10)</span>
+            <span class="val"><span class="pill ok">proven</span></span>
+            <div class="graph">
+              <svg viewBox="0 0 800 200" role="img" aria-label="Graph of sin(x)/x from -10 to 10, six proven roots marked, removable gap at x = 0">
+                <g id="grid"></g>
+                <line x1="0" y1="148" x2="800" y2="148" stroke="currentColor" opacity=".25"/>
+                <line x1="400" y1="8" x2="400" y2="192" stroke="currentColor" opacity=".25"/>
+                <path id="curve" fill="none" stroke="currentColor" stroke-width="2"/>
+                <g id="roots"></g>
+                <circle cx="400" cy="38" r="4" fill="var(--panel)" stroke="currentColor" stroke-width="1.6"/>
+                <g font-family="Spline Sans Mono, monospace" font-size="11" fill="currentColor" opacity=".55">
+                  <text x="6" y="166">−10</text><text x="762" y="166">10</text><text x="408" y="34">1</text>
+                </g>
+              </svg>
+              <div class="cap">
+                <span><i style="background:var(--ok)"></i>roots ±π, ±2π, ±3π — each proven unique</span>
+                <span><i style="border:1.5px solid currentColor;border-radius:50%;background:none"></i>removable gap at x = 0, limit 1</span>
+                <span>drag to pan · scroll to zoom</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <span class="n">13</span>
+            <span class="expr">5 m + 3 s</span>
+            <span class="val"><span class="pill bad"><svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>error</span><span class="num dim">cannot add length (m) and time (s)</span></span>
+          </div>
+
+          <div class="row">
+            <span class="n">14</span>
+            <span class="expr"><span class="caret"></span></span>
+            <span></span>
+          </div>
+
+        </div>
+      </main>
+
+      <!-- terminal -->
+      <main class="term" id="term" hidden>
+        <div class="inner">
+          <div class="block"><div class="out">go-calc 0.1.0 · wasm · CODATA 2022 · type <b>help</b></div></div>
+          <div class="block cmd">
+            <div class="in">t = sqrt(2h / g0)</div>
+            <div class="out"><b>t = 1.584 ± 0.013 s</b>   estimate · GUM k=1
+h  ████████████████████  100.0 %</div>
+          </div>
+          <div class="block cmd">
+            <div class="in">(1e16 + 1) - 1e16</div>
+            <div class="out"><b>= 1</b>   exact
+⚠ float64 gives 0 here: all 53 bits lost in the subtraction</div>
+          </div>
+          <div class="block cmd">
+            <div class="in">why</div>
+            <div class="out">shadow (float64)   0
+proven             1        exact
+worst node         line 5, col 11:  ( … ) − 1e16
+bits lost          53 of 53 = log2(1e16 / 1)</div>
+          </div>
+          <div class="block cmd">
+            <div class="in">trace t</div>
+            <div class="out">t = sqrt(2·h / g0)
+├─ h  = 12.3 ± 0.2 m      input, line 1
+└─ g0 = 9.80665 m/s²      exact · CODATA 2022</div>
+          </div>
+          <div class="block cmd">
+            <div class="in">info G</div>
+            <div class="out">G = 6.67430(15)e-11 m³/(kg·s²)   u_r 2.2e-5 · CODATA 2022
+physics.nist.gov/cuu/Constants</div>
+          </div>
+        </div>
+        <div class="prompt"><input id="tin" aria-label="Terminal input" autocomplete="off" spellcheck="false" placeholder="type an expression"></div>
+      </main>
+
+      <!-- inspector -->
+      <aside class="insp open" id="insp" aria-label="Result details">
+        <button class="x" id="insp-close" aria-label="Close details"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+        <header>
+          <div class="expr-line"><span>t = sqrt(2h / g)</span><span>line 3</span></div>
+          <div class="big">1.584 <span class="pm">±</span> 0.013 <span class="u">s</span></div>
+          <div class="sub"><span class="pill info">± estimate</span><span class="meta">GUM first-order, k = 1</span></div>
+        </header>
+        <div class="tabs" role="tablist">
+          <button role="tab" aria-selected="true" data-pane="b">Budget</button>
+          <button role="tab" aria-selected="false" data-pane="t">Trace</button>
+          <button role="tab" aria-selected="false" data-pane="d">Digits</button>
+          <button role="tab" aria-selected="false" data-pane="j">JSON</button>
+        </div>
+        <div class="panes">
+          <div class="pane on" data-pane="b">
+            <div class="bud"><code>h</code><span class="bar"><i style="width:100%"></i></span><span>100.0 %</span></div>
+            <div class="bud" style="color:var(--ink-3)"><code>g0</code><span class="bar"></span><span>exact</span></div>
+            <div class="kv">
+              <span>u(h)</span><b>0.2 m</b>
+              <span>∂t/∂h</span><b>0.0644 s/m</b>
+              <span>95 % (k=2)</span><b>1.584 ± 0.026 s</b>
+              <span>linearity</span><b>ok — first-order is adequate</b>
+            </div>
+          </div>
+          <div class="pane" data-pane="t">
+<div class="tree"><b>t</b> = sqrt(2·h / g)
+├─ <b>h</b>  = 12.3 ± 0.2 m     input, line 1
+├─ <b>g</b>  = g0                line 2
+│   └─ <b>g0</b> = 9.80665 m/s²  exact · CGPM 1901
+└─ <b>2</b>  exact integer</div>
+          </div>
+          <div class="pane" data-pane="d">
+            <div class="kv" style="margin-top:0">
+              <span>midpoint</span><b>1.58382648913004…</b>
+              <span>radius</span><b>2.1e-38</b>
+              <span>precision</span><b>120 bit ball</b>
+              <span>shown</span><b>4 s.f. — the ± dominates</b>
+            </div>
+          </div>
+          <div class="pane" data-pane="j">
+<div class="code">{
+  "schema": "go-calc.result/1",
+  "value": { "decimal": "1.58382648913", "digits": 12 },
+  "unit": { "symbol": "s", "dims": { "T": "1" } },
+  "uncertainty": { "u": "0.013", "k": 1,
+    "method": "gum-first-order",
+    "contributions": [ { "input": "h", "share": 1.0 } ] }
+}</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="statusbar">
+      <span><span class="live"></span>Engine ready</span>
+      <span>Recalculated in <b>4 ms</b></span>
+      <span><b>1</b> precision warning · <b>1</b> without result · <b>1</b> error</span>
+      <span style="margin-left:auto">Mockup — demo values, engine not wired</span>
+    </footer>
+  </div>
+</div>
+
+<script>
+// graph
+(function(){
+  const X=v=>(v+10)*40, Y=v=>148-v*110;
+  let d="",pen=false;
+  for(let i=0;i<=800;i++){const x=i/40-10;if(Math.abs(x)<0.06){pen=false;continue}d+=(pen?"L":"M")+X(x).toFixed(1)+","+Y(Math.sin(x)/x).toFixed(1);pen=true}
+  document.getElementById("curve").setAttribute("d",d);
+  const g=document.getElementById("roots"),NS="http://www.w3.org/2000/svg";
+  [-3,-2,-1,1,2,3].forEach(k=>{const c=document.createElementNS(NS,"circle");c.setAttribute("cx",X(k*Math.PI));c.setAttribute("cy",148);c.setAttribute("r",3.5);c.setAttribute("fill","var(--ok)");g.appendChild(c)});
+  const grid=document.getElementById("grid");
+  for(let x=0;x<=800;x+=40){const l=document.createElementNS(NS,"line");l.setAttribute("x1",x);l.setAttribute("x2",x);l.setAttribute("y1",8);l.setAttribute("y2",192);l.setAttribute("stroke","currentColor");l.setAttribute("opacity",".07");grid.appendChild(l)}
+  for(let y=8;y<=192;y+=45){const l=document.createElementNS(NS,"line");l.setAttribute("y1",y);l.setAttribute("y2",y);l.setAttribute("x1",0);l.setAttribute("x2",800);l.setAttribute("stroke","currentColor");l.setAttribute("opacity",".07");grid.appendChild(l)}
+})();
+
+// theme
+const root=document.documentElement,tbtn=document.getElementById("theme");
+function setTheme(dark){root.dataset.theme=dark?"dark":"light";tbtn.textContent=dark?"Light":"Dark"}
+setTheme(location.hash.includes("dark")||(!location.hash.includes("light")&&matchMedia("(prefers-color-scheme: dark)").matches));
+tbtn.addEventListener("click",()=>setTheme(root.dataset.theme!=="dark"));
+
+// view switch
+const pad=document.getElementById("pad"),term=document.getElementById("term"),insp=document.getElementById("insp"),
+      tabPad=document.getElementById("tab-pad"),tabTerm=document.getElementById("tab-term");
+function setView(t){
+  tabPad.setAttribute("aria-selected",!t);tabTerm.setAttribute("aria-selected",t);
+  pad.hidden=t;term.hidden=!t;insp.classList.toggle("closed",t);
+  if(t)document.getElementById("tin").focus({preventScroll:true});
+}
+tabPad.addEventListener("click",()=>setView(false));
+tabTerm.addEventListener("click",()=>setView(true));
+document.addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key==="."){e.preventDefault();setView(tabTerm.getAttribute("aria-selected")!=="true")}});
+if(location.hash.includes("terminal"))setView(true);
+
+// inspector
+function openInsp(on){insp.classList.toggle("open",on);document.querySelectorAll('.val[data-open]').forEach(v=>v.setAttribute("aria-expanded",on));
+  document.querySelectorAll('.row[data-id="t"]').forEach(r=>r.classList.toggle("active",on))}
+document.getElementById("insp-close").addEventListener("click",()=>openInsp(false));
+document.querySelectorAll(".val[data-open]").forEach(v=>{
+  const t=()=>openInsp(!insp.classList.contains("open"));
+  v.addEventListener("click",t);
+  v.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();t()}});
+});
+insp.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>{
+  insp.querySelectorAll(".tabs button").forEach(x=>x.setAttribute("aria-selected",x===b));
+  insp.querySelectorAll(".pane").forEach(p=>p.classList.toggle("on",p.dataset.pane===b.dataset.pane));
+}));
+if(location.hash.includes("noinsp"))openInsp(false);
+
+// dependency highlight
+const byId={};document.querySelectorAll(".row[data-id]").forEach(r=>byId[r.dataset.id]=r);
+function down(id,acc=new Set()){const r=byId[id];if(!r||!r.dataset.deps)return acc;r.dataset.deps.split(",").forEach(d=>{if(!acc.has(d)){acc.add(d);down(d,acc)}});return acc}
+Object.keys(byId).forEach(id=>{const r=byId[id];
+  r.addEventListener("mouseenter",()=>down(id).forEach(d=>byId[d]&&byId[d].classList.add("dep")));
+  r.addEventListener("mouseleave",()=>down(id).forEach(d=>byId[d]&&byId[d].classList.remove("dep")));
+});
+
+// terminal echo
+document.getElementById("tin").addEventListener("keydown",e=>{
+  if(e.key!=="Enter"||!e.target.value.trim())return;
+  const wrap=document.createElement("div");wrap.className="block cmd";
+  wrap.innerHTML='<div class="in"></div><div class="out">(mockup: engine not wired yet)</div>';
+  wrap.querySelector(".in").textContent=e.target.value;
+  document.querySelector(".term .inner").append(wrap);e.target.value="";
+});
+</script>
+<!-- impeccable-live-start -->
+<script src="http://localhost:8400/live.js?token=7cae2059-42bd-45fc-aac6-a66b058f26af"></script>
+<!-- impeccable-live-end -->
+</body>
+</html>

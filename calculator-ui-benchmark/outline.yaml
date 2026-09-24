@@ -1,0 +1,137 @@
+topic: "Best calculator and math tool UIs (UI/UX benchmark for go-calc)"
+date: 2026-09-22
+time_range: "since 2024"
+
+items:
+  # Notepad / text calculators
+  - name: Soulver
+    category: notepad
+    note: "Notepad-style calculator, results aligned right per line; the reference notepad UX"
+  - name: Numi
+    category: notepad
+    note: "macOS text calculator with natural-language input (Windows/Linux support claims conflict between sources)"
+  - name: Calca
+    category: notepad
+    note: "Live markdown calculator"
+  - name: Parsify Desktop
+    category: notepad
+    note: "Cross-platform OSS notepad calculator; plugins and custom units, privacy-focused"
+  - name: Commercial Soulver alternatives (Notes Calculator, OpalCalc, Numbr, Calculo, NumPad, Napkin)
+    category: notepad
+    note: "Competitive field; freemium models and web versions"
+  - name: Apple Math Notes
+    category: notepad
+    note: "iOS/iPadOS 18+; inline handwritten results, linked variables, opt-in auto-insert on '='"
+  - name: Heynote
+    category: notepad
+    note: "Developer scratchpad with math blocks (Math.js), units, currencies, prev"
+  - name: Obsidian Numerals
+    category: notepad
+    note: "Math code blocks with TeX rendering, => result highlighting, @sum/@total/@prev"
+
+  # Terminal / CLI calculators (closest peers to go-calc)
+  - name: numr
+    category: terminal
+    note: "Rust/Ratatui vim-style TUI notepad calculator; syntax-coloured tokens, currencies, continuation lines"
+  - name: mathypad
+    category: terminal
+    note: "Rust TUI with split notepad/results, line references, developer-oriented units"
+  - name: Numby
+    category: terminal
+    note: "Natural-language CLI/TUI plus macOS app; 300+ currencies offline, 9 UI languages"
+  - name: fend
+    category: terminal
+    note: "Rust arbitrary-precision rational calculator, CLI + web; exact output, complex numbers"
+  - name: Qalculate!
+    category: terminal
+    note: "GTK + CLI; exact/approximate output, units, interval and uncertainty modes"
+  - name: SpeedCrunch
+    category: terminal
+    note: "Keyboard-centric desktop calculator"
+  - name: Numbat
+    category: terminal
+    note: "Unit-aware language, REPL + web playground; v1.17–v1.24 (Dec 2025–Aug 2026) added edit mode, formatting config, unit simplification, better errors"
+  - name: insect.sh
+    category: terminal
+    note: "Terminal-style web calculator with units (Numbat predecessor)"
+  - name: Kalker
+    category: terminal
+    note: "Rust calculator with math syntax, terminal + web"
+  - name: Frink
+    category: terminal
+    note: "Units-aware calculating language"
+  - name: Rink
+    category: terminal
+    note: "Unit-first query calculator in the GNU units tradition (not verified in web pass)"
+  - name: Nushell math mode
+    category: terminal
+    note: "Shell-as-calculator; reference for pipe/shell integration"
+
+  # Graphing / CAS
+  - name: Desmos
+    category: graphing
+    note: "Graphing UI benchmark; includes Audio Trace sonification for accessibility"
+  - name: GeoGebra
+    category: graphing
+    note: "Graphing + CAS"
+  - name: Graphest
+    category: graphing
+    note: "Guaranteed-correct graphing (Tupper-style)"
+  - name: Wolfram|Alpha
+    category: cas
+    note: "Natural-language input, input interpretation, result pods, step-by-step"
+  - name: Mathematica notebooks + Wolfram AI Assistant
+    category: cas
+    note: "Notebook CAS; 14.2/15 chat cells where an LLM writes code and the engine computes"
+  - name: Symbolab
+    category: cas
+    note: "Step-by-step solver"
+  - name: Microsoft Math Solver / Photomath
+    category: cas
+    note: "Camera input + step-by-step"
+  - name: AI math solvers (ChatGPT/Gemini/Claude with code execution)
+    category: cas
+    note: "Trust contrast; 'verified symbolically' marketing claims"
+  - name: Calcpad / CalcpadCE (vs SMath Studio, Mathcad)
+    category: cas
+    note: "Engineering scripts with units rendered as HTML/PDF/Word reports"
+
+  # Launchers / system calculators
+  - name: Raycast calculator
+    category: launcher
+    note: "Instant answers; history (v1.43), swap units, copy unformatted answer, time zones, crypto"
+  - name: Spotlight calculator
+    category: launcher
+    note: "macOS inline instant answers"
+  - name: PowerToys Run / Command Palette calculator
+    category: launcher
+    note: "Windows launcher instant answers"
+  - name: Windows Calculator
+    category: launcher
+    note: "OSS; standard/scientific/programmer/graphing modes, history and memory, date calculation"
+
+  # Notebooks / reactive documents
+  - name: Jupyter / Observable
+    category: notebook
+    note: "Notebook-style computation"
+  - name: marimo / Pluto.jl
+    category: notebook
+    note: "Reactive DAG notebooks; model for dependent-line recalculation"
+
+  # Hardware
+  - name: NumWorks
+    category: hardware
+    note: "Modern hardware calculator UX"
+  - name: Casio fx-CG100 / TI-84 Evo
+    category: hardware
+    note: "2025–2026 redesigns: tabs, icon home screens; modernisation vs discoverability"
+
+  # Components
+  - name: MathLive / MathQuill
+    category: component
+    note: "Math input editor components"
+
+execution:
+  batch_size: 5
+  items_per_agent: 4
+  output_dir: ./results

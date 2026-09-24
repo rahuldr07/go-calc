@@ -1,0 +1,57 @@
+# Product
+
+<!-- impeccable:product-schema 1 -->
+
+## Platform
+
+web
+
+## Stack
+
+Delegated (user asked for a recommendation): Svelte 5 + Vite + CodeMirror 6 for the web UI, static build, maths engine in pure Go compiled to WASM. Astro considered and rejected for the calculator itself (single highly interactive surface); may host future docs/landing pages. CLI (`gocalc`) and terminal REPL share the same Go core.
+
+## Product
+
+go-calc is a calculator and computer algebra system where every answer is either exact or proven, states how uncertain it is and why, and shows where every number came from.
+
+Mechanism: exact rationals by default; midpoint-radius ball arithmetic for irrational results, printing only guaranteed digits; first-order (GUM) measurement uncertainty via forward-mode AD with per-input contribution budgets and correlation; a float64 shadow evaluation that warns, with location, when ordinary floating point would lose digits; provenance for every value (inputs, CODATA 2022 constants with citation, unit definitions); symbolic results (integrals, roots) verified before they are shown; guaranteed graphs that never draw across asymptotes.
+
+## Users
+
+Primary: daily users who come back to calculate — engineering and science students (lab reports, homework), lab and test engineers (measurement budgets), developers (quick maths, unit conversion, exact arithmetic), and everyday money maths (salary, EMI, percentages, lakh/crore formatting).
+
+Secondary: portfolio visitors (hiring managers, engineers) judging engineering depth.
+
+The web surface is designed for daily users first: an editor ready to type into. Demonstrating the product to newcomers must not get in the way of that.
+
+## Principles
+
+1. Say what I read — ambiguous input shows its interpretation; never guess silently.
+2. "I don't know" beats a wrong answer — wide intervals, undecided pixels and "no closed form found" are valid outputs.
+3. Two kinds of doubt, never mixed — guaranteed numeric bounds and statistical uncertainty (±) are displayed differently.
+4. Every warning explains itself — one line by default, `why` for the full story.
+5. Exact by default.
+6. One core — front ends format, never compute.
+
+## Confirmed product decisions
+
+- Web layout: live notepad (input left, answers aligned right, dependent lines recalculate live) with expandable result cards (uncertainty budget, provenance trace, digit guarantee, JSON, inline graphs).
+- Two view modes over the same document and engine, switchable at any time: **Notepad** (the live notepad above) and **Terminal** (CLI-style prompt/response transcript, same commands as the `gocalc` REPL). Switching never loses work; every visual direction must carry both.
+- Editing is hybrid: the line being edited recalculates live, while errors and warnings appear only once the caret leaves the line.
+- An optional keypad: a full scientific instrument (sci, calculus, algebra, matrix, stats, and go-calc's own trust keys) that types into the sheet rather than replacing it, so a key press and typed text are the same thing underneath. Hidden by default on desktop, shown by default on phones, remembered per person. Keys for engines not yet built are visible but inactive and say so.
+- `%` means percent (Soulver-style: `500 + 10%`, `18% of 500`); modulo is `mod`. (Assumed default; user did not object.)
+- Names after a number resolve as units (`5 h` is hours); bare names resolve variable → constant → unit.
+- Indian digit grouping accepted in input and available in output.
+
+## Brand
+
+Name: go-calc (command `gocalc`). Visual identity approved 2026-09-24 and recorded in `DESIGN.md`: work on an emissive void with nothing enclosed, trust read as signal strength, and physical controls (keycaps, knurled knob, amber readout, keypad) at the edge of the work. Built from impeccable catalog worlds `operate-c-cracktro-scroller-queue` and `design-canon-creator-hardware-bench`, in dark and light. Rejected along the way: the mission-control console (too retro, too busy) and a neutral Linear/Raycast-style app (too plain).
+
+## Honesty constraints
+
+Do not claim firsts for things Qalculate! (exact/approx, CODATA, interval mode) or Graphest (guaranteed graphing) already do. Positioning: "a calculator that shows how far to trust its answers". No invented users, benchmarks or adoption numbers.
+
+## Open decisions
+
+- Hosting target (GitHub Pages assumed, unconfirmed).
+- Accessibility bar beyond WCAG 2.2 AA (e.g. screen-reader math output, graph sonification) — undecided.

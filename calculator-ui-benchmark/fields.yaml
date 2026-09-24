@@ -1,0 +1,133 @@
+topic: "Best calculator and math tool UIs (UI/UX benchmark for go-calc)"
+
+categories:
+  - name: Basic Info
+    fields:
+      - name: platform
+        description: "Platforms and surfaces (desktop OS, web, mobile, terminal, hardware)"
+        detail_level: brief
+      - name: license_price
+        description: "License (OSS or proprietary) and pricing model"
+        detail_level: brief
+      - name: url
+        description: "Official site or repository"
+        detail_level: brief
+
+  - name: Input Model
+    fields:
+      - name: input_style
+        description: "Free text, natural language, structured math editor, keypad, handwriting or camera"
+        detail_level: moderate
+      - name: live_evaluation
+        description: "Whether results update while typing, and how fast it feels"
+        detail_level: moderate
+      - name: syntax_highlighting
+        description: "Colouring of numbers, operators, variables, units, errors"
+        detail_level: brief
+      - name: editing_paradigm
+        description: "vim/Emacs bindings, edit modes, multi-cursor, multi-line input"
+        detail_level: moderate
+
+  - name: Interpretation & Trust
+    fields:
+      - name: interpretation_echo
+        description: "Whether the tool shows how it read the input (precedence, implicit multiplication, unit resolution); quality of error messages"
+        detail_level: detailed
+      - name: number_representation
+        description: "float, decimal, rational, arbitrary precision, intervals; how rounding, repeating decimals, overflow are shown; configurable precision"
+        detail_level: detailed
+      - name: trust_signals
+        description: "How precision, error, uncertainty and ambiguity are communicated visually"
+        detail_level: detailed
+      - name: ai_boundary
+        description: "Whether an LLM is in the loop, and how that is disclosed relative to deterministic evaluation"
+        detail_level: moderate
+
+  - name: Output Presentation
+    fields:
+      - name: result_display
+        description: "Exact vs decimal, typeset math, alignment, emphasis of key results"
+        detail_level: detailed
+      - name: unit_display
+        description: "Unit rendering, simplification (J/s → W), conversion UX"
+        detail_level: moderate
+      - name: result_actions
+        description: "Copy formatted/unformatted, swap units, insert into text, pipe to stdout"
+        detail_level: moderate
+
+  - name: Documents & Recalculation
+    fields:
+      - name: recalculation_model
+        description: "Live recalculation of dependent lines, prev/line references, continuation lines"
+        detail_level: detailed
+      - name: aggregation_annotation
+        description: "Comments, headers, labels, sum/total across lines, ignoring non-math text"
+        detail_level: moderate
+      - name: document_model
+        description: "File format, git-friendliness, auto-save, multiple sheets/tabs, report export"
+        detail_level: moderate
+      - name: history_sharing
+        description: "History, persistence, sharing via URL or file"
+        detail_level: moderate
+
+  - name: Units & Data
+    fields:
+      - name: unit_currency_data
+        description: "Unit catalogue size, custom units, temperature offsets, currency rate source and freshness display"
+        detail_level: moderate
+
+  - name: Graphing UX
+    fields:
+      - name: graphing
+        description: "Pan/zoom, trace, marked features (roots, extrema), asymptote handling, correctness guarantees"
+        detail_level: detailed
+
+  - name: Explanations
+    fields:
+      - name: explanations
+        description: "Step-by-step solutions, 'why' explanations, interpretation notes"
+        detail_level: moderate
+
+  - name: Discoverability & Structure
+    fields:
+      - name: discoverability
+        description: "Autocomplete, inline help, examples, onboarding"
+        detail_level: moderate
+      - name: modes
+        description: "Separate modes (scientific, programmer, date, conversion) vs one universal input"
+        detail_level: moderate
+      - name: invocation_surfaces
+        description: "Launcher, CLI one-shot, REPL, TUI, embedded block, web playground, scripting/stdin"
+        detail_level: moderate
+      - name: extensibility
+        description: "Plugins, user-defined functions and units, standard library"
+        detail_level: brief
+
+  - name: Accessibility & Localization
+    fields:
+      - name: keyboard_accessibility
+        description: "Keyboard-only operation, screen-reader support, sonification, MathML/spoken output"
+        detail_level: moderate
+      - name: localization
+        description: "Decimal separators, digit grouping (incl. Indian), UI languages, date formats"
+        detail_level: brief
+
+  - name: Visual Design & Performance
+    fields:
+      - name: visual_design
+        description: "Theme, typography, density, colour, motion"
+        detail_level: detailed
+      - name: offline_privacy_performance
+        description: "Network use, startup time, per-keystroke latency"
+        detail_level: brief
+
+  - name: Takeaways for go-calc
+    fields:
+      - name: ideas_to_borrow
+        description: "Concrete UI ideas go-calc should adopt"
+        detail_level: detailed
+      - name: pitfalls
+        description: "UI mistakes or weaknesses go-calc should avoid"
+        detail_level: moderate
+
+uncertain: []

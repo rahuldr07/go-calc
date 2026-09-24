@@ -1,0 +1,12 @@
+c	speed of light in vacuum	299792458	0	m/s	exact
+h	Planck constant	662607015e-42	0	J·s	exact
+hbar	reduced Planck constant	1054571817e-43	0	J·s	exact
+e_charge	elementary charge	1602176634e-28	0	C	exact
+k_B	Boltzmann constant	1380649e-29	0	J/K	exact
+N_A	Avogadro constant	602214076e15	0	1/mol	exact
+g0	standard acceleration of gravity	980665e-5	0	m/s^2	exact
+G	Newtonian constant of gravitation	667430e-16	15e-16	m^3/(kg·s^2)	measured
+m_e	electron mass	91093837139e-42	28e-42	kg	measured
+m_p	proton mass	167262192595e-38	52e-38	kg	measured
+alpha	fine-structure constant	72973525643e-13	11e-13		measured
+R	molar gas constant	8314462618e-9	0	J/(mol·K)	exact
