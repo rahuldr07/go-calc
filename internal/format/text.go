@@ -40,6 +40,9 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 			b.WriteString("\n  " + note)
 		}
 	}
+	if note := covarianceNote(v); note != "" {
+		b.WriteString("\n  " + note)
+	}
 	if v.Unc.Warning != "" {
 		b.WriteString("\n  " + v.Unc.Warning)
 	}
@@ -282,4 +285,13 @@ func exactSignificantDigits(r *big.Rat) int {
 		return 0
 	}
 	return len(scaled.String())
+}
+
+func covarianceNote(v value.Value) string {
+	for _, c := range v.Unc.Budget {
+		if c.Covariance {
+			return "the budget includes a covariance term from declared correlation"
+		}
+	}
+	return ""
 }

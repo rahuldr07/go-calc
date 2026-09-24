@@ -31,11 +31,12 @@ type contributionOut struct {
 	Share       float64 `json:"share"`
 	Sigma       float64 `json:"sigma"`
 	Sensitivity float64 `json:"sensitivity"`
+	Covariance  bool    `json:"covariance,omitempty"`
 }
 
 type uncertaintyOut struct {
-	Value    string            `json:"value"`
-	Reported string            `json:"reported"`
+	Value    string            `json:"value,omitempty"`
+	Reported string            `json:"reported,omitempty"`
 	Standard float64           `json:"standard"`
 	Coverage string            `json:"coverage,omitempty"`
 	Factor   float64           `json:"factor,omitempty"`
@@ -107,7 +108,7 @@ func (s Style) provenExact(r *big.Rat) (string, int) {
 
 func uncertainty(v value.Value) *uncertaintyOut {
 	mid, reported, ok := Default.Uncertain(v)
-	if !ok {
+	if !ok && v.Unc.Warning == "" {
 		return nil
 	}
 	scale := 1.0
@@ -128,6 +129,7 @@ func uncertainty(v value.Value) *uncertaintyOut {
 			Share:       c.Share,
 			Sigma:       c.Sigma,
 			Sensitivity: c.Sensitivity,
+			Covariance:  c.Covariance,
 		})
 	}
 	return out

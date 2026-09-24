@@ -1,6 +1,7 @@
 package eval
 
 import (
+	"errors"
 	"math"
 	"strings"
 	"testing"
@@ -346,5 +347,139 @@ func TestNonlinearityIsNotCheckedSilentlyWhenCorrelated(t *testing.T) {
 	w := mustEval(t, env, "a + b")
 	if w.Unc.Warning != "" {
 		t.Errorf("a linear expression was annotated: %q", w.Unc.Warning)
+	}
+}
+
+func TestAStationaryPointIsNotReportedAsCertain(t *testing.T) {
+	for _, src := range []string{"cos(x)", "x * x", "x ^ 2"} {
+		env := NewEnv()
+		run(t, env, "x = 0 ± 1")
+		v := mustEval(t, env, src)
+		if len(v.Curv) == 0 {
+			t.Errorf("%s: the curvature was discarded at the stationary point", src)
+		}
+		if env.Uncertainty(v) != 0 {
+			t.Errorf("%s: first-order uncertainty should cancel to zero", src)
+		}
+		if v.Unc.Warning != unc.NonlinearWarning {
+			t.Errorf("%s: warning = %q, want the first-order warning", src, v.Unc.Warning)
+		}
+		if !strings.Contains(format.Text(v, nil), unc.NonlinearWarning) {
+			t.Errorf("%s: the warning did not reach the output: %q", src, format.Text(v, nil))
+		}
+	}
+	env := NewEnv()
+	run(t, env, "x = 10 ± 1")
+	v := mustEval(t, env, "x - x")
+	if len(v.Curv) != 0 {
+		t.Errorf("x - x grew a curvature: %v", v.Curv)
+	}
+	if v.Unc.Warning != "" {
+		t.Errorf("x - x was annotated: %q", v.Unc.Warning)
+	}
+	if got := format.Text(v, nil); got != "0" {
+		t.Errorf("x - x = %q, want 0", got)
+	}
+}
+
+func TestSelfQuotientIsExactlyOne(t *testing.T) {
+	for _, mid := range []string{"0.1", "3.7", "12.3", "7", "1e-3", "6.02e23"} {
+		env := NewEnv()
+		run(t, env, "x = "+mid+" ± 1")
+		v := mustEval(t, env, "x / x")
+		if u := env.Uncertainty(v); u != 0 {
+			t.Errorf("u(x/x) at %s = %g, want exactly 0", mid, u)
+		}
+		if len(v.Curv) != 0 {
+			t.Errorf("x/x at %s kept a curvature: %v", mid, v.Curv)
+		}
+		if got := format.Text(v, nil); got != "1" {
+			t.Errorf("x/x at %s = %q, want a bare 1", mid, got)
+		}
+	}
+}
+
+func TestAnOverflowingSensitivityIsNotBlamedOnCorrelation(t *testing.T) {
+	env := NewEnv()
+	n, _, err := parse.Parse("1e400 * (2 ± 1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = env.Eval(n)
+	if err == nil {
+		t.Fatal("an overflowing sensitivity produced a number")
+	}
+	if !errors.Is(err, unc.ErrSensitivityOverflow) {
+		t.Errorf("error = %v, want the overflow error", err)
+	}
+	if strings.Contains(err.Error(), "correlation") {
+		t.Errorf("error blames correlation the user never declared: %v", err)
+	}
+}
+
+func TestACorrelatedBudgetPartitions(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "a = 10 ± 1")
+	run(t, env, "b = 10 ± 2")
+	run(t, env, "corr(a, b) = -1")
+	v := mustEval(t, env, "a + b")
+	if u := env.Uncertainty(v); math.Abs(u-1) > 1e-12 {
+		t.Fatalf("u = %g, want 1", u)
+	}
+	cs := v.Unc.Budget
+	if len(cs) != 3 {
+		t.Fatalf("budget = %+v, want two inputs and a covariance row", cs)
+	}
+	last := cs[2]
+	if !last.Covariance || last.Name != unc.CovarianceName {
+		t.Errorf("last row = %+v, want the covariance row", last)
+	}
+	if math.Abs(last.Share+4) > 1e-9 {
+		t.Errorf("covariance share = %g, want -4", last.Share)
+	}
+	total := 0.0
+	for _, c := range cs {
+		total += c.Share
+	}
+	if math.Abs(total-1) > 1e-9 {
+		t.Errorf("shares sum to %g, want 1", total)
+	}
+	if !strings.Contains(format.Text(v, nil), "covariance term from declared correlation") {
+		t.Errorf("text does not mention the covariance term: %q", format.Text(v, nil))
+	}
+	out, err := format.JSON("a + b", v, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), `"covariance": true`) {
+		t.Errorf("JSON does not flag the covariance row: %s", out)
+	}
+}
+
+func TestAnUncorrelatedBudgetHasNoCovarianceRow(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "a = 10 ± 1")
+	run(t, env, "b = 10 ± 2")
+	v := mustEval(t, env, "a + b")
+	for _, c := range v.Unc.Budget {
+		if c.Covariance {
+			t.Errorf("an uncorrelated budget grew a covariance row: %+v", c)
+		}
+	}
+	if strings.Contains(format.Text(v, nil), "covariance") {
+		t.Errorf("text mentions covariance with none declared: %q", format.Text(v, nil))
+	}
+}
+
+func TestAStationaryPointWarnsInJSONToo(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "x = 0 ± 1")
+	v := mustEval(t, env, "x * x")
+	out, err := format.JSON("x * x", v, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), unc.NonlinearWarning) {
+		t.Errorf("JSON dropped the warning: %s", out)
 	}
 }

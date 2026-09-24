@@ -47,7 +47,7 @@ func (e *Env) EvalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
 }
 
 func (e *Env) report(v value.Value) (value.Value, error) {
-	if !v.IsMeasured() {
+	if !v.IsMeasured() && len(v.Curv) == 0 {
 		return v, nil
 	}
 	if err := e.table.Check(v.Sens); err != nil {

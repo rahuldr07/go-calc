@@ -459,8 +459,9 @@ func TestCorrelationDeclaredOnOneLineReachesALaterLine(t *testing.T) {
 		"corr(a, b) = 1",
 		"a + b",
 	})
-	if got := numbers(lines)[3]; got != "20.0 ± 2.0" {
-		t.Errorf("a + b = %q, want 20.0 ± 2.0", got)
+	want := "20.0 ± 2.0\n  the budget includes a covariance term from declared correlation"
+	if got := numbers(lines)[3]; got != want {
+		t.Errorf("a + b = %q, want %q", got, want)
 	}
 }
 
@@ -477,7 +478,7 @@ func TestEditingTheCorrelationReevaluatesWhatUsesIt(t *testing.T) {
 		t.Errorf("changed lines = %v, want [2 3]", indices(changed))
 	}
 	if got := numbers(d.Lines())[3]; got != "20.0 ± 1.4" {
-		t.Errorf("a + b = %q, want 20.0 ± 1.4", got)
+		t.Errorf("a + b = %q, want 20.0 ± 1.4 with no covariance note", got)
 	}
 }
 

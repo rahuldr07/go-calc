@@ -12,7 +12,10 @@ type Contribution struct {
 	Share       float64
 	Sigma       float64
 	Sensitivity float64
+	Covariance  bool
 }
+
+const CovarianceName = "declared correlation"
 
 type Coverage struct {
 	K     float64
@@ -32,16 +35,19 @@ const UncheckedWarning = "nonlinearity not checked: inputs are correlated"
 
 func (t *Table) Contributions(s Sens) []Contribution {
 	u := t.Combined(s)
-	if u == 0 {
+	if u == 0 || math.IsNaN(u) {
 		return nil
 	}
-	out := make([]Contribution, 0, len(s))
+	out := make([]Contribution, 0, len(s)+1)
+	alone := 0.0
 	for _, id := range ids(s) {
 		c := s[id]
 		sigma := t.sigma(id)
+		term := (c * sigma) * (c * sigma)
+		alone += term
 		out = append(out, Contribution{
 			Name:        t.name(id),
-			Share:       (c * sigma) * (c * sigma) / (u * u),
+			Share:       term / (u * u),
 			Sigma:       sigma,
 			Sensitivity: c,
 		})
@@ -55,10 +61,16 @@ func (t *Table) Contributions(s Sens) []Contribution {
 		}
 		return strings.Compare(a.Name, b.Name)
 	})
+	if cov := t.Variance(s) - alone; math.Abs(cov) > 1e-12*u*u {
+		out = append(out, Contribution{Name: CovarianceName, Share: cov / (u * u), Covariance: true})
+	}
 	return out
 }
 
 func (t *Table) SecondOrder(s Sens, h Curv) float64 {
+	if t.Check(s) != nil {
+		return math.NaN()
+	}
 	extra := 0.0
 	for p, v := range h {
 		si, sj := t.sigma(p.A), t.sigma(p.B)
@@ -76,18 +88,22 @@ func (t *Table) SecondOrder(s Sens, h Curv) float64 {
 }
 
 func (t *Table) NonlinearityUnchecked(s Sens, h Curv) bool {
-	return len(h) > 0 && t.Correlated(s)
+	return len(h) > 0 && t.correlatedAmong(involved(s, h))
 }
 
 func (t *Table) Nonlinear(s Sens, h Curv) bool {
-	if len(h) == 0 || t.Correlated(s) {
+	if t.NonlinearityUnchecked(s, h) || len(h) == 0 {
 		return false
 	}
 	u := t.Combined(s)
-	if u == 0 {
+	second := t.SecondOrder(s, h)
+	if math.IsNaN(u) || math.IsNaN(second) {
 		return false
 	}
-	return math.Abs(t.SecondOrder(s, h)-u)/u > 0.1
+	if u == 0 {
+		return second > 0
+	}
+	return math.Abs(second-u)/u > 0.1
 }
 
 func FactorFor(p float64) (float64, bool) {

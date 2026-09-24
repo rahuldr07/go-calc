@@ -85,3 +85,34 @@ func TestCelsiusIsAffine(t *testing.T) {
 		t.Errorf("20 degC = %s K, want 5863/20", got)
 	}
 }
+
+func TestSISymbolParenthesisesAMultipleDenominator(t *testing.T) {
+	cases := []struct {
+		dim  Dim
+		want string
+	}{
+		{Dim{1, 0, -1, 0, -1, 0, 0, 0}, "m/(s·K)"},
+		{Dim{1, 0, -1, 0, 0, 0, 0, 0}, "m/s"},
+		{Dim{1, 0, -2, 0, 0, 0, 0, 0}, "m/s^2"},
+		{Dim{0, 0, -1, 0, -1, 0, 0, 0}, "1/(s·K)"},
+		{Dim{0, 0, -1, 0, 0, 0, 0, 0}, "1/s"},
+		{Dim{2, 1, -2, 0, 0, 0, 0, 0}, "m^2·kg/s^2"},
+		{Dim{}, ""},
+	}
+	for _, c := range cases {
+		if got := SISymbol(c.dim); got != c.want {
+			t.Errorf("SISymbol(%v) = %q, want %q", c.dim, got, c.want)
+		}
+		if c.want == "" {
+			continue
+		}
+		u, ok := Lookup(c.want)
+		if !ok {
+			t.Errorf("SISymbol(%v) = %q does not parse back", c.dim, c.want)
+			continue
+		}
+		if u.Dim != c.dim {
+			t.Errorf("%q parses back as %v, want %v", c.want, u.Dim, c.dim)
+		}
+	}
+}

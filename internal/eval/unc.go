@@ -289,7 +289,8 @@ func quotientJet(l, r value.Value, prec uint) (unc.Jet, error) {
 	if b == 0 {
 		return unc.Jet{}, errOutsideDomain
 	}
-	return unc.Compose(l.Jet(), 1/b, 0, r.Jet(), -a/(b*b), 2*a/(b*b*b), -1/(b*b)), nil
+	q := a / b
+	return unc.Compose(l.Jet(), 1/b, 0, r.Jet(), -q/b, 2*q/(b*b), -1/(b*b)), nil
 }
 
 func sumJet(l, r value.Value, op string) unc.Jet {

@@ -218,9 +218,16 @@ func SISymbol(d Dim) string {
 	case len(pos) == 0 && len(neg) == 0:
 		return ""
 	case len(pos) == 0:
-		return "1/" + strings.Join(neg, "·")
+		return "1/" + denominator(neg)
 	case len(neg) == 0:
 		return strings.Join(pos, "·")
 	}
-	return strings.Join(pos, "·") + "/" + strings.Join(neg, "·")
+	return strings.Join(pos, "·") + "/" + denominator(neg)
+}
+
+func denominator(neg []string) string {
+	if len(neg) == 1 {
+		return neg[0]
+	}
+	return "(" + strings.Join(neg, "·") + ")"
 }

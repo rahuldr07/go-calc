@@ -1,6 +1,7 @@
 package unc
 
 import (
+	"errors"
 	"math"
 	"testing"
 )
@@ -244,5 +245,103 @@ func TestNonlinearityUncheckedIsDistinctFromLinear(t *testing.T) {
 	}
 	if tab.NonlinearityUnchecked(s, nil) {
 		t.Error("a linear expression was reported as unchecked")
+	}
+}
+
+func TestCurvatureSurvivesAVanishingGradient(t *testing.T) {
+	x := Jet{Grad: Sens{1: 1}}
+	z := Compose(x, 0, 0, x, 0, 0, 1)
+	if len(z.Grad) != 0 {
+		t.Errorf("grad = %v, want empty at a stationary point", z.Grad)
+	}
+	if got := z.Hess[Pair{A: 1, B: 1}]; got != 2 {
+		t.Errorf("hess = %g, want 2: the curvature must outlive the gradient", got)
+	}
+	flat := Compose(x, 1, 0, x, -1, 0, 0)
+	if len(flat.Grad) != 0 || len(flat.Hess) != 0 {
+		t.Errorf("x - x = %+v, want an empty jet", flat)
+	}
+}
+
+func TestNonlinearityIsFlaggedAtAStationaryPoint(t *testing.T) {
+	tab := NewTable()
+	a := tab.Declare("a", 0, 1, 1)
+	h := Curv{Pair{A: a, B: a}: 2}
+	if u := tab.Combined(nil); u != 0 {
+		t.Fatalf("Combined = %g, want 0", u)
+	}
+	if !tab.Nonlinear(nil, h) {
+		t.Error("a stationary point with curvature was not flagged")
+	}
+	if tab.Nonlinear(nil, nil) {
+		t.Error("a flat expression was flagged")
+	}
+}
+
+func TestNonFiniteSensitivitiesAreNamedForWhatTheyAre(t *testing.T) {
+	tab := NewTable()
+	a := tab.Declare("a", 0, 1, 1)
+	if err := tab.Check(Sens{a: math.Inf(1)}); !errors.Is(err, ErrSensitivityOverflow) {
+		t.Errorf("Check on an infinite sensitivity = %v, want the overflow error", err)
+	}
+	if err := tab.Check(Sens{a: math.NaN()}); !errors.Is(err, ErrSensitivityUndefined) {
+		t.Errorf("Check on a NaN sensitivity = %v, want the undefined error", err)
+	}
+	b := tab.Declare("b", 0, math.Inf(1), 1)
+	if err := tab.Check(Sens{b: 1}); !errors.Is(err, ErrSensitivityOverflow) {
+		t.Errorf("Check on an infinite sigma = %v, want the overflow error", err)
+	}
+	if u := tab.Combined(Sens{a: math.Inf(1)}); !math.IsNaN(u) {
+		t.Errorf("Combined on an infinite sensitivity = %g, want NaN", u)
+	}
+	if cs := tab.Contributions(Sens{a: math.Inf(1)}); cs != nil {
+		t.Errorf("Contributions on an infinite sensitivity = %+v, want none", cs)
+	}
+}
+
+func TestCombinedRefusesAnImpossibleMatrixInsteadOfClampingToZero(t *testing.T) {
+	tab := NewTable()
+	a := tab.Declare("a", 0, 1, 1)
+	b := tab.Declare("b", 0, 1, 1)
+	c := tab.Declare("c", 0, 1, 1)
+	for _, pair := range [][2]InputID{{a, b}, {a, c}, {b, c}} {
+		if err := tab.SetCorr(pair[0], pair[1], -1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if u := tab.Combined(Sens{a: 1, b: 1, c: 1}); !math.IsNaN(u) {
+		t.Errorf("Combined = %g, want NaN rather than a clamped 0", u)
+	}
+}
+
+func TestCovarianceRowMakesTheSharesPartition(t *testing.T) {
+	tab := NewTable()
+	a := tab.Declare("a", 10, 1, 1)
+	b := tab.Declare("b", 10, 2, 2)
+	if err := tab.SetCorr(a, b, -1); err != nil {
+		t.Fatal(err)
+	}
+	s := Sens{a: 1, b: 1}
+	if u := tab.Combined(s); !near(u, 1, 1e-12) {
+		t.Fatalf("Combined = %g, want 1", u)
+	}
+	cs := tab.Contributions(s)
+	if len(cs) != 3 {
+		t.Fatalf("budget = %+v, want a covariance row", cs)
+	}
+	if !cs[2].Covariance || !near(cs[2].Share, -4, 1e-9) {
+		t.Errorf("covariance row = %+v, want share -4", cs[2])
+	}
+	total := 0.0
+	for _, c := range cs {
+		total += c.Share
+	}
+	if !near(total, 1, 1e-9) {
+		t.Errorf("shares sum to %g, want 1", total)
+	}
+	for _, c := range tab.Contributions(Sens{a: 1}) {
+		if c.Covariance {
+			t.Errorf("a single input grew a covariance row: %+v", c)
+		}
 	}
 }

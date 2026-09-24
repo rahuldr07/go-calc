@@ -35,25 +35,16 @@ type Table struct {
 
 var ErrInconsistentCorrelation = errors.New("the declared correlations are not consistent: no real combined uncertainty exists")
 
+var ErrSensitivityOverflow = errors.New("no uncertainty can be reported here: a sensitivity or an uncertainty is larger than a 64-bit float can hold")
+
+var ErrSensitivityUndefined = errors.New("no uncertainty can be reported here: a sensitivity is not a number")
+
 func NewTable() *Table { return &Table{corr: map[Pair]float64{}} }
 
 func (t *Table) Declare(name string, value, sigma float64, line int) InputID {
 	id := InputID(len(t.inputs))
 	t.inputs = append(t.inputs, Input{ID: id, Name: name, Value: value, Sigma: math.Abs(sigma), Line: line})
 	return id
-}
-
-func (t *Table) Rename(id InputID, name string) {
-	if t.valid(id) {
-		t.inputs[id].Name = name
-	}
-}
-
-func (t *Table) Lookup(id InputID) (Input, bool) {
-	if !t.valid(id) {
-		return Input{}, false
-	}
-	return t.inputs[id], true
 }
 
 func (t *Table) SetCorr(a, b InputID, rho float64) error {
@@ -73,16 +64,29 @@ func (t *Table) SetCorr(a, b InputID, rho float64) error {
 	return nil
 }
 
-func (t *Table) Correlated(s Sens) bool {
-	ids := ids(s)
-	for i, a := range ids {
-		for _, b := range ids[i+1:] {
+func (t *Table) Correlated(s Sens) bool { return t.correlatedAmong(ids(s)) }
+
+func (t *Table) correlatedAmong(order []InputID) bool {
+	for i, a := range order {
+		for _, b := range order[i+1:] {
 			if t.corr[key(a, b)] != 0 {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+func involved(s Sens, h Curv) []InputID {
+	set := make(map[InputID]bool, len(s)+2*len(h))
+	for id := range s {
+		set[id] = true
+	}
+	for p := range h {
+		set[p.A] = true
+		set[p.B] = true
+	}
+	return slices.Sorted(maps.Keys(set))
 }
 
 func (t *Table) Variance(s Sens) float64 {
@@ -100,6 +104,9 @@ func (t *Table) Combined(s Sens) float64 {
 	if len(s) == 0 {
 		return 0
 	}
+	if err := t.Check(s); err != nil {
+		return math.NaN()
+	}
 	v := t.Variance(s)
 	if v <= 0 {
 		return 0
@@ -111,7 +118,18 @@ func (t *Table) Check(s Sens) error {
 	if len(s) == 0 {
 		return nil
 	}
+	for _, id := range ids(s) {
+		if err := finite(s[id]); err != nil {
+			return err
+		}
+		if err := finite(t.sigma(id)); err != nil {
+			return err
+		}
+	}
 	v := t.Variance(s)
+	if err := finite(v); err != nil {
+		return err
+	}
 	if v >= 0 {
 		return nil
 	}
@@ -123,6 +141,16 @@ func (t *Table) Check(s Sens) error {
 		return nil
 	}
 	return ErrInconsistentCorrelation
+}
+
+func finite(x float64) error {
+	switch {
+	case math.IsNaN(x):
+		return ErrSensitivityUndefined
+	case math.IsInf(x, 0):
+		return ErrSensitivityOverflow
+	}
+	return nil
 }
 
 func (t *Table) valid(id InputID) bool { return id >= 0 && int(id) < len(t.inputs) }
@@ -201,11 +229,11 @@ func Compose(a Jet, fa, faa float64, b Jet, fb, fbb, fab float64) Jet {
 			delete(hess, p)
 		}
 	}
-	if len(grad) == 0 {
-		return Jet{}
-	}
 	if len(hess) == 0 {
 		hess = nil
+	}
+	if len(grad) == 0 && hess == nil {
+		return Jet{}
 	}
 	return Jet{Grad: grad, Hess: hess}
 }
