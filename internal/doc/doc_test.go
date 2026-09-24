@@ -159,14 +159,107 @@ func TestFailingLineLeavesIndependentLinesAlone(t *testing.T) {
 	}
 }
 
-func TestDependentOfAFailingLineFails(t *testing.T) {
+func TestDependentOfAFailingLineNamesTheFailure(t *testing.T) {
 	d := New()
 	lines := d.SetLines([]string{"bad = 5 m + 3 s", "uses = bad + 1", "fine = 1 + 1"})
 	if lines[1].Err == nil {
-		t.Error("line 1 should have failed with its input missing")
+		t.Fatal("line 1 should have failed with its input missing")
+	}
+	if got, want := lines[1].Err.Error(), "uses bad, which failed on line 1"; got != want {
+		t.Errorf("line 1 error = %q, want %q", got, want)
 	}
 	if lines[2].Err != nil || text(lines[2].Value) != "2" {
 		t.Errorf("line 2 = %v %q, want 2", lines[2].Err, text(lines[2].Value))
+	}
+}
+
+func TestDependentNamesEveryFailedInput(t *testing.T) {
+	d := New()
+	lines := d.SetLines([]string{"bad = 5 m + 3 s", "worse = 1 kg + 2 s", "uses = bad + worse"})
+	if lines[2].Err == nil {
+		t.Fatal("line 2 should have failed")
+	}
+	want := "uses bad, worse, which failed on lines 1, 2"
+	if got := lines[2].Err.Error(); got != want {
+		t.Errorf("line 2 error = %q, want %q", got, want)
+	}
+}
+
+func TestFailureExplanationTravelsDownTheChain(t *testing.T) {
+	d := New()
+	lines := d.SetLines([]string{"bad = 5 m + 3 s", "mid = bad * 2", "far = mid * 2"})
+	if got, want := lines[2].Err.Error(), "uses mid, which failed on line 2"; got != want {
+		t.Errorf("line 2 error = %q, want %q", got, want)
+	}
+	changed := d.Edit(0, "bad = 5 m + 3 m")
+	if got := indices(changed); !reflect.DeepEqual(got, []int{0, 1, 2}) {
+		t.Fatalf("changed = %v, want [0 1 2]", got)
+	}
+	if got, want := numbers(d.Lines()), []string{"8 m", "16 m", "32 m"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("after the fix = %v, want %v", got, want)
+	}
+}
+
+func TestEditCanIntroduceACycle(t *testing.T) {
+	d := New()
+	got := numbers(d.SetLines([]string{"a = 1", "b = a + 1"}))
+	if want := []string{"1", "2"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("first pass = %v, want %v", got, want)
+	}
+	changed := d.Edit(0, "a = b + 1")
+	if idx := indices(changed); !reflect.DeepEqual(idx, []int{0, 1}) {
+		t.Fatalf("changed = %v, want [0 1]", idx)
+	}
+	for _, l := range d.Lines() {
+		if l.Err == nil || l.Err.Error() != "this line depends on itself" {
+			t.Errorf("line %d error = %v, want this line depends on itself", l.N, l.Err)
+		}
+	}
+}
+
+func TestEditCanBreakACycle(t *testing.T) {
+	d := New()
+	d.SetLines([]string{"a = b + 1", "b = a + 1"})
+	changed := d.Edit(0, "a = 1")
+	if idx := indices(changed); !reflect.DeepEqual(idx, []int{0, 1}) {
+		t.Fatalf("changed = %v, want [0 1]", idx)
+	}
+	if got, want := numbers(d.Lines()), []string{"1", "2"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("after the edit = %v, want %v", got, want)
+	}
+}
+
+func TestEditFromDefinitionToPlainExpression(t *testing.T) {
+	d := New()
+	d.SetLines([]string{"a = 2", "b = a * 3", "c = 99"})
+	changed := d.Edit(0, "7 + 1")
+	if idx := indices(changed); !reflect.DeepEqual(idx, []int{0, 1}) {
+		t.Fatalf("changed = %v, want [0 1]", idx)
+	}
+	lines := d.Lines()
+	if lines[0].Err != nil || text(lines[0].Value) != "8" {
+		t.Errorf("line 0 = %v %q, want 8", lines[0].Err, text(lines[0].Value))
+	}
+	if lines[1].Err == nil {
+		t.Error("line 1 should fail once nothing defines a")
+	}
+	if text(lines[2].Value) != "99" {
+		t.Errorf("line 2 = %q, want 99", text(lines[2].Value))
+	}
+}
+
+func TestEditFromPlainExpressionToDefinition(t *testing.T) {
+	d := New()
+	d.SetLines([]string{"7 + 1", "b = a * 3"})
+	if d.Lines()[1].Err == nil {
+		t.Fatal("line 1 should fail while nothing defines a")
+	}
+	changed := d.Edit(0, "a = 2")
+	if idx := indices(changed); !reflect.DeepEqual(idx, []int{0, 1}) {
+		t.Fatalf("changed = %v, want [0 1]", idx)
+	}
+	if got := text(d.Lines()[1].Value); got != "6" {
+		t.Errorf("line 1 = %q, want 6", got)
 	}
 }
 

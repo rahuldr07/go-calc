@@ -114,3 +114,25 @@ func TestRunFileReportsACycle(t *testing.T) {
 		t.Errorf("out = %q, want the independent line still evaluated", out)
 	}
 }
+
+func TestRunFileExplainsADependentOfAFailedLine(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sheet.calc")
+	body := "bad = 5 m + 3 s\nuses = bad + 1\nfine = 1 + 1\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, code := runFile(path, plain, false)
+	if code == 0 {
+		t.Fatalf("want non-zero exit, got %q", out)
+	}
+	if !strings.Contains(out, "line 2: uses bad, which failed on line 1") {
+		t.Errorf("out = %q, want the dependent to name the line it depends on", out)
+	}
+	if strings.Contains(out, "unknown name bad") {
+		t.Errorf("out = %q, leaked a raw evaluator error", out)
+	}
+	if !strings.Contains(out, "= 2") {
+		t.Errorf("out = %q, want the independent line still evaluated", out)
+	}
+}

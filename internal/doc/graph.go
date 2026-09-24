@@ -2,6 +2,7 @@ package doc
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/rahuldr07/go-calc/internal/parse"
@@ -210,4 +211,22 @@ func usedBeforeDefined(names []string) error {
 		return errors.New("uses " + names[0] + " before it is defined")
 	}
 	return errors.New("uses " + strings.Join(names, ", ") + " before they are defined")
+}
+
+func dependsOnFailure(names []string, at []int) error {
+	switch len(names) {
+	case 0:
+		return nil
+	case 1:
+		return errors.New("uses " + names[0] + ", which failed on line " + strconv.Itoa(at[0]))
+	}
+	return errors.New("uses " + strings.Join(names, ", ") + ", which failed on lines " + joinInts(at))
+}
+
+func joinInts(xs []int) string {
+	parts := make([]string, len(xs))
+	for i, x := range xs {
+		parts[i] = strconv.Itoa(x)
+	}
+	return strings.Join(parts, ", ")
 }

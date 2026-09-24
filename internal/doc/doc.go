@@ -136,6 +136,7 @@ func read(src string) *entry {
 func (d *Doc) evaluate(i int) {
 	e := d.lines[i]
 	e.value, e.err, e.warning = value.Value{}, nil, ""
+	broken := d.brokenInputs(i)
 	switch {
 	case e.node == nil:
 		e.err = e.parseErr
@@ -143,9 +144,24 @@ func (d *Doc) evaluate(i int) {
 		e.err = errCycle
 	case len(e.fwd) > 0:
 		e.err = usedBeforeDefined(e.fwd)
+	case broken != nil:
+		e.err = broken
 	default:
 		e.value, e.err = d.evaluator(d.env(i), e.node)
 	}
+}
+
+func (d *Doc) brokenInputs(i int) error {
+	var names []string
+	var at []int
+	for _, j := range d.lines[i].deps {
+		if j == i || d.lines[j].err == nil {
+			continue
+		}
+		names = append(names, d.lines[j].def)
+		at = append(at, j+1)
+	}
+	return dependsOnFailure(names, at)
 }
 
 func (d *Doc) env(i int) *eval.Env {
