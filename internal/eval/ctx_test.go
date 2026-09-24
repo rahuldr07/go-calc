@@ -14,13 +14,13 @@ import (
 
 func TestProvenDigitsForFamousValue(t *testing.T) {
 	env := NewEnv()
-	ctx := DefaultCtx()
-	ctx.Digits = 35
+	ctx := provingCtx(t, 35)
 	n, _, _ := parse.Parse("exp(pi * sqrt(163))")
 	v, err := env.EvalCtx(n, ctx)
 	if err != nil {
 		t.Fatalf("eval: %v", err)
 	}
+	mustProve(t, v, "exp(pi * sqrt(163))")
 	if ctx.Prec <= DefaultCtx().Prec {
 		t.Fatalf("precision stayed at %d, but 35 digits need more than the default", ctx.Prec)
 	}
@@ -64,6 +64,7 @@ func TestRetryStopsAtTheCapAndSaysSo(t *testing.T) {
 	ctx := DefaultCtx()
 	ctx.Digits = 400
 	ctx.MaxPrec = 160
+	ctx.Deadline = time.Now().Add(time.Hour)
 	n, _, _ := parse.Parse("sqrt(2)")
 	v, err := env.EvalCtx(n, ctx)
 	if err != nil {
@@ -83,13 +84,13 @@ func TestRetryStopsAtTheCapAndSaysSo(t *testing.T) {
 
 func TestRetryRaisesPrecisionUntilTheDigitsAreThere(t *testing.T) {
 	env := NewEnv()
-	ctx := DefaultCtx()
-	ctx.Digits = 200
+	ctx := provingCtx(t, 200)
 	n, _, _ := parse.Parse("sqrt(2)")
 	v, err := env.EvalCtx(n, ctx)
 	if err != nil {
 		t.Fatalf("eval: %v", err)
 	}
+	mustProve(t, v, "sqrt(2)")
 	if ctx.Prec <= 120 {
 		t.Fatalf("precision stayed at %d, want the retry loop to raise it", ctx.Prec)
 	}
@@ -204,12 +205,14 @@ func TestIrrationalConstantsResolveAndCanBeShadowed(t *testing.T) {
 
 func TestProvableZeroIsPrintedAsZeroNotAsARange(t *testing.T) {
 	env := NewEnv()
-	ctx := DefaultCtx()
-	ctx.Digits = 30
+	ctx := provingCtx(t, 30)
 	n, _, _ := parse.Parse("sqrt(2) - sqrt(2)")
 	v, err := env.EvalCtx(n, ctx)
 	if err != nil {
 		t.Fatalf("eval: %v", err)
+	}
+	if v.Stopped == value.StopDeadline {
+		t.Fatal("the retry loop hit its deadline, so this run proves nothing")
 	}
 	b := v.Num.Ball(ctx.Prec)
 	if !b.Contains(new(big.Float)) {
@@ -226,6 +229,7 @@ func TestCapReachedIsNamedOnlyWhenItIs(t *testing.T) {
 	ctx := DefaultCtx()
 	ctx.Digits = 400
 	ctx.MaxPrec = 160
+	ctx.Deadline = time.Now().Add(time.Hour)
 	n, _, _ := parse.Parse("sqrt(2)")
 	v, err := env.EvalCtx(n, ctx)
 	if err != nil {
@@ -302,11 +306,12 @@ func TestCancellationDoesNotCollapseToZero(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parse %q: %v", c.src, err)
 		}
-		ctx := DefaultCtx()
+		ctx := provingCtx(t, DefaultCtx().Digits)
 		v, err := NewEnv().EvalCtx(n, ctx)
 		if err != nil {
 			t.Fatalf("eval %q: %v", c.src, err)
 		}
+		mustProve(t, v, c.src)
 		b := v.Num.Ball(ctx.Prec)
 		if text := format.Default.Text(v, nil); strings.HasPrefix(text, "0\n") || text == "0" {
 			t.Fatalf("%s printed %q, but the true value is near %s", c.src, text, c.low)
@@ -326,11 +331,12 @@ func TestCancellationDoesNotCollapseToZero(t *testing.T) {
 
 func TestHugeTrigArgumentStillConverges(t *testing.T) {
 	n, _, _ := parse.Parse("sin(1e400)")
-	ctx := DefaultCtx()
+	ctx := provingCtx(t, DefaultCtx().Digits)
 	v, err := NewEnv().EvalCtx(n, ctx)
 	if err != nil {
 		t.Fatalf("eval: %v", err)
 	}
+	mustProve(t, v, "sin(1e400)")
 	b := v.Num.Ball(ctx.Prec)
 	if got := format.GuaranteedDigits(b); got < ctx.Digits {
 		t.Fatalf("only %d digits guaranteed for sin(1e400), want %d", got, ctx.Digits)
@@ -381,5 +387,25 @@ func TestWideBallFromAnUncertainInputIsNotPrintedAsZero(t *testing.T) {
 	}
 	if !strings.HasPrefix(text, "0 ± ") {
 		t.Fatalf("text = %q, want the midpoint and radius", text)
+	}
+}
+
+func provingCtx(t *testing.T, digits int) *Ctx {
+	t.Helper()
+	ctx := DefaultCtx()
+	ctx.Digits = digits
+	ctx.Deadline = time.Now().Add(time.Hour)
+	return ctx
+}
+
+func mustProve(t *testing.T, v value.Value, src string) {
+	t.Helper()
+	switch v.Stopped {
+	case value.StopDeadline:
+		t.Fatalf("%s: the retry loop hit its deadline, so this run proves nothing about the digits", src)
+	case value.StopPrecisionCap:
+		t.Fatalf("%s: the retry loop hit the precision cap, so this run proves nothing about the digits", src)
+	case value.StopUncertainInput:
+		t.Fatalf("%s: an input carried uncertainty, so the retry loop never ran to completion", src)
 	}
 }
