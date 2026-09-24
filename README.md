@@ -54,7 +54,7 @@ h * w
   = 55.4 ± 1.5 m·m
 ```
 
-`--json` on that document adds the contribution budget — `w` at 65% of the variance, `h` at 35% — and the provenance tree for every line.
+`gocalc --json run sheet.calc` answers with one `go-calc.sheet/1` document for the whole file: a status, the proven digits, the qualifier that makes those digits honest, the contribution budget — `w` at 65% of the variance, `h` at 35% — and the provenance tree for every line.
 
 ## Install
 
@@ -66,21 +66,25 @@ go install github.com/rahuldr07/go-calc/cmd/gocalc@latest
 
 ```
 gocalc "expression"
+gocalc "-2^2"
 gocalc --json "expression"
 gocalc --indian "18,50,000 / 12"
 gocalc run sheet.calc
+gocalc --json run sheet.calc
 gocalc trace "expression"
 gocalc why "expression"
 gocalc repl
 ```
 
-`--json` prints the versioned `go-calc.result/1` schema; the sheet API answers under `go-calc.sheet/1`. Errors exit non-zero.
+Options are the two-dashed names only, so a leading `-` begins an expression: `gocalc "-2^2"` answers `-4`. `--` ends the options.
+
+`--json` prints the versioned `go-calc.result/1` schema for one expression and the `go-calc.sheet/1` document for `run`; the sheet API answers under `go-calc.sheet/1` too. `trace`, `why` and `repl` do not produce JSON and say so rather than dropping the flag. Errors exit non-zero.
 
 ## What it does today
 
 **Exact where it can be.** Decimals are rationals, so `0.1` is exactly 1/10. Percent (`500 + 10%`), `mod`, factorial, exact roots of perfect powers, `gcd`, `lcm`, `floor`, `ceil`, `round`, `isprime`. Numbers as `1_000`, `18,50,000`, `0xFF`, `0b1010`, `0o17`, `1.5e-3`; lakh and crore.
 
-**Proven where it cannot.** Ball arithmetic with rigorous radii behind `sqrt`, `exp`, `ln`, `log`, `log2`, `log10`, `root`, the trigonometric and hyperbolic functions, `atan2` and `pi`. Precision doubles until the requested digits are guaranteed or a stated stop is reached: the precision cap, an uncertain input, or a deadline. Every printed digit is one the ball guarantees — `digits 30` in the REPL prints thirty proven digits, not thirty digits of hope. A result that would take more than 10,000 digits to write is refused by name rather than ground out.
+**Proven where it cannot.** Ball arithmetic with rigorous radii behind `sqrt`, `exp`, `ln`, `log`, `log2`, `log10`, `root`, the trigonometric and hyperbolic functions, `atan2` and `pi`. Precision doubles until the requested digits are guaranteed or a stated stop is reached: the precision cap, an uncertain input, or a deadline. Every printed digit is one the ball guarantees — `digits 30` in the REPL prints thirty proven digits, not thirty digits of hope. Where fewer digits are guaranteed than asked for, the qualifier says so, on the printer as a second line and in the sheet API as the `qualifiers` field beside `text`. A result that would take more than 10,000 digits to write is refused by name rather than ground out.
 
 **Measurement uncertainty.** `h = 12.3 ± 0.2 m` declares a measurement. Uncertainty propagates through first and second derivatives, so nonlinearity is detected rather than assumed away, and the result carries a contribution budget naming each input's share of the variance. `expand(x, k)` widens to a coverage factor. `corr(a, b) = 0.5` declares a correlation, and the budget then carries the covariance term and says so.
 
@@ -88,9 +92,11 @@ gocalc repl
 
 **The float64 shadow.** Every expression is also evaluated in float64. `gocalc why` shows the proven answer beside the float64 one, how many digits they agree to, how many of float64's printed digits are wrong, and which operator lost the bits.
 
-**Units.** SI prefixes, binary prefixes, imperial, time, force, energy, power and pressure, converted through exact rational factors (`inch` is exactly 127/5000 m). Affine temperature: `20 degC to K` is `293.15 K`, `20 degC + 5 K` is `25 degC`, and adding two absolute temperatures is refused. Compound units: `60 km/h`, `9.8 m/s^2`, `1 J/(mol·K)`. A name straight after a number is a unit, so `5 h` is five hours even when `h` is a variable — and the calculator says so when a variable of that name could have been meant instead. Long-form names: `hour`, `metre`, `gram`, `litre`, `tonne`.
+**Units.** SI prefixes, binary prefixes, imperial, time, force, energy, power and pressure, converted through exact rational factors (`inch` is exactly 127/5000 m). Affine temperature: `20 degC to K` is `293.15 K`, `20 degC + 5 K` is `25 degC`, and adding two absolute temperatures is refused. Compound units: `60 km/h`, `9.8 m/s^2`, `1 J/(mol·K)`, `100 W / 2 m^2` (`50 W/m^2`). `^` binds tighter than an implicit product, so `2 m^2` is two square metres, and a numeral-bearing term after `/` stays in the denominator; where that grouping changes the value the calculator prints the reading it took. A name straight after a number is a unit, so `5 h` is five hours even when `h` is a variable — and the calculator says so when a variable of that name could have been meant instead. Long-form names: `hour`, `metre`, `gram`, `litre`, `tonne`.
 
 **Constants.** CODATA 2022 with citations, pinned by checksum so the table cannot drift silently.
+
+A measured constant's uncertainty is reported by `info` and is **not yet propagated into calculations**. `info G` prints `0.0000000000667430 ± 0.0000000000000015 m^3/(kg·s^2)` with its CODATA citation, but `G` used in an expression answers `6.6743e-11 m^3/(kg·s^2)` as if it were exact, so a result that depends on `G` carries no contribution from it and no budget line for it. Spec 4.3 requires that propagation and it is not built; declared measurements (`h = 12.3 ± 0.2 m`) do propagate, and they are the only source of uncertainty in a result today.
 
 **Documents.** `gocalc run sheet.calc` evaluates a file in one environment, in dependency order, detecting cycles. `Doc.Edit` re-evaluates only the lines an edit actually staled.
 
@@ -157,7 +163,7 @@ go test ./internal/parse/ -run XXX -fuzz '^FuzzParse$' -fuzztime 120s
 go test ./internal/doc/ -run XXX -fuzz '^FuzzEvalRequest$' -fuzztime 120s
 ```
 
-427 test functions, 479 cases, green across twelve packages. Four fuzz targets, all clean on the runs recorded here:
+455 test functions, 507 cases, green across twelve packages. Four fuzz targets, all clean on the runs recorded here:
 
 | Target | What it checks | Executions |
 | --- | --- | --- |

@@ -49,6 +49,10 @@ The web surface is designed for daily users first: an editor ready to type into.
 
 Name: go-calc (command `gocalc`). Visual identity approved 2026-09-24 and recorded in `DESIGN.md`: work on an emissive void with nothing enclosed, trust read as signal strength, and physical controls (keycaps, knurled knob, amber readout, keypad) at the edge of the work. Built from impeccable catalog worlds `operate-c-cracktro-scroller-queue` and `design-canon-creator-hardware-bench`, in dark and light. Rejected along the way: the mission-control console (too retro, too busy) and a neutral Linear/Raycast-style app (too plain).
 
+## Known gaps stated in the product
+
+- A measured constant's uncertainty is reported by `info` and is **not yet propagated into calculations**. `info G` shows the CODATA standard uncertainty; `G` inside an expression behaves as an exact number, so a result depending on it carries no contribution from it. The design spec (4.3) requires that propagation; until it is built, only a declared measurement (`x = 12.3 ± 0.2`) contributes uncertainty to a result. Doing it properly needs the uncertainty table to give one identity per constant rather than a fresh one per mention, so that `G - G` stays exactly zero.
+
 ## Honesty constraints
 
 Do not claim firsts for things Qalculate! (exact/approx, CODATA, interval mode) or Graphest (guaranteed graphing) already do. Positioning: "a calculator that shows how far to trust its answers". No invented users, benchmarks or adoption numbers.
