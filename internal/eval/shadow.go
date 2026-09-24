@@ -34,8 +34,13 @@ type Shadow struct {
 	modelled bool
 }
 
-func (e *Env) Shadow(n parse.Node) Shadow {
-	s := &shadowPass{env: e, prec: DefaultCtx().Prec}
+func (e *Env) Shadow(n parse.Node) Shadow { return e.ShadowCtx(n, DefaultCtx()) }
+
+func (e *Env) ShadowCtx(n parse.Node, ctx *Ctx) Shadow {
+	if ctx == nil {
+		ctx = DefaultCtx()
+	}
+	s := &shadowPass{env: e, prec: DefaultCtx().Prec, degrees: ctx.Degrees}
 	v, ok := s.walk(n, nil, 0)
 	if !ok {
 		return Shadow{Value: math.NaN(), si: math.NaN()}
@@ -48,16 +53,17 @@ func (e *Env) Shadow(n parse.Node) Shadow {
 }
 
 type shadowPass struct {
-	env   *Env
-	prec  uint
-	lost  []LossSite
-	units unitScope
+	env     *Env
+	prec    uint
+	degrees bool
+	lost    []LossSite
+	units   unitScope
 }
 
 type shown struct {
-	num     float64
-	factor  float64
-	dim     units.Dim
+	num    float64
+	factor float64
+	dim    units.Dim
 }
 
 func plain(x float64) shown { return shown{num: x, factor: 1} }
@@ -351,7 +357,7 @@ func (s *shadowPass) call(t *parse.Call, sc scope, depth int) (shown, bool) {
 		}
 	}
 	if f, ok := shadowUnary[t.Fn]; ok && len(args) == 1 {
-		return plain(f(args[0])), true
+		return plain(s.angle(t.Fn, f(s.radians(t.Fn, args[0])))), true
 	}
 	switch t.Fn {
 	case "root":
@@ -360,7 +366,7 @@ func (s *shadowPass) call(t *parse.Call, sc scope, depth int) (shown, bool) {
 		}
 	case "atan2":
 		if len(args) == 2 {
-			return plain(math.Atan2(args[0], args[1])), true
+			return plain(s.angle(t.Fn, math.Atan2(args[0], args[1]))), true
 		}
 	case "expand":
 		if len(args) == 2 {
@@ -368,6 +374,23 @@ func (s *shadowPass) call(t *parse.Call, sc scope, depth int) (shown, bool) {
 		}
 	}
 	return shown{}, false
+}
+
+func (s *shadowPass) radians(name string, x float64) float64 {
+	if _, ok := radianIn[name]; ok && s.degrees {
+		return x * math.Pi / 180
+	}
+	return x
+}
+
+func (s *shadowPass) angle(name string, x float64) float64 {
+	if _, ok := radianOut[name]; !ok && name != "atan2" {
+		return x
+	}
+	if !s.degrees {
+		return x
+	}
+	return x * 180 / math.Pi
 }
 
 var keepsItsUnit = map[string]func(float64) float64{
@@ -479,7 +502,11 @@ func (x Explanation) Worst() (LossSite, bool) {
 }
 
 func (e *Env) Why(n parse.Node, proven value.Value) Explanation {
-	sh := e.Shadow(n)
+	return e.WhyCtx(n, proven, DefaultCtx())
+}
+
+func (e *Env) WhyCtx(n parse.Node, proven value.Value, ctx *Ctx) Explanation {
+	sh := e.ShadowCtx(n, ctx)
 	digits, ok := digitsAgreed(sh, proven)
 	gap, _ := integerCheck(sh, proven)
 	return Explanation{

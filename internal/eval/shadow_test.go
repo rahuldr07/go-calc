@@ -213,3 +213,45 @@ func TestWarningIsAbsentWhenNoProvenValueDisagrees(t *testing.T) {
 		}
 	}
 }
+
+func TestShadowFollowsTheAngleMode(t *testing.T) {
+	env := NewEnv()
+	degrees := DefaultCtx()
+	degrees.Degrees = true
+	cases := []struct {
+		src  string
+		want float64
+	}{
+		{"sin(30)", 0.5},
+		{"cos(60)", 0.5},
+		{"asin(0.5)", 30},
+		{"atan2(1, 1)", 45},
+	}
+	for _, c := range cases {
+		sh := env.ShadowCtx(mustParse(t, c.src), degrees)
+		if !sh.modelled {
+			t.Errorf("%s: no shadow in degree mode", c.src)
+			continue
+		}
+		if math.Abs(sh.Value-c.want) > 1e-9 {
+			t.Errorf("%s in degrees = %v, want %v", c.src, sh.Value, c.want)
+		}
+	}
+	if sh := env.ShadowCtx(mustParse(t, "sin(30)"), DefaultCtx()); math.Abs(sh.Value-math.Sin(30)) > 1e-12 {
+		t.Errorf("sin(30) in radians = %v, want %v", sh.Value, math.Sin(30))
+	}
+}
+
+func TestWhyFollowsTheAngleMode(t *testing.T) {
+	env := NewEnv()
+	degrees := DefaultCtx()
+	degrees.Degrees = true
+	n := mustParse(t, "sin(30)")
+	v, err := env.EvalCtx(n, degrees)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if x := env.WhyCtx(n, v, degrees); x.Warning != "" {
+		t.Errorf("degree mode warned about its own answer: %q", x.Warning)
+	}
+}
