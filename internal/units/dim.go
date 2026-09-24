@@ -59,11 +59,11 @@ func (d Dim) Words() string {
 	case len(pos) == 0 && len(neg) == 0:
 		return "dimensionless"
 	case len(pos) == 0:
-		return "1/" + strings.Join(neg, "·")
+		return "1/" + denominator(neg)
 	case len(neg) == 0:
 		return strings.Join(pos, "·")
 	}
-	return strings.Join(pos, "·") + "/" + strings.Join(neg, "·")
+	return strings.Join(pos, "·") + "/" + denominator(neg)
 }
 
 type Kind int

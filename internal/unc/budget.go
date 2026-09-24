@@ -23,10 +23,11 @@ type Coverage struct {
 }
 
 type Report struct {
-	Sigma   float64
-	Budget  []Contribution
-	Cover   Coverage
-	Warning string
+	Sigma      float64
+	Budget     []Contribution
+	Cover      Coverage
+	Warning    string
+	Degenerate bool
 }
 
 const NonlinearWarning = "first-order propagation may be unreliable here; Monte Carlo would be better"
@@ -85,6 +86,16 @@ func (t *Table) SecondOrder(s Sens, h Curv) float64 {
 		return 0
 	}
 	return math.Sqrt(v)
+}
+
+func (t *Table) Degenerate(s Sens, h Curv) bool {
+	if len(h) == 0 {
+		return false
+	}
+	if u := t.Combined(s); math.IsNaN(u) || u != 0 {
+		return false
+	}
+	return t.SecondOrder(s, h) > 0
 }
 
 func (t *Table) NonlinearityUnchecked(s Sens, h Curv) bool {

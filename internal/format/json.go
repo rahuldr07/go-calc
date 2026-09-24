@@ -35,13 +35,14 @@ type contributionOut struct {
 }
 
 type uncertaintyOut struct {
-	Value    string            `json:"value,omitempty"`
-	Reported string            `json:"reported,omitempty"`
-	Standard float64           `json:"standard"`
-	Coverage string            `json:"coverage,omitempty"`
-	Factor   float64           `json:"factor,omitempty"`
-	Budget   []contributionOut `json:"budget,omitempty"`
-	Warning  string            `json:"warning,omitempty"`
+	Value      string            `json:"value,omitempty"`
+	Reported   string            `json:"reported,omitempty"`
+	Standard   *float64          `json:"standard,omitempty"`
+	Degenerate bool              `json:"degenerate,omitempty"`
+	Coverage   string            `json:"coverage,omitempty"`
+	Factor     float64           `json:"factor,omitempty"`
+	Budget     []contributionOut `json:"budget,omitempty"`
+	Warning    string            `json:"warning,omitempty"`
 }
 
 type result struct {
@@ -116,12 +117,16 @@ func uncertainty(v value.Value) *uncertaintyOut {
 		scale = math.Abs(f)
 	}
 	out := &uncertaintyOut{
-		Value:    mid,
-		Reported: reported,
-		Standard: v.Unc.Sigma / scale,
-		Coverage: v.Unc.Cover.Label,
-		Factor:   v.Unc.Cover.K,
-		Warning:  v.Unc.Warning,
+		Value:      mid,
+		Reported:   reported,
+		Degenerate: v.Unc.Degenerate,
+		Coverage:   v.Unc.Cover.Label,
+		Factor:     v.Unc.Cover.K,
+		Warning:    v.Unc.Warning,
+	}
+	if !v.Unc.Degenerate {
+		standard := v.Unc.Sigma / scale
+		out.Standard = &standard
 	}
 	for _, c := range v.Unc.Budget {
 		out.Budget = append(out.Budget, contributionOut{

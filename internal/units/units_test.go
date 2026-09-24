@@ -116,3 +116,23 @@ func TestSISymbolParenthesisesAMultipleDenominator(t *testing.T) {
 		}
 	}
 }
+
+func TestWordsParenthesiseAMultipleDenominator(t *testing.T) {
+	cases := []struct {
+		dim  Dim
+		want string
+	}{
+		{Dim{1, 0, -1, 0, -1, 0, 0, 0}, "length/(time·temperature)"},
+		{Dim{1, 0, -1, 0, 0, 0, 0, 0}, "length/time"},
+		{Dim{2, 1, -2, 0, -1, -1, 0, 0}, "length^2·mass/(time^2·temperature·amount)"},
+		{Dim{0, 0, -1, 0, -1, 0, 0, 0}, "1/(time·temperature)"},
+		{Dim{0, 0, 0, 0, 0, -1, 0, 0}, "1/amount"},
+		{Dim{1, 0, 0, 0, 0, 0, 0, 0}, "length"},
+		{Dim{}, "dimensionless"},
+	}
+	for _, c := range cases {
+		if got := c.dim.Words(); got != c.want {
+			t.Errorf("Words(%v) = %q, want %q", c.dim, got, c.want)
+		}
+	}
+}

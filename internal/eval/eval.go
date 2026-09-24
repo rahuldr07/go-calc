@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 	"strconv"
+	"strings"
 
 	"github.com/rahuldr07/go-calc/internal/consts"
 	"github.com/rahuldr07/go-calc/internal/elem"
@@ -659,12 +660,23 @@ func combine(l, r value.Value, n num.Number, d units.Dim, sep string) value.Valu
 	case r.Unit == "":
 		out.Unit = l.Unit
 	default:
-		out.Unit = l.Unit + sep + r.Unit
+		denominator := "/"
+		if sep == "/" {
+			denominator = "/·"
+		}
+		out.Unit = grouped(l.Unit, "/") + sep + grouped(r.Unit, denominator)
 	}
 	if d.IsNone() {
 		out.Unit = ""
 	}
 	return out
+}
+
+func grouped(unit, ambiguous string) string {
+	if !strings.ContainsAny(unit, ambiguous) {
+		return unit
+	}
+	return "(" + unit + ")"
 }
 
 func isPercentNode(n parse.Node) bool {

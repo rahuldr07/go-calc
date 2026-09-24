@@ -11,6 +11,8 @@ import (
 
 const Digits = 12
 
+const UnknownUncertainty = "?"
+
 type Style struct {
 	Digits  int
 	Grouped bool
@@ -23,7 +25,14 @@ func Text(v value.Value, notes []parse.Note) string { return Default.Text(v, not
 
 func (s Style) Text(v value.Value, notes []parse.Note) string {
 	var b strings.Builder
-	if mid, u, ok := s.Uncertain(v); ok {
+	mid, u, rounded := s.Uncertain(v)
+	switch {
+	case v.Unc.Degenerate:
+		b.WriteString(s.Number(v) + " ± " + UnknownUncertainty)
+		if v.Unit != "" {
+			b.WriteString(" " + v.Unit)
+		}
+	case rounded:
 		b.WriteString(mid + " ± " + u)
 		if v.Unit != "" {
 			b.WriteString(" " + v.Unit)
@@ -31,7 +40,7 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 		if label := v.Unc.Cover.Label; label != "" {
 			b.WriteString(" (" + label + ")")
 		}
-	} else {
+	default:
 		b.WriteString(s.Number(v))
 		if v.Unit != "" {
 			b.WriteString(" " + v.Unit)

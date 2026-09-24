@@ -345,3 +345,22 @@ func TestCovarianceRowMakesTheSharesPartition(t *testing.T) {
 		}
 	}
 }
+
+func TestDegenerateSeparatesUnknownFromCertain(t *testing.T) {
+	tab := NewTable()
+	a := tab.Declare("a", 0, 1, 1)
+	certain := tab.Declare("c", 0, 0, 1)
+	curved := Curv{Pair{A: a, B: a}: 2}
+	if !tab.Degenerate(nil, curved) {
+		t.Error("cancelled first-order terms over a real sigma were called certain")
+	}
+	if tab.Degenerate(nil, nil) {
+		t.Error("a flat expression was called degenerate")
+	}
+	if tab.Degenerate(Sens{a: 1}, curved) {
+		t.Error("a surviving gradient was called degenerate")
+	}
+	if tab.Degenerate(nil, Curv{Pair{A: certain, B: certain}: 2}) {
+		t.Error("curvature over a zero sigma was called degenerate")
+	}
+}

@@ -55,6 +55,7 @@ func (e *Env) report(v value.Value) (value.Value, error) {
 	}
 	v.Unc.Sigma = e.table.Combined(v.Sens)
 	v.Unc.Budget = e.table.Contributions(v.Sens)
+	v.Unc.Degenerate = e.table.Degenerate(v.Sens, v.Curv)
 	switch {
 	case e.table.NonlinearityUnchecked(v.Sens, v.Curv):
 		v.Unc.Warning = unc.UncheckedWarning

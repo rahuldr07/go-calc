@@ -130,6 +130,9 @@ func (e *Env) expand(t *parse.Call, args []value.Value, p *pass) (value.Value, e
 		return value.Value{}, &lex.Error{Pos: t.P, Msg: "expand takes a value and a coverage factor"}
 	}
 	if !args[0].IsMeasured() {
+		if e.table.Degenerate(args[0].Sens, args[0].Curv) {
+			return value.Value{}, &lex.Error{Pos: t.P, Msg: "the first-order terms cancel here, so there is no standard uncertainty to expand"}
+		}
 		return value.Value{}, &lex.Error{Pos: t.P, Msg: "expand needs a value with a declared uncertainty"}
 	}
 	if !args[1].IsScalar() || args[1].IsMeasured() {

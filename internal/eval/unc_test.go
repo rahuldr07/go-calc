@@ -367,6 +367,9 @@ func TestAStationaryPointIsNotReportedAsCertain(t *testing.T) {
 		if !strings.Contains(format.Text(v, nil), unc.NonlinearWarning) {
 			t.Errorf("%s: the warning did not reach the output: %q", src, format.Text(v, nil))
 		}
+		if !v.Unc.Degenerate {
+			t.Errorf("%s: the first-order estimate was not marked degenerate", src)
+		}
 	}
 	env := NewEnv()
 	run(t, env, "x = 10 ± 1")
@@ -379,6 +382,9 @@ func TestAStationaryPointIsNotReportedAsCertain(t *testing.T) {
 	}
 	if got := format.Text(v, nil); got != "0" {
 		t.Errorf("x - x = %q, want 0", got)
+	}
+	if v.Unc.Degenerate {
+		t.Error("x - x was marked degenerate: it is genuinely exact")
 	}
 }
 
@@ -481,5 +487,89 @@ func TestAStationaryPointWarnsInJSONToo(t *testing.T) {
 	}
 	if !strings.Contains(string(out), unc.NonlinearWarning) {
 		t.Errorf("JSON dropped the warning: %s", out)
+	}
+}
+
+func TestUnknownUncertaintyIsNotZeroUncertainty(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "x = 0 ± 1")
+	for _, c := range [][2]string{
+		{"cos(x)", "1 ± ?"},
+		{"x * x", "0 ± ?"},
+		{"x ^ 2", "0 ± ?"},
+		{"(x * x) m", "0 ± ? m"},
+	} {
+		v := mustEval(t, env, c[0])
+		got := format.Text(v, nil)
+		head, _, _ := strings.Cut(got, "\n")
+		if head != c[1] {
+			t.Errorf("%s = %q, want %q", c[0], head, c[1])
+		}
+	}
+	run(t, env, "y = 3 ± 0")
+	certain := mustEval(t, env, "y * y")
+	if certain.Unc.Degenerate {
+		t.Error("an input with no uncertainty produced an unknown result")
+	}
+	if got := format.Text(certain, nil); got != "9" {
+		t.Errorf("y * y = %q, want a bare 9", got)
+	}
+}
+
+func TestJSONMarksTheDegenerateEstimateInsteadOfClaimingZero(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "x = 0 ± 1")
+	out, err := format.JSON("x * x", mustEval(t, env, "x * x"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), `"degenerate": true`) {
+		t.Errorf("JSON does not mark the estimate degenerate: %s", out)
+	}
+	if strings.Contains(string(out), `"standard"`) {
+		t.Errorf("JSON reports a standard uncertainty for a degenerate estimate: %s", out)
+	}
+	run(t, env, "a = 10 ± 1")
+	plain, err := format.JSON("a * 2", mustEval(t, env, "a * 2"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(plain), `"standard": 2`) {
+		t.Errorf("an ordinary result lost its standard uncertainty: %s", plain)
+	}
+	if strings.Contains(string(plain), "degenerate") {
+		t.Errorf("an ordinary result was marked degenerate: %s", plain)
+	}
+}
+
+func TestExpandingADegenerateEstimateSaysWhy(t *testing.T) {
+	env := NewEnv()
+	run(t, env, "x = 0 ± 1")
+	run(t, env, "z = x * x")
+	n, _, err := parse.Parse("expand(z, 2)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = env.Eval(n)
+	if err == nil {
+		t.Fatal("expanding a degenerate estimate produced a number")
+	}
+	if !strings.Contains(err.Error(), "first-order terms cancel") {
+		t.Errorf("error = %v, want it to name the cancellation", err)
+	}
+}
+
+func TestComposedUnitSymbolsKeepTheirGrouping(t *testing.T) {
+	env := NewEnv()
+	for _, c := range [][2]string{
+		{"(10 m/s) * (2 s)", "(m/s)·s"},
+		{"(6 m) / (2 s)", "m/s"},
+		{"(1 J) / (1 J/(mol·K))", "J/(J/(mol·K))"},
+		{"(3 m) * (2 kg)", "m·kg"},
+	} {
+		v := mustEval(t, env, c[0])
+		if v.Unit != c[1] {
+			t.Errorf("%s has unit %q, want %q", c[0], v.Unit, c[1])
+		}
 	}
 }
