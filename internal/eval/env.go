@@ -70,6 +70,14 @@ func (e *Env) Contributions(v value.Value) []unc.Contribution {
 
 func (e *Env) Set(name string, v value.Value) { e.vars[name] = v }
 
+func (e *Env) Unset(name string) bool {
+	_, wasVar := e.vars[name]
+	_, wasFunc := e.funcs[name]
+	delete(e.vars, name)
+	delete(e.funcs, name)
+	return wasVar || wasFunc
+}
+
 func (e *Env) Get(name string) (value.Value, bool) {
 	v, ok := e.vars[name]
 	return v, ok

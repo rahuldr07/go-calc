@@ -586,3 +586,31 @@ func TestDefiningAFunctionAnswersWithItsDefinition(t *testing.T) {
 		t.Errorf("f(3) = %s, want 10", out.Num.Exact().String())
 	}
 }
+
+func TestUnsetForgetsNamesAndFunctions(t *testing.T) {
+	env := NewEnv()
+	if _, err := env.Eval(mustParse(t, "h = 3")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.Eval(mustParse(t, "f(x) = x")); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"h", "f"} {
+		if !env.Unset(name) {
+			t.Errorf("Unset(%q) found nothing", name)
+		}
+		if env.Unset(name) {
+			t.Errorf("Unset(%q) found it twice", name)
+		}
+	}
+	v, err := env.Eval(mustParse(t, "h"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Unit != "J·s" {
+		t.Errorf("h = %v %q, want the Planck constant", v.Num, v.Unit)
+	}
+	if _, err := env.Eval(mustParse(t, "f(1)")); err == nil {
+		t.Error("the function survived unset")
+	}
+}

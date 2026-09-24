@@ -21,11 +21,12 @@ import (
 )
 
 const (
-	prompt      = "> "
-	banner      = "go-calc — every answer exact or proven. help lists the commands, exit leaves."
-	maxDigits   = 1000
-	lookupLimit = 40
-	lookupForm  = "?<prefix>"
+	prompt        = "> "
+	banner        = "go-calc — every answer exact or proven. help lists the commands, exit leaves."
+	maxDigits     = 1000
+	lookupLimit   = 40
+	lookupForm    = "?<prefix>"
+	escapeCommand = "unset"
 )
 
 var functions = []string{
@@ -63,6 +64,7 @@ func init() {
 		{"digits", "[n]", "print this many significant digits", (*repler).setDigits},
 		{"deg", "", "read and write angles in degrees", (*repler).setDegrees},
 		{"rad", "", "read and write angles in radians", (*repler).setRadians},
+		{"unset", "<name>", "give a name back to the calculator", (*repler).unset},
 		{"help", "", "list these commands", (*repler).help},
 		{"exit", "", "leave, saving the history", (*repler).quit},
 	}
@@ -117,7 +119,7 @@ func (r *repler) handle(out io.Writer, line string) bool {
 	}
 	verb, rest := split(line)
 	c, ok := byName[verb]
-	if !ok || r.defines(verb) || claims(c, rest) {
+	if !ok || (c.name != escapeCommand && r.defines(verb)) || claims(c, rest) {
 		return r.compute(out, line)
 	}
 	return c.run(r, out, rest)
@@ -167,7 +169,7 @@ func (r *repler) compute(out io.Writer, src string) bool {
 	now := r.shadowed()
 	for _, c := range commands {
 		if now[c.name] && !was[c.name] {
-			fmt.Fprintln(out, "  "+c.name+" is now a name of yours, so the "+c.name+" command is out of reach")
+			fmt.Fprintln(out, "  "+c.name+" is now a name of yours, so the "+c.name+" command is out of reach until "+escapeCommand+" "+c.name)
 		}
 	}
 	return false
@@ -298,6 +300,30 @@ func (r *repler) setRadians(out io.Writer, _ string) bool {
 	r.degrees = false
 	fmt.Fprintln(out, "angles are in radians")
 	return false
+}
+
+func (r *repler) unset(out io.Writer, name string) bool {
+	if name == "" {
+		return r.fail(out, escapeCommand+" needs a name")
+	}
+	if !r.env.Unset(name) {
+		return r.fail(out, "nothing of yours is called "+name)
+	}
+	fmt.Fprintln(out, name+" is no longer a name of yours"+restored(name))
+	return false
+}
+
+func restored(name string) string {
+	if _, ok := byName[name]; ok {
+		return ", so the " + name + " command works again"
+	}
+	if c, ok := consts.Lookup(name); ok {
+		return ", so it reads as " + c.Name + " again"
+	}
+	if u, ok := units.Lookup(name); ok {
+		return ", so it reads as a unit of " + u.Dim.Words() + " again"
+	}
+	return ""
 }
 
 func (r *repler) quit(io.Writer, string) bool { return true }

@@ -544,3 +544,132 @@ func TestReplLookupFindsAFunctionYouDefined(t *testing.T) {
 		t.Errorf("lookup missed a function you defined:\n%s", got)
 	}
 }
+
+func TestReplDefinitionReportsItself(t *testing.T) {
+	got := session(t, "f(x) = x^2 + 1\ng(a, b) = a * b\nf(3)\n")
+	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+	want := []string{"f(x) defined", "g(a, b) defined", "10"}
+	if len(lines) != len(want) {
+		t.Fatalf("lines = %q, want %q", lines, want)
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Errorf("line %d = %q, want %q", i, lines[i], want[i])
+		}
+	}
+}
+
+func TestDefinitionReportsItselfInOneShot(t *testing.T) {
+	out, code := run([]string{"f(x) = x^2 + 1"}, plain, false)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if out != "f(x) defined" {
+		t.Errorf("one-shot printed %q, want %q", out, "f(x) defined")
+	}
+	if strings.TrimSpace(out) == "0" {
+		t.Errorf("a definition must not answer 0")
+	}
+}
+
+func TestDefinitionReportsItselfInJSON(t *testing.T) {
+	out, code := run([]string{"f(x) = x^2 + 1"}, plain, true)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if !strings.Contains(out, `"definition": "f(x)"`) {
+		t.Errorf("JSON is missing the definition:\n%s", out)
+	}
+	if strings.Contains(out, `"value"`) {
+		t.Errorf("a definition must not carry a numeric value:\n%s", out)
+	}
+}
+
+func TestDefinitionReportsItselfInASheet(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sheet.calc")
+	if err := os.WriteFile(path, []byte("h(x) = x^2\nh(3)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, code := runFile(path, plain, false)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if !strings.Contains(out, "= h(x) defined") {
+		t.Errorf("sheet is missing the definition:\n%s", out)
+	}
+	if !strings.Contains(out, "= 9") {
+		t.Errorf("the sheet stopped working:\n%s", out)
+	}
+}
+
+func TestReplUnsetRestoresACommand(t *testing.T) {
+	got := session(t, "digits = 4\ndigits 3\nunset digits\ndigits 3\n")
+	if !strings.Contains(got, "out of reach until unset digits") {
+		t.Errorf("the way out was not named:\n%s", got)
+	}
+	if !strings.Contains(got, "\n12\n") {
+		t.Errorf("a bound name must win while it is bound:\n%s", got)
+	}
+	if !strings.Contains(got, "the digits command works again") {
+		t.Errorf("unset did not say what it gave back:\n%s", got)
+	}
+	if !strings.Contains(lastLine(got), "digits is 3") {
+		t.Errorf("the command did not come back:\n%s", got)
+	}
+}
+
+func TestReplUnsetRestoresAUnit(t *testing.T) {
+	got := session(t, "m = 7\nm * 2\nunset m\nm * 2\n")
+	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+	if lines[1] != "14" {
+		t.Errorf("a bound name must win while it is bound: %q\n%s", lines[1], got)
+	}
+	if !strings.Contains(got, "a unit of length") {
+		t.Errorf("unset did not say what it gave back:\n%s", got)
+	}
+	if lastLine(got) != "2 m" {
+		t.Errorf("the unit did not come back: %q\n%s", lastLine(got), got)
+	}
+}
+
+func TestReplUnsetRestoresAConstant(t *testing.T) {
+	got := session(t, "h = 3\nh\nunset h\nh\n")
+	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+	if lines[1] != "3" {
+		t.Errorf("a bound name must win while it is bound: %q\n%s", lines[1], got)
+	}
+	if !strings.Contains(got, "Planck constant") {
+		t.Errorf("unset did not say what it gave back:\n%s", got)
+	}
+	if !strings.Contains(lastLine(got), "J·s") {
+		t.Errorf("the constant did not come back: %q\n%s", lastLine(got), got)
+	}
+}
+
+func TestReplUnsetForgetsAFunctionToo(t *testing.T) {
+	got := session(t, "f(x) = x\nunset f\nf(1)\n")
+	if !strings.Contains(got, "error: ") {
+		t.Errorf("unset left the function behind:\n%s", got)
+	}
+}
+
+func TestReplUnsetStaysReachableWhenShadowed(t *testing.T) {
+	got := session(t, "unset = 5\nunset unset\nunset + 1\n")
+	if !strings.Contains(got, "no longer a name of yours") {
+		t.Errorf("the escape hatch was trapped:\n%s", got)
+	}
+}
+
+func TestReplUnsetRefusesWhatItDoesNotHold(t *testing.T) {
+	cases := map[string]string{
+		"unset":     "error: unset needs a name",
+		"unset zzz": "error: nothing of yours is called zzz",
+		"unset km":  "error: nothing of yours is called km",
+	}
+	for line, want := range cases {
+		if got := strings.TrimRight(session(t, line+"\n"), "\n"); got != want {
+			t.Errorf("%q said %q, want %q", line, got, want)
+		}
+	}
+}
