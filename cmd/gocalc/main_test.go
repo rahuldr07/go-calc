@@ -76,3 +76,41 @@ func TestUsageWithoutArguments(t *testing.T) {
 		t.Errorf("out = %q", out)
 	}
 }
+
+func TestRunFileRejectsAForwardReference(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sheet.calc")
+	body := "total = price * 2\nprice = 5\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, code := runFile(path, plain, false)
+	if code == 0 {
+		t.Fatalf("want non-zero exit, got %q", out)
+	}
+	if !strings.Contains(out, "line 1: uses price before it is defined") {
+		t.Errorf("out = %q, want the forward-reference error on line 1", out)
+	}
+	if strings.Contains(out, "= 10") {
+		t.Errorf("out = %q, want no answer for the forward reference", out)
+	}
+}
+
+func TestRunFileReportsACycle(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sheet.calc")
+	body := "a = b + 1\nb = a + 1\nz = 7\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, code := runFile(path, plain, false)
+	if code == 0 {
+		t.Fatalf("want non-zero exit, got %q", out)
+	}
+	if !strings.Contains(out, "line 1: this line depends on itself") {
+		t.Errorf("out = %q, want the cycle reported on line 1", out)
+	}
+	if !strings.Contains(out, "= 7") {
+		t.Errorf("out = %q, want the independent line still evaluated", out)
+	}
+}

@@ -237,17 +237,51 @@ func TestLaterDefinitionShadowsEarlierOne(t *testing.T) {
 	}
 }
 
-func TestForwardReferenceResolvesAndWarns(t *testing.T) {
+func TestForwardReferenceIsAnError(t *testing.T) {
 	d := New()
 	lines := d.SetLines([]string{"b = a + 1", "a = 41"})
-	if got := text(lines[0].Value); got != "42" {
-		t.Errorf("b = %q, want 42", got)
+	if lines[0].Err == nil || lines[0].Err.Error() != "uses a before it is defined" {
+		t.Errorf("line 0 error = %v, want uses a before it is defined", lines[0].Err)
 	}
-	if !strings.Contains(lines[0].Warning, "uses a before it is defined") {
-		t.Errorf("warning = %q", lines[0].Warning)
+	if got := text(lines[0].Value); got != "0" {
+		t.Errorf("line 0 kept the value %q, want nothing", got)
 	}
-	if lines[1].Warning != "" {
-		t.Errorf("line 1 warning = %q, want none", lines[1].Warning)
+	if lines[1].Err != nil || text(lines[1].Value) != "41" {
+		t.Errorf("line 1 = %v %q, want 41", lines[1].Err, text(lines[1].Value))
+	}
+}
+
+func TestForwardReferenceNamesEveryName(t *testing.T) {
+	d := New()
+	lines := d.SetLines([]string{"c = a + b", "a = 1", "b = 2"})
+	if lines[0].Err == nil || lines[0].Err.Error() != "uses a, b before they are defined" {
+		t.Errorf("error = %v, want uses a, b before they are defined", lines[0].Err)
+	}
+}
+
+func TestForwardReferenceThroughAFunctionBody(t *testing.T) {
+	d := New()
+	lines := d.SetLines([]string{"g(x) = x + a", "g(1)", "a = 10", "g(2)"})
+	if lines[1].Err == nil || lines[1].Err.Error() != "uses a before it is defined" {
+		t.Errorf("line 1 error = %v, want uses a before it is defined", lines[1].Err)
+	}
+	if lines[3].Err != nil || text(lines[3].Value) != "12" {
+		t.Errorf("line 3 = %v %q, want 12", lines[3].Err, text(lines[3].Value))
+	}
+}
+
+func TestDefiningAboveClearsTheForwardError(t *testing.T) {
+	d := New()
+	d.SetLines([]string{"# placeholder", "b = a + 1", "a = 41"})
+	if err := d.Lines()[1].Err; err == nil {
+		t.Fatal("line 1 should fail while a is defined below it")
+	}
+	changed := d.Edit(0, "a = 6")
+	if got := indices(changed); !reflect.DeepEqual(got, []int{0, 1}) {
+		t.Fatalf("changed = %v, want [0 1]", got)
+	}
+	if l := d.Lines()[1]; l.Err != nil || text(l.Value) != "7" {
+		t.Errorf("line 1 = %v %q, want 7", l.Err, text(l.Value))
 	}
 }
 

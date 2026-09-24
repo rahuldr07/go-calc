@@ -141,11 +141,10 @@ func (d *Doc) evaluate(i int) {
 		e.err = e.parseErr
 	case e.cyclic:
 		e.err = errCycle
+	case len(e.fwd) > 0:
+		e.err = usedBeforeDefined(e.fwd)
 	default:
 		e.value, e.err = d.evaluator(d.env(i), e.node)
-		if e.err == nil {
-			e.warning = forwardWarning(e.fwd)
-		}
 	}
 }
 

@@ -1,6 +1,7 @@
 package doc
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/rahuldr07/go-calc/internal/parse"
@@ -201,12 +202,12 @@ func sameInts(a, b []int) bool {
 	return true
 }
 
-func forwardWarning(names []string) string {
+func usedBeforeDefined(names []string) error {
 	switch len(names) {
 	case 0:
-		return ""
+		return nil
 	case 1:
-		return "uses " + names[0] + " before it is defined"
+		return errors.New("uses " + names[0] + " before it is defined")
 	}
-	return "uses " + strings.Join(names, ", ") + " before they are defined"
+	return errors.New("uses " + strings.Join(names, ", ") + " before they are defined")
 }
