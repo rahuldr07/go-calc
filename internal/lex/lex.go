@@ -9,9 +9,14 @@ const Version = "0.1.0"
 
 const operators = "+-*/^!%×÷·±="
 
-func Scan(src string) ([]Token, error) {
+func Scan(src string) ([]Token, error) { return ScanFrom(src, 1) }
+
+func ScanFrom(src string, first int) ([]Token, error) {
 	var toks []Token
-	line, col := 1, 1
+	if first < 1 {
+		first = 1
+	}
+	line, col := first, 1
 	rs := []rune(src)
 	for i := 0; i < len(rs); {
 		r := rs[i]

@@ -47,6 +47,7 @@ type noteOut struct {
 type lineOut struct {
 	N           int                 `json:"n"`
 	Text        string              `json:"text"`
+	Qualifiers  []string            `json:"qualifiers,omitempty"`
 	Status      string              `json:"status"`
 	Digits      int                 `json:"digits"`
 	Capped      bool                `json:"capped,omitempty"`
@@ -143,10 +144,10 @@ func (d *Doc) sheetLine(i int, e *entry, style format.Style) lineOut {
 		out.Status = StatusHeld
 	case e.value.IsDefinition():
 		out.Status = StatusHeld
-		out.Text = answer(style, e.value)
+		out.Text, out.Qualifiers = answer(style, e.value)
 	default:
 		out.Status = statusOf(e.value)
-		out.Text = answer(style, e.value)
+		out.Text, out.Qualifiers = answer(style, e.value)
 		_, out.Digits, out.Capped = style.Proven(e.value)
 		out.Stopped = whyStopped(e.value.Stopped)
 		out.Uncertainty = format.UncertaintyOf(e.value)
@@ -165,9 +166,22 @@ func statusOf(v value.Value) string {
 	return StatusProven
 }
 
-func answer(style format.Style, v value.Value) string {
-	head, _, _ := strings.Cut(style.Text(v, nil), "\n")
-	return head
+func answer(style format.Style, v value.Value) (string, []string) {
+	head, rest, _ := strings.Cut(style.Text(v, nil), "\n")
+	if rest == "" {
+		return head, nil
+	}
+	lines := strings.Split(rest, "\n")
+	qualifiers := make([]string, 0, len(lines))
+	for _, l := range lines {
+		if trimmed := strings.TrimSpace(l); trimmed != "" {
+			qualifiers = append(qualifiers, trimmed)
+		}
+	}
+	if len(qualifiers) == 0 {
+		return head, nil
+	}
+	return head, qualifiers
 }
 
 func whyStopped(s value.Stop) string {

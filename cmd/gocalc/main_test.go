@@ -515,3 +515,19 @@ func TestDispatchSendsJSONRunToTheSheetDocument(t *testing.T) {
 		t.Errorf("run without --json = %q (exit %d)", plainOut, code)
 	}
 }
+
+func TestRunPointsAtTheDocumentLine(t *testing.T) {
+	out, code := runFile(writeSheet(t, "1+1\n2+2\n3 +\nq = (1e16+1)-1e16\n"), plain)
+	if code == 0 {
+		t.Fatalf("want a non-zero exit: %s", out)
+	}
+	if !strings.Contains(out, "3:4: unexpected end of input") {
+		t.Errorf("out = %q, want the parse error at 3:4", out)
+	}
+	if strings.Contains(out, "line 3: 1:4") {
+		t.Errorf("out = %q, still carries two line conventions", out)
+	}
+	if !strings.Contains(out, "at 4:13") {
+		t.Errorf("out = %q, want the warning on document line 4", out)
+	}
+}

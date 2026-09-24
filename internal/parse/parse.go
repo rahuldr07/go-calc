@@ -22,8 +22,10 @@ type parser struct {
 	notes []Note
 }
 
-func Parse(src string) (Node, []Note, error) {
-	toks, err := lex.Scan(src)
+func Parse(src string) (Node, []Note, error) { return ParseFrom(src, 1) }
+
+func ParseFrom(src string, line int) (Node, []Note, error) {
+	toks, err := lex.ScanFrom(src, line)
 	if err != nil {
 		return nil, nil, err
 	}

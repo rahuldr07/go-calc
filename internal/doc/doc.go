@@ -62,7 +62,7 @@ func warnNode(env *eval.Env, n parse.Node, v value.Value) string { return env.Wa
 func (d *Doc) SetLines(src []string) []Line {
 	d.lines = make([]*entry, len(src))
 	for i, s := range src {
-		d.lines[i] = read(s)
+		d.lines[i] = read(s, i+1)
 	}
 	d.link()
 	for _, i := range d.schedule() {
@@ -80,7 +80,7 @@ func (d *Doc) Edit(n int, src string) []Line {
 	for i, e := range d.lines {
 		was[i], wasCyclic[i] = e.deps, e.cyclic
 	}
-	d.lines[n] = read(src)
+	d.lines[n] = read(src, n+1)
 	d.link()
 	order := d.schedule()
 	stale := map[int]bool{n: true}
@@ -127,12 +127,12 @@ func (d *Doc) line(i int) Line {
 	return Line{N: i, Src: e.src, Value: e.value, Notes: e.notes, Err: e.err, Warning: e.warning}
 }
 
-func read(src string) *entry {
+func read(src string, line int) *entry {
 	e := &entry{src: src}
 	if Blank(src) {
 		return e
 	}
-	node, notes, err := parse.Parse(src)
+	node, notes, err := parse.ParseFrom(src, line)
 	if err != nil {
 		e.parseErr = err
 		return e
@@ -181,7 +181,7 @@ func (d *Doc) brokenInputs(i int) error {
 		if j == i || d.lines[j].err == nil {
 			continue
 		}
-		names = append(names, d.lines[j].def)
+		names = append(names, d.lines[j].label(j+1))
 		at = append(at, j+1)
 	}
 	return dependsOnFailure(names, at)

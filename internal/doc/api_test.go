@@ -3,11 +3,13 @@ package doc
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rahuldr07/go-calc/internal/eval"
+	"github.com/rahuldr07/go-calc/internal/format"
 	"github.com/rahuldr07/go-calc/internal/parse"
 	"github.com/rahuldr07/go-calc/internal/value"
 )
@@ -670,4 +672,122 @@ func itoa(n int) string {
 		return "0"
 	}
 	return string(out)
+}
+
+func sheetAnswer(t *testing.T, req string) map[string]any {
+	t.Helper()
+	var got map[string]any
+	if err := json.Unmarshal(EvalRequest([]byte(req)), &got); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	return got
+}
+
+func TestTheSheetCarriesTheQualifierThatMakesADigitHonest(t *testing.T) {
+	got := sheetAnswer(t, `{"lines":["sqrt(2) - sqrt(2)","a = 10 ± 1","b = 20 ± 2","corr(a, b) = 0.5","a + b"]}`)
+	lines := got["lines"].([]any)
+	zero := lines[0].(map[string]any)
+	if zero["text"] != "0" {
+		t.Errorf("text = %v, want 0", zero["text"])
+	}
+	quals, _ := zero["qualifiers"].([]any)
+	if len(quals) != 1 || !strings.Contains(quals[0].(string), "decimal places") {
+		t.Errorf("qualifiers = %v, want the precision the zero is proven to", zero["qualifiers"])
+	}
+	sum := lines[4].(map[string]any)
+	quals, _ = sum["qualifiers"].([]any)
+	if len(quals) != 1 || !strings.Contains(quals[0].(string), "covariance") {
+		t.Errorf("qualifiers = %v, want the covariance sentence", sum["qualifiers"])
+	}
+}
+
+func TestEverySheetQualifierIsTheTextTheCLIPrints(t *testing.T) {
+	sheets := [][]string{
+		{"sqrt(2) - sqrt(2)"},
+		{"exp(pi * sqrt(163))"},
+		{"a = 10 ± 1", "b = 20 ± 2", "corr(a, b) = 0.5", "a + b"},
+		{"x = 1.0 ± 0.1", "exp(exp(x))"},
+		{"1 + 1"},
+		{"sin(1) * 2"},
+	}
+	for _, lines := range sheets {
+		req, err := json.Marshal(map[string]any{"lines": lines})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out struct {
+			Lines []struct {
+				Text       string   `json:"text"`
+				Qualifiers []string `json:"qualifiers"`
+			} `json:"lines"`
+		}
+		if err := json.Unmarshal(EvalRequest(req), &out); err != nil {
+			t.Fatal(err)
+		}
+		printed := New().SetLines(lines)
+		for i, l := range out.Lines {
+			if printed[i].Err != nil {
+				continue
+			}
+			joined := strings.Join(append([]string{l.Text}, l.Qualifiers...), "\n  ")
+			if want := format.Default.Text(printed[i].Value, nil); joined != want {
+				t.Errorf("%q: sheet says %q, the printer says %q", lines[i], joined, want)
+			}
+		}
+	}
+}
+
+func TestADependentNamesACorrelationLineThatFailed(t *testing.T) {
+	got := sheetAnswer(t, `{"lines":["a = 10 ± 1","corr(a, b) = 0.5","b = 20 ± 2","a+b"]}`)
+	last := got["lines"].([]any)[3].(map[string]any)
+	msg, _ := last["error"].(string)
+	if !strings.Contains(msg, "corr(a, b)") {
+		t.Errorf("error = %q, want the correlation line named", msg)
+	}
+	if strings.Contains(msg, "uses , ") {
+		t.Errorf("error = %q, still leaves the name blank", msg)
+	}
+}
+
+func TestOneLineConventionAcrossTheWholePayload(t *testing.T) {
+	got := sheetAnswer(t, `{"lines":["1+1","2+2","3 +","q = (1e16+1)-1e16"]}`)
+	lines := got["lines"].([]any)
+	broken := lines[2].(map[string]any)
+	if msg, _ := broken["error"].(string); !strings.HasPrefix(msg, "3:") {
+		t.Errorf("error = %q, want document line 3", msg)
+	}
+	if col, _ := broken["column"].(float64); col != 4 {
+		t.Errorf("column = %v, want 4", broken["column"])
+	}
+	warned := lines[3].(map[string]any)
+	if msg, _ := warned["warning"].(string); !strings.Contains(msg, "at 4:") {
+		t.Errorf("warning = %q, want document line 4", msg)
+	}
+}
+
+func TestEveryPositionInASheetIsADocumentPosition(t *testing.T) {
+	lines := []string{"1+1", "", "2 +", "# comment", "(1e16+1)-1e16", "5 m + 3 s"}
+	req, err := json.Marshal(map[string]any{"lines": lines})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Lines []struct {
+			N       int    `json:"n"`
+			Error   string `json:"error"`
+			Warning string `json:"warning"`
+		} `json:"lines"`
+	}
+	if err := json.Unmarshal(EvalRequest(req), &out); err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range out.Lines {
+		at := strconv.Itoa(l.N+1) + ":"
+		if l.Error != "" && strings.Contains(l.Error, ":") && !strings.HasPrefix(l.Error, at) && strings.Contains(l.Error, "unexpected") {
+			t.Errorf("line %d error %q does not start at %s", l.N+1, l.Error, at)
+		}
+		if l.Warning != "" && strings.Contains(l.Warning, " at ") && !strings.Contains(l.Warning, " at "+at) {
+			t.Errorf("line %d warning %q does not point at %s", l.N+1, l.Warning, at)
+		}
+	}
 }

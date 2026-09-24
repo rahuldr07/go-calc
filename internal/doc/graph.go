@@ -221,6 +221,16 @@ func sameInts(a, b []int) bool {
 	return true
 }
 
+func (e *entry) label(n int) string {
+	switch {
+	case e.def != "":
+		return e.def
+	case len(e.corr) == 2:
+		return "corr(" + strings.Join(e.corr, ", ") + ")"
+	}
+	return "the expression on line " + strconv.Itoa(n)
+}
+
 func usedBeforeDefined(names []string) error {
 	switch len(names) {
 	case 0:
