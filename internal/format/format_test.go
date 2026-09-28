@@ -385,3 +385,36 @@ func TestASmallMeasuredValueIsSpeltInScientificNotation(t *testing.T) {
 		}
 	}
 }
+
+func TestEveryMeasuredValuePrintsTwoUncertaintyDigitsAndReadsBack(t *testing.T) {
+	for midScale := -34; midScale <= 12; midScale++ {
+		for sigmaScale := -38; sigmaScale <= 8; sigmaScale++ {
+			mid := "1.2345678901e" + strconv.Itoa(midScale)
+			sigmaText := "2.3e" + strconv.Itoa(sigmaScale)
+			sigma, _ := new(big.Rat).SetString(sigmaText)
+			f, _ := sigma.Float64()
+			v := measuredValue(t, mid, f)
+			text, u, ok := Default.Uncertain(v)
+			if !ok {
+				continue
+			}
+			if strings.ContainsRune(u, 'e') {
+				if n := significantDigits(mantissaOf(u)); n != uncertaintyDigits {
+					t.Errorf("%s ± %s printed ± %q, whose mantissa claims %d significant digits", mid, sigmaText, u, n)
+				}
+			}
+			for _, token := range []string{text, u} {
+				if _, ok := new(big.Rat).SetString(token); !ok {
+					t.Errorf("%s ± %s: %q does not read back as a number", mid, sigmaText, token)
+				}
+			}
+		}
+	}
+}
+
+func mantissaOf(text string) string {
+	if i := strings.IndexByte(text, 'e'); i >= 0 {
+		return text[:i]
+	}
+	return text
+}

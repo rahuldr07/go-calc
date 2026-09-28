@@ -39,12 +39,19 @@ func (s Style) Uncertain(v value.Value) (string, string, bool) {
 func sized(r *big.Rat, decimals int) string {
 	text := at(r, decimals)
 	rounded, ok := new(big.Rat).SetString(text)
-	if !ok || rounded.Sign() == 0 {
+	if !ok {
 		return text
 	}
+	if rounded.Sign() == 0 {
+		return "0"
+	}
 	e := ratScale(rounded)
+	digits := e + decimals + 1
+	if digits < 1 {
+		digits = 1
+	}
 	m := new(big.Rat).Quo(rounded, ratPow10(e))
-	return m.FloatString(significantDigits(text)-1) + "e" + strconv.Itoa(e)
+	return m.FloatString(digits-1) + "e" + strconv.Itoa(e)
 }
 
 func reported(v value.Value) (float64, bool) {
