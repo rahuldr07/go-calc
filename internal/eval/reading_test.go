@@ -1,0 +1,74 @@
+package eval
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/rahuldr07/go-calc/internal/format"
+	"github.com/rahuldr07/go-calc/internal/parse"
+)
+
+func spelled(t *testing.T, env *Env, src string) string {
+	t.Helper()
+	return format.Default.Text(mustEval(t, env, src), nil)
+}
+
+func TestANegativeExponentKeepsTheFollowingFactor(t *testing.T) {
+	cases := map[string]string{
+		"10^-3 m":       "0.001 m",
+		"9.8 * 10^-3 m": "0.0098 m",
+		"2^-2 kg":       "0.25 kg",
+		"2^-1 3":        "1.5",
+		"2^-1 sqrt(4)":  "1",
+		"2^-1 2^2":      "2",
+		"-2^2":          "-4",
+		"-2 m":          "-2 m",
+	}
+	for src, want := range cases {
+		if got := spelled(t, NewEnv(), src); got != want {
+			t.Errorf("%q = %q, want %q", src, got, want)
+		}
+	}
+	if got := spelled(t, NewEnv(), "2^-1 pi"); !strings.HasPrefix(got, "1.5707963267") {
+		t.Errorf("2^-1 pi = %q, want half of pi", got)
+	}
+}
+
+func TestTheShadowReadsANameTheWayTheEvaluatorDid(t *testing.T) {
+	cases := []struct {
+		setup []string
+		src   string
+	}{
+		{[]string{"f(h) = 1/2 h"}, "f(5 s)"},
+		{[]string{"h = 12.3 ± 0.2 m", "g(h) = 1/2 h"}, "g(3)"},
+		{[]string{"k(h) = 1/2 h"}, "k(12.3 ± 0.2)"},
+		{[]string{"h = 3"}, "1/2 h"},
+		{nil, "100 km / 2 h"},
+	}
+	for _, c := range cases {
+		env := NewEnv()
+		for _, line := range c.setup {
+			mustEval(t, env, line)
+		}
+		n, _, err := parse.Parse(c.src)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", c.src, err)
+		}
+		if w := env.Warning(n, mustEval(t, env, c.src)); w != "" {
+			t.Errorf("%q after %v warned %q; the shadow read it differently from the evaluator", c.src, c.setup, w)
+		}
+	}
+}
+
+func TestProvenanceNamesTheOperationThatWasTaken(t *testing.T) {
+	env := NewEnv()
+	tree := env.Arena().Tree(mustEval(t, env, "100 km / 2 h").Prov)
+	if head := strings.SplitN(tree, "\n", 2)[0]; !strings.HasPrefix(head, "/") {
+		t.Errorf("trace of a speed starts %q, want the division the evaluator took:\n%s", head, tree)
+	}
+	env = NewEnv()
+	tree = env.Arena().Tree(mustEval(t, env, "2 m").Prov)
+	if strings.HasPrefix(tree, "/") {
+		t.Errorf("trace of a plain product starts with a division:\n%s", tree)
+	}
+}

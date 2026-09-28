@@ -62,9 +62,10 @@ type shadowPass struct {
 }
 
 type shown struct {
-	num    float64
-	factor float64
-	dim    units.Dim
+	num      float64
+	factor   float64
+	dim      units.Dim
+	measured bool
 }
 
 func plain(x float64) shown { return shown{num: x, factor: 1} }
@@ -153,10 +154,51 @@ func (s *shadowPass) name(t *parse.Name, sc scope) (shown, bool) {
 func (s *shadowPass) readsAsUnit(t *parse.Name, sc scope) (units.Unit, bool) {
 	if x, bound := sc[t.Text]; bound {
 		u, known := units.Lookup(t.Text)
-		return u, known && x.dimless() && x.factor == 1
+		return u, known && x.dimless() && x.factor == 1 && !x.measured
 	}
 	u, _, _, asUnit := s.env.implicitReading(t)
 	return u, asUnit
+}
+
+func (s *shadowPass) uncertain(n parse.Node, sc scope) bool {
+	switch t := n.(type) {
+	case *parse.Name:
+		if x, bound := sc[t.Text]; bound {
+			return x.measured
+		}
+		v, known := s.env.vars[t.Text]
+		return known && v.IsMeasured()
+	case *parse.Unary:
+		return s.uncertain(t.X, sc)
+	case *parse.Binary:
+		if t.Op == "±" || t.Op == "+-" {
+			return true
+		}
+		return s.uncertain(t.L, sc) || s.uncertain(t.R, sc)
+	case *parse.Call:
+		for _, a := range t.Args {
+			if s.uncertain(a, sc) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *shadowPass) nodeReadsAsUnit(n parse.Node, sc scope) bool {
+	switch t := n.(type) {
+	case *parse.Name:
+		_, asUnit := s.readsAsUnit(t, sc)
+		return asUnit
+	case *parse.Binary:
+		if isProduct(t.Op) {
+			return s.nodeReadsAsUnit(t.L, sc) && s.nodeReadsAsUnit(t.R, sc)
+		}
+		if t.Op == "^" {
+			return s.nodeReadsAsUnit(t.L, sc)
+		}
+	}
+	return false
 }
 
 func (s *shadowPass) unitInPosition(t *parse.Name, sc scope) (shown, bool, bool) {
@@ -268,7 +310,7 @@ func (s *shadowPass) implicitAfterDivision(t *parse.Binary, l shown, sc scope, d
 	if !ok {
 		return shown{}, false
 	}
-	if s.divides(t.L) && s.env.readsAsUnit(t.R) {
+	if s.divides(t.L) && s.nodeReadsAsUnit(t.R, sc) {
 		s.markDivisor(t)
 		if r.si() == 0 {
 			return shown{}, false
@@ -385,6 +427,7 @@ func (s *shadowPass) call(t *parse.Call, sc scope, depth int) (shown, bool) {
 			if !ok {
 				return shown{}, false
 			}
+			a.measured = s.uncertain(t.Args[i], sc)
 			inner[param] = a
 		}
 		return s.walk(f.body, inner, depth+1)
@@ -674,6 +717,9 @@ func digitWord(digits float64) string {
 		return "every digit it has"
 	}
 	whole := int(digits)
+	if whole < 0 {
+		whole = 0
+	}
 	switch whole {
 	case 0:
 		return "no significant digits"

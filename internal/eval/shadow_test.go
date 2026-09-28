@@ -255,3 +255,15 @@ func TestWhyFollowsTheAngleMode(t *testing.T) {
 		t.Errorf("degree mode warned about its own answer: %q", x.Warning)
 	}
 }
+
+func TestDigitAgreementIsNeverNegative(t *testing.T) {
+	for _, digits := range []float64{-3, -0.5, 0, 0.9, 1, 2.7} {
+		w := digitWord(digits)
+		if strings.Contains(w, "-") {
+			t.Errorf("digitWord(%g) = %q", digits, w)
+		}
+	}
+	if w := digitWord(-3); w != "no significant digits" {
+		t.Errorf("digitWord(-3) = %q", w)
+	}
+}
