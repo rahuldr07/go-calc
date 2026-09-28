@@ -177,3 +177,23 @@ func TestEveryRegroupingIsAnnounced(t *testing.T) {
 		}
 	}
 }
+
+func TestNegativeExponentDoesNotSwallowTheImplicitProduct(t *testing.T) {
+	cases := map[string]string{
+		"10^-3 m":       "((10 ^ (-3)) * m)",
+		"2^-1 pi":       "((2 ^ (-1)) * pi)",
+		"2^-1 3":        "((2 ^ (-1)) * 3)",
+		"2^-2 kg":       "((2 ^ (-2)) * kg)",
+		"2^-1 sqrt(4)":  "((2 ^ (-1)) * sqrt(4))",
+		"2^-1 2^2":      "((2 ^ (-1)) * (2 ^ 2))",
+		"9.8 * 10^-3 m": "((9.8 * (10 ^ (-3))) * m)",
+		"-2 m":          "((-2) * m)",
+		"-2^2":          "(-(2 ^ 2))",
+		"-x y":          "((-x) * y)",
+	}
+	for src, want := range cases {
+		if got := parseOK(t, src).String(); got != want {
+			t.Errorf("Parse(%q) = %s, want %s", src, got, want)
+		}
+	}
+}

@@ -182,7 +182,7 @@ func (p *parser) parseUnary() (Node, error) {
 	t := p.peek()
 	if t.Kind == lex.Op && (t.Text == "-" || t.Text == "+") {
 		p.next()
-		x, err := p.parseExpr(implicitPower)
+		x, err := p.parseExpr(implicitPower + 1)
 		if err != nil {
 			return nil, err
 		}
