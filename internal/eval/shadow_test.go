@@ -258,12 +258,12 @@ func TestWhyFollowsTheAngleMode(t *testing.T) {
 
 func TestDigitAgreementIsNeverNegative(t *testing.T) {
 	for _, digits := range []float64{-3, -0.5, 0, 0.9, 1, 2.7} {
-		w := digitWord(digits)
+		w := DigitWord(digits)
 		if strings.Contains(w, "-") {
-			t.Errorf("digitWord(%g) = %q", digits, w)
+			t.Errorf("DigitWord(%g) = %q", digits, w)
 		}
 	}
-	if w := digitWord(-3); w != "no significant digits" {
-		t.Errorf("digitWord(-3) = %q", w)
+	if w := DigitWord(-3); w != "no significant digits" {
+		t.Errorf("DigitWord(-3) = %q", w)
 	}
 }

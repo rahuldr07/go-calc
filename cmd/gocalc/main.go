@@ -185,7 +185,7 @@ func comparison(x eval.Explanation, style format.Style) string {
 	var b strings.Builder
 	b.WriteString("proven:  " + provenText(x.Proven, style) + "\n")
 	b.WriteString("float64: " + strconv.FormatFloat(x.Shadow, 'g', -1, 64) + "\n")
-	b.WriteString("they agree to " + agreement(x.Digits))
+	b.WriteString("they agree to " + eval.DigitWord(x.Digits))
 	if x.WrongDigits > 0 {
 		b.WriteString("\nprinted in full, float64 gives " + x.ShadowExact + ", wrong in its last " + plural(x.WrongDigits, "digit"))
 	}
@@ -205,20 +205,6 @@ func provenText(v value.Value, style format.Style) string {
 }
 
 const provenIndent = "         "
-
-func agreement(digits float64) string {
-	if math.IsInf(digits, 1) {
-		return "every digit it has"
-	}
-	whole := int(digits)
-	switch whole {
-	case 0:
-		return "no significant digits"
-	case 1:
-		return "1 significant digit"
-	}
-	return strconv.Itoa(whole) + " significant digits"
-}
 
 func plural(n int, word string) string {
 	if n == 1 {

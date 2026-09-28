@@ -160,6 +160,13 @@ func (s *shadowPass) readsAsUnit(t *parse.Name, sc scope) (units.Unit, bool) {
 	return u, asUnit
 }
 
+func (s *shadowPass) argWasMeasured(t *parse.Call, i int, sc scope) bool {
+	if known, ok := s.env.bound.at(t, i); ok {
+		return known
+	}
+	return s.uncertain(t.Args[i], sc)
+}
+
 func (s *shadowPass) uncertain(n parse.Node, sc scope) bool {
 	switch t := n.(type) {
 	case *parse.Name:
@@ -427,7 +434,7 @@ func (s *shadowPass) call(t *parse.Call, sc scope, depth int) (shown, bool) {
 			if !ok {
 				return shown{}, false
 			}
-			a.measured = s.uncertain(t.Args[i], sc)
+			a.measured = s.argWasMeasured(t, i, sc)
 			inner[param] = a
 		}
 		return s.walk(f.body, inner, depth+1)
@@ -626,7 +633,7 @@ func warn(sh Shadow, proven value.Value) string {
 		return ""
 	}
 	if digits, ok := digitsAgreed(sh, proven); ok && digits < trustedDigits {
-		return "float64 would answer " + shortFloat(sh.Value) + " here, agreeing with the proven value to " + digitWord(digits) + worstClause(sh)
+		return "float64 would answer " + shortFloat(sh.Value) + " here, agreeing with the proven value to " + DigitWord(digits) + worstClause(sh)
 	}
 	if gap, ok := integerCheck(sh, proven); ok && gap.Wrong > 0 {
 		return "float64 gives " + gap.Float + " here; " + wrongDigits(gap.Wrong) + worstClause(sh)
@@ -712,7 +719,7 @@ func (e *Env) at(p lex.Pos) lex.Pos {
 	return p
 }
 
-func digitWord(digits float64) string {
+func DigitWord(digits float64) string {
 	if math.IsInf(digits, 1) {
 		return "every digit it has"
 	}
