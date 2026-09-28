@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/rahuldr07/go-calc/internal/consts"
 	"github.com/rahuldr07/go-calc/internal/elem"
@@ -65,6 +66,9 @@ func (e *Env) evalName(t *parse.Name, p *pass) (value.Value, error) {
 	}
 	if c, ok := consts.Lookup(t.Text); ok {
 		e.record(t, p, prov.Node{Kind: prov.Constant, Label: t.Text, Detail: constantDetail(c)})
+		if c.Formula != "" {
+			return e.derived(c, p)
+		}
 		if u, ok := units.Lookup(c.Unit); ok && c.Unit != "" {
 			return value.WithUnit(c.Value, u), nil
 		}
@@ -85,6 +89,33 @@ func (e *Env) evalName(t *parse.Name, p *pass) (value.Value, error) {
 		return value.WithUnit(num.FromInt(1), u), nil
 	}
 	return value.Value{}, &lex.Error{Pos: t.P, Msg: "unknown name " + t.Text}
+}
+
+func (e *Env) derived(c consts.Const, p *pass) (value.Value, error) {
+	n, ok := formulaTree(c)
+	if !ok {
+		return value.Value{}, &lex.Error{Msg: "the definition of " + c.Symbol + " cannot be read"}
+	}
+	v, err := NewEnvWith(e.table).evalNode(n, &pass{ctx: p.ctx, prov: map[parse.Node]prov.NodeID{}, divisor: map[parse.Node]bool{}})
+	if err != nil {
+		return value.Value{}, err
+	}
+	v.Prov = prov.None
+	return v, nil
+}
+
+var formulas sync.Map
+
+func formulaTree(c consts.Const) (parse.Node, bool) {
+	if n, ok := formulas.Load(c.Symbol); ok {
+		return n.(parse.Node), true
+	}
+	n, _, err := parse.Parse(c.Formula)
+	if err != nil {
+		return nil, false
+	}
+	formulas.Store(c.Symbol, n)
+	return n, true
 }
 
 func (e *Env) unitInPosition(t *parse.Name, p *pass) (value.Value, bool) {
@@ -866,9 +897,19 @@ func isBareUnit(v value.Value) bool {
 }
 
 func (p *pass) announceRegroupings(n parse.Node) {
+	if at, ok := regroupingSite(n); ok {
+		p.notes = append(p.notes, parse.Note{Pos: at, Msg: "read as " + parse.Reading(p.effective(n))})
+	}
+	p.announceInside(n)
+}
+
+func (p *pass) announceInside(n parse.Node) {
 	switch t := n.(type) {
 	case *parse.Unary:
-		p.announceRegroupings(t.X)
+		p.announceInside(t.X)
+	case *parse.Binary:
+		p.announceInside(t.L)
+		p.announceInside(t.R)
 	case *parse.Call:
 		for _, a := range t.Args {
 			p.announceRegroupings(a)
@@ -877,14 +918,23 @@ func (p *pass) announceRegroupings(n parse.Node) {
 		if len(t.Params) == 0 {
 			p.announceRegroupings(t.Body)
 		}
+	}
+}
+
+func regroupingSite(n parse.Node) (lex.Pos, bool) {
+	switch t := n.(type) {
+	case *parse.Unary:
+		return regroupingSite(t.X)
 	case *parse.Binary:
 		if t.Implicit && parse.InDenominator(t.L) {
-			p.notes = append(p.notes, parse.Note{Pos: t.P, Msg: "read as " + parse.Reading(p.effective(t))})
-			return
+			return t.P, true
 		}
-		p.announceRegroupings(t.L)
-		p.announceRegroupings(t.R)
+		if at, ok := regroupingSite(t.L); ok {
+			return at, true
+		}
+		return regroupingSite(t.R)
 	}
+	return lex.Pos{}, false
 }
 
 func (p *pass) effective(n parse.Node) parse.Node {

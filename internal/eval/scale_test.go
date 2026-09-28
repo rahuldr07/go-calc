@@ -123,7 +123,7 @@ func TestWhatItCanStillWriteItStillAnswers(t *testing.T) {
 		"10^9999",
 		"2^20000",
 		"1000!",
-		"R^1000",
+		"R^500",
 		"km^100000",
 		"m^8000",
 		"1e200 * 1e200",

@@ -19,6 +19,7 @@ type Const struct {
 	Symbol      string
 	Unit        string
 	Source      string
+	Formula     string
 	Value       num.Exact
 	Uncertainty num.Exact
 	Exact       bool
@@ -29,8 +30,12 @@ var table = map[string]Const{}
 func init() {
 	for _, line := range strings.Split(strings.TrimSpace(raw), "\n") {
 		f := strings.Split(line, "\t")
-		if len(f) != 6 {
+		if len(f) != 6 && len(f) != 7 {
 			continue
+		}
+		formula := ""
+		if len(f) == 7 {
+			formula = f[6]
 		}
 		v, err := num.ParseExact(f[2])
 		if err != nil {
@@ -47,6 +52,7 @@ func init() {
 			Uncertainty: u,
 			Unit:        f[4],
 			Exact:       f[5] == "exact",
+			Formula:     formula,
 			Source:      Source,
 		}
 	}

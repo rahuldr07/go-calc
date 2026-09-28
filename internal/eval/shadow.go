@@ -59,6 +59,7 @@ type shadowPass struct {
 	lost    []LossSite
 	units   unitScope
 	divisor map[parse.Node]bool
+	calls   map[*parse.Call]int
 }
 
 type shown struct {
@@ -128,6 +129,12 @@ func (s *shadowPass) name(t *parse.Name, sc scope) (shown, bool) {
 		return wearing(numFloat(v.Num, s.prec), exactFloat(v.FactorOrOne()), v.Dim), true
 	}
 	if c, ok := consts.Lookup(t.Text); ok {
+		if c.Formula != "" {
+			if n, ok := formulaTree(c); ok {
+				return s.walk(n, nil, 0)
+			}
+			return shown{}, false
+		}
 		if u, ok := units.Lookup(c.Unit); ok && c.Unit != "" {
 			if u.Offset.Sign() != 0 {
 				return shown{}, false
@@ -160,11 +167,20 @@ func (s *shadowPass) readsAsUnit(t *parse.Name, sc scope) (units.Unit, bool) {
 	return u, asUnit
 }
 
-func (s *shadowPass) argWasMeasured(t *parse.Call, i int, sc scope) bool {
-	if known, ok := s.env.bound.at(t, i); ok {
+func (s *shadowPass) argWasMeasured(t *parse.Call, call, i int, sc scope) bool {
+	if known, ok := s.env.bound.at(t, call, i); ok {
 		return known
 	}
 	return s.uncertain(t.Args[i], sc)
+}
+
+func (s *shadowPass) entering(t *parse.Call) int {
+	if s.calls == nil {
+		s.calls = map[*parse.Call]int{}
+	}
+	n := s.calls[t]
+	s.calls[t] = n + 1
+	return n
 }
 
 func (s *shadowPass) uncertain(n parse.Node, sc scope) bool {
@@ -429,12 +445,13 @@ func (s *shadowPass) call(t *parse.Call, sc scope, depth int) (shown, bool) {
 			return shown{}, false
 		}
 		inner := scope{}
+		call := s.entering(t)
 		for i, param := range f.params {
 			a, ok := s.walk(t.Args[i], sc, depth+1)
 			if !ok {
 				return shown{}, false
 			}
-			a.measured = s.argWasMeasured(t, i, sc)
+			a.measured = s.argWasMeasured(t, call, i, sc)
 			inner[param] = a
 		}
 		return s.walk(f.body, inner, depth+1)

@@ -1,3 +1,3 @@
 package consts
 
-const checksumPin = "2b757d7e83242f7c"
+const checksumPin = "c1d7e9d5b00d0df1"

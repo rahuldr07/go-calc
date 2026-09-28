@@ -48,19 +48,20 @@ func TestEveryConstantMatchesItsPublishedValue(t *testing.T) {
 		value       string
 		uncertainty string
 		unit        string
+		formula     string
 	}{
-		"c":        {"2.99792458e8", "0", "m/s"},
-		"h":        {"6.62607015e-34", "0", "J·s"},
-		"hbar":     {"1.054571817e-34", "0", "J·s"},
-		"e_charge": {"1.602176634e-19", "0", "C"},
-		"k_B":      {"1.380649e-23", "0", "J/K"},
-		"N_A":      {"6.02214076e23", "0", "1/mol"},
-		"g0":       {"9.80665", "0", "m/s^2"},
-		"G":        {"6.67430e-11", "1.5e-15", "m^3/(kg·s^2)"},
-		"m_e":      {"9.1093837139e-31", "2.8e-40", "kg"},
-		"m_p":      {"1.67262192595e-27", "5.2e-37", "kg"},
-		"alpha":    {"7.2973525643e-3", "1.1e-12", ""},
-		"R":        {"8.314462618", "0", "J/(mol·K)"},
+		"c":        {"2.99792458e8", "0", "m/s", ""},
+		"h":        {"6.62607015e-34", "0", "J·s", ""},
+		"hbar":     {"1.054571817e-34", "0", "J·s", "h / (2 pi)"},
+		"e_charge": {"1.602176634e-19", "0", "C", ""},
+		"k_B":      {"1.380649e-23", "0", "J/K", ""},
+		"N_A":      {"6.02214076e23", "0", "1/mol", ""},
+		"g0":       {"9.80665", "0", "m/s^2", ""},
+		"G":        {"6.67430e-11", "1.5e-15", "m^3/(kg·s^2)", ""},
+		"m_e":      {"9.1093837139e-31", "2.8e-40", "kg", ""},
+		"m_p":      {"1.67262192595e-27", "5.2e-37", "kg", ""},
+		"alpha":    {"7.2973525643e-3", "1.1e-12", "", ""},
+		"R":        {"8.31446261815324", "0", "J/(mol·K)", ""},
 	}
 	if len(published) != len(All()) {
 		t.Fatalf("the table holds %d constants, this test pins %d", len(All()), len(published))
@@ -88,8 +89,19 @@ func TestEveryConstantMatchesItsPublishedValue(t *testing.T) {
 		if c.Unit != want.unit {
 			t.Errorf("%s unit = %q, want %q", name, c.Unit, want.unit)
 		}
-		if c.Exact != (want.uncertainty == "0") {
+		if c.Formula != want.formula {
+			t.Errorf("%s formula = %q, want %q", name, c.Formula, want.formula)
+		}
+		if c.Exact != (want.uncertainty == "0" && want.formula == "") {
 			t.Errorf("%s exact = %v", name, c.Exact)
+		}
+	}
+}
+
+func TestAnIrrationalConstantIsNotClaimedExact(t *testing.T) {
+	for _, c := range All() {
+		if c.Formula != "" && c.Exact {
+			t.Errorf("%s is derived from %q and cannot be an exact rational", c.Symbol, c.Formula)
 		}
 	}
 }

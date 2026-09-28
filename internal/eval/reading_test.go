@@ -83,6 +83,9 @@ func TestTheShadowReadsANameTheWayTheEvaluatorDid(t *testing.T) {
 		{[]string{"x = 3 ± 1", "f(h) = 1/2 h"}, "f(x/x*3)"},
 		{[]string{"f(h) = 1/2 h", "g(t) = t + (1 ± 0.5)"}, "f(g(2))"},
 		{[]string{"f(h) = 1/2 h^2"}, "f(3)"},
+		{[]string{"ke(m, v) = 1/2 m v^2", "outer(m, v) = ke(m, v)"}, "outer(2.0 ± 0.1, 3) / outer(2.0, 3)"},
+		{[]string{"f(h) = 1/2 h", "g(x) = f(x)"}, "g(3) * g(12.3 ± 0.2)"},
+		{[]string{"f(h) = 1/2 h", "g(x) = f(x)"}, "g(12.3 ± 0.2) * g(3)"},
 		{[]string{"h = 3"}, "1/2 h"},
 		{nil, "100 km / 2 h"},
 	}
@@ -115,5 +118,41 @@ func TestProvenanceNamesTheOperationThatWasTaken(t *testing.T) {
 	tree = env.Arena().Tree(mustEval(t, env, "2 m").Prov)
 	if strings.HasPrefix(tree, "/") {
 		t.Errorf("trace of a plain product starts with a division:\n%s", tree)
+	}
+}
+
+func TestOneCallNodeReachedTwiceKeepsEachReading(t *testing.T) {
+	env := NewEnv()
+	for _, line := range []string{"f(h) = 1/2 h", "g(x) = f(x)"} {
+		mustEval(t, env, line)
+	}
+	n, _, err := parse.Parse("g(3) * g(12.3 ± 0.2)")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	v, err := env.Eval(n)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	x := env.Why(n, v)
+	if x.Warning != "" {
+		t.Errorf("warned on a correct answer: %s", x.Warning)
+	}
+	if x.Digits < 15 {
+		t.Errorf("the shadow answered %g against the proven %s, agreeing to %g digits", x.Shadow, format.Default.Text(v, nil), x.Digits)
+	}
+}
+
+func TestTheConstantsHoldTheirDefiningRelations(t *testing.T) {
+	zero := map[string]string{
+		"N_A * k_B - R":     "0 (1/mol)·(J/K)",
+		"h / (2 pi) - hbar": "0 J·s",
+		"hbar * 2 pi - h":   "0 J·s",
+	}
+	for src, want := range zero {
+		got := spelled(t, NewEnv(), src)
+		if head := strings.SplitN(got, "\n", 2)[0]; head != want {
+			t.Errorf("%q = %q, want %q; the table does not hold the relation it claims", src, head, want)
+		}
 	}
 }

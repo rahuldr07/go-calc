@@ -25,16 +25,25 @@ type Env struct {
 }
 
 type boundArgs struct {
-	measured map[*parse.Call][]bool
+	measured map[*parse.Call][][]bool
 }
 
-func (b *boundArgs) clear() { b.measured = map[*parse.Call][]bool{} }
+func (b *boundArgs) clear() { b.measured = map[*parse.Call][][]bool{} }
 
-func (b *boundArgs) record(t *parse.Call, measured []bool) { b.measured[t] = measured }
+func (b *boundArgs) record(t *parse.Call, measured []bool) {
+	b.measured[t] = append(b.measured[t], measured)
+}
 
-func (b *boundArgs) at(t *parse.Call, i int) (bool, bool) {
-	m, ok := b.measured[t]
-	if !ok || i >= len(m) {
+func (b *boundArgs) at(t *parse.Call, call, i int) (bool, bool) {
+	calls, ok := b.measured[t]
+	if !ok || len(calls) == 0 {
+		return false, false
+	}
+	if call >= len(calls) {
+		call = len(calls) - 1
+	}
+	m := calls[call]
+	if i >= len(m) {
 		return false, false
 	}
 	return m[i], true
@@ -46,7 +55,7 @@ func NewEnvWith(t *unc.Table) *Env {
 	if t == nil {
 		t = unc.NewTable()
 	}
-	return &Env{vars: map[string]value.Value{}, funcs: map[string]fn{}, table: t, arena: prov.NewArena(), bound: &boundArgs{measured: map[*parse.Call][]bool{}}}
+	return &Env{vars: map[string]value.Value{}, funcs: map[string]fn{}, table: t, arena: prov.NewArena(), bound: &boundArgs{measured: map[*parse.Call][][]bool{}}}
 }
 
 func (e *Env) Arena() *prov.Arena { return e.arena }
