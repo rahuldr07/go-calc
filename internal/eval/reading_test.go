@@ -6,6 +6,7 @@ import (
 
 	"github.com/rahuldr07/go-calc/internal/format"
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/value"
 )
 
 func spelled(t *testing.T, env *Env, src string) string {
@@ -176,43 +177,81 @@ func TestBothParenthesisationsOfADenominatorAgree(t *testing.T) {
 }
 
 func TestEveryNoteReadsBackToTheAnswerItDescribes(t *testing.T) {
-	lines := []string{
-		"1/2 h", "1/2 m s", "-(1/2 m) s", "-(1/2 h) m", "(-1/2 h) m", "(1/2 m) s",
-		"100 km / 2 h", "100 W / 2 m^2", "3 m / 2 s / 4 s", "1/2 h m",
-		"2 m^2", "2 pi^2", "1/2 m s + 1/2 m s", "sqrt(1/2 h m)", "-(1/2 m s)",
-	}
-	for _, src := range lines {
-		env := NewEnv()
-		n, read, err := parse.Parse(src)
-		if err != nil {
-			t.Fatalf("Parse(%q): %v", src, err)
+	setups := [][]string{nil, {"x = 3"}, {"h = 3"}, {"h = 12.3 ± 0.2 m"}, {"m = 4"}, {"f(h) = 1/2 h"}}
+	heads := []string{"1", "2", "100", "x", "m", "h", "kg", "sqrt(4)", "-1", "(1/2)"}
+	tails := []string{"h", "m", "x", "2", "m^2", "2^2", "h^2", "s", "kg 2^2", "pi^2", "sqrt(4)^2"}
+	joins := []string{" ", "/", " / ", "*", " "}
+	checked := 0
+	for _, setup := range setups {
+		for _, head := range heads {
+			for _, tail := range tails {
+				for _, join := range joins {
+					src := head + join + tail
+					env := NewEnv()
+					ok := true
+					for _, line := range setup {
+						if _, err := evaluate(env, line); err != nil {
+							ok = false
+						}
+					}
+					if !ok {
+						continue
+					}
+					v, err := evaluate(env, src)
+					if err != nil {
+						continue
+					}
+					for _, note := range readings(env, src) {
+						checked++
+						again := NewEnv()
+						for _, line := range setup {
+							evaluate(again, line)
+						}
+						w, err := evaluate(again, note)
+						if err != nil {
+							t.Errorf("%v then %q said it read %q, which does not read back: %v", setup, src, note, err)
+							continue
+						}
+						if w.Dim != v.Dim {
+							t.Errorf("%v then %q answered %s but says it read %q, which is %s", setup, src, v.Dim.Words(), note, w.Dim.Words())
+							continue
+						}
+						if format.Default.Number(w) != format.Default.Number(v) {
+							t.Errorf("%v then %q answered %q but says it read %q, which is %q", setup, src, format.Default.Text(v, nil), note, format.Default.Text(w, nil))
+						}
+					}
+				}
+			}
 		}
-		v, err := env.Eval(n)
-		if err != nil {
+	}
+	if checked < 200 {
+		t.Fatalf("only %d notes were checked; the generator has stopped producing ambiguous lines", checked)
+	}
+}
+
+func evaluate(env *Env, src string) (value.Value, error) {
+	n, _, err := parse.Parse(src)
+	if err != nil {
+		return value.Value{}, err
+	}
+	return env.Eval(n)
+}
+
+func readings(env *Env, src string) []string {
+	n, read, err := parse.Parse(src)
+	if err != nil {
+		return nil
+	}
+	if _, err := env.Eval(n); err != nil {
+		return nil
+	}
+	var out []string
+	for _, note := range append(read, env.Notes()...) {
+		said := strings.TrimPrefix(note.Msg, "read as ")
+		if said == note.Msg || strings.Contains(said, " the ") {
 			continue
 		}
-		for _, note := range append(read, env.Notes()...) {
-			said := strings.TrimPrefix(note.Msg, "read as ")
-			if !strings.HasPrefix(note.Msg, "read as ") || strings.Contains(said, " the ") {
-				continue
-			}
-			again, _, err := parse.Parse(said)
-			if err != nil {
-				t.Errorf("%q said %q, which does not parse: %v", src, note.Msg, err)
-				continue
-			}
-			w, err := NewEnv().Eval(again)
-			if err != nil {
-				t.Errorf("%q said %q, which does not evaluate: %v", src, note.Msg, err)
-				continue
-			}
-			if w.Dim != v.Dim {
-				t.Errorf("%q answered %s but says it read %q, which is %s", src, v.Dim.Words(), said, w.Dim.Words())
-				continue
-			}
-			if format.Default.Number(w) != format.Default.Number(v) {
-				t.Errorf("%q answered %q but says it read %q, which is %q", src, format.Default.Text(v, nil), said, format.Default.Text(w, nil))
-			}
-		}
+		out = append(out, said)
 	}
+	return out
 }

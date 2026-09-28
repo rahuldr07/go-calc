@@ -176,12 +176,29 @@ func (s *shadowPass) argWasMeasured(t *parse.Call, call, i int, sc scope) bool {
 	return s.uncertain(t.Args[i], sc)
 }
 
-func (s *shadowPass) count(n parse.Node, sc scope, depth int) {
-	if s.calls == nil {
-		s.calls = map[*parse.Call]int{}
+func (s *shadowPass) count(n parse.Node, depth int) {
+	if depth > maxShadowDepth {
+		return
 	}
-	aside := &shadowPass{env: s.env, prec: s.prec, degrees: s.degrees, units: s.units, calls: s.calls}
-	aside.walk(n, sc, depth)
+	switch t := n.(type) {
+	case *parse.Unary:
+		s.count(t.X, depth+1)
+	case *parse.Binary:
+		s.count(t.L, depth+1)
+		s.count(t.R, depth+1)
+	case *parse.Call:
+		for _, a := range t.Args {
+			s.count(a, depth+1)
+		}
+		if f, ok := s.env.funcs[t.Fn]; ok {
+			s.entering(t)
+			s.count(f.body, depth+1)
+		}
+	case *parse.Assign:
+		if len(t.Params) == 0 {
+			s.count(t.Body, depth+1)
+		}
+	}
 }
 
 func (s *shadowPass) entering(t *parse.Call) int {
@@ -293,7 +310,14 @@ func (s *shadowPass) binary(t *parse.Binary, sc scope, depth int) (shown, bool) 
 		return shown{}, false
 	}
 	if t.Op == "±" || t.Op == "+-" {
-		s.count(t.R, sc, depth+1)
+		r, ok := s.walkPositioned(t.R, sc, depth+1, false)
+		if !ok {
+			s.count(t.R, depth+1)
+			return l, true
+		}
+		if l.dimless() && l.factor == 1 && !r.dimless() {
+			return wearing(l.num, r.factor, r.dim), true
+		}
 		return l, true
 	}
 	if t.Implicit && parse.InDenominator(t.L) {

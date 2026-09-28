@@ -100,31 +100,53 @@ type Note struct {
 }
 
 func regroupings(n Node, notes []Note) []Note {
-	return append(notes, collectRegroupings(n, nil)...)
+	return append(notes, announceRegrouped(n, nil)...)
 }
 
-func collectRegroupings(n Node, out []Note) []Note {
+func announceRegrouped(n Node, out []Note) []Note {
+	if at, ok := regroupedSite(n); ok {
+		out = append(out, Note{Pos: at, Msg: "read as " + Reading(n)})
+	}
+	return insideRegrouped(n, out)
+}
+
+func insideRegrouped(n Node, out []Note) []Note {
 	switch t := n.(type) {
 	case *Unary:
-		return collectRegroupings(t.X, out)
+		return insideRegrouped(t.X, out)
+	case *Binary:
+		out = insideRegrouped(t.L, out)
+		return insideRegrouped(t.R, out)
 	case *Call:
 		for _, a := range t.Args {
-			out = collectRegroupings(a, out)
+			out = announceRegrouped(a, out)
 		}
 		return out
 	case *Assign:
-		return collectRegroupings(t.Body, out)
-	case *Binary:
-		if t.Implicit && InDenominator(t.L) {
-			return out
+		if len(t.Params) == 0 {
+			return announceRegrouped(t.Body, out)
 		}
-		if regrouped(t) {
-			return append(out, Note{Pos: t.P, Msg: "read as " + Reading(t)})
-		}
-		out = collectRegroupings(t.L, out)
-		return collectRegroupings(t.R, out)
 	}
 	return out
+}
+
+func regroupedSite(n Node) (lex.Pos, bool) {
+	switch t := n.(type) {
+	case *Unary:
+		return regroupedSite(t.X)
+	case *Binary:
+		if t.Implicit && InDenominator(t.L) {
+			return lex.Pos{}, false
+		}
+		if regrouped(t) {
+			return t.P, true
+		}
+		if at, ok := regroupedSite(t.L); ok {
+			return at, true
+		}
+		return regroupedSite(t.R)
+	}
+	return lex.Pos{}, false
 }
 
 func InDenominator(n Node) bool {
@@ -188,11 +210,32 @@ func reading(n Node) string {
 		return t.Op + bracket(t.X)
 	case *Binary:
 		if t.Implicit {
-			return bracket(t.L) + " " + bracket(t.R)
+			return juxtaposed(bracket(t.L), bracket(t.R))
 		}
 		return bracket(t.L) + operatorSymbol(t.Op) + bracket(t.R)
 	}
 	return n.String()
+}
+
+func juxtaposed(left, right string) string {
+	if endsInName(left) && strings.HasPrefix(right, "(") {
+		return "(" + left + ") " + right
+	}
+	return left + " " + right
+}
+
+func endsInName(text string) bool {
+	toks, err := lex.Scan(text)
+	if err != nil {
+		return true
+	}
+	for len(toks) > 0 && toks[len(toks)-1].Kind == lex.EOF {
+		toks = toks[:len(toks)-1]
+	}
+	if len(toks) == 0 {
+		return true
+	}
+	return toks[len(toks)-1].Kind == lex.Ident
 }
 
 func bracket(n Node) string {
