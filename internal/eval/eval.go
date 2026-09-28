@@ -151,13 +151,16 @@ func (e *Env) evalCall(t *parse.Call, p *pass) (value.Value, error) {
 			return value.Value{}, &lex.Error{Pos: t.P, Msg: "wrong number of arguments for " + t.Fn}
 		}
 		inner := e.child()
+		measured := make([]bool, len(f.params))
 		for i, param := range f.params {
 			a, err := e.eval(t.Args[i], p)
 			if err != nil {
 				return value.Value{}, err
 			}
 			inner.vars[param] = a
+			measured[i] = a.IsMeasured()
 		}
+		e.bound.record(t, measured)
 		return inner.eval(f.body, p)
 	}
 	if v, err, handled := e.builtin(t, p); handled {

@@ -19,8 +19,25 @@ type Env struct {
 	funcs map[string]fn
 	table *unc.Table
 	arena *prov.Arena
+	bound *boundArgs
 	line  int
 	notes []parse.Note
+}
+
+type boundArgs struct {
+	measured map[*parse.Call][]bool
+}
+
+func (b *boundArgs) clear() { b.measured = map[*parse.Call][]bool{} }
+
+func (b *boundArgs) record(t *parse.Call, measured []bool) { b.measured[t] = measured }
+
+func (b *boundArgs) at(t *parse.Call, i int) (bool, bool) {
+	m, ok := b.measured[t]
+	if !ok || i >= len(m) {
+		return false, false
+	}
+	return m[i], true
 }
 
 func NewEnv() *Env { return NewEnvWith(unc.NewTable()) }
@@ -29,7 +46,7 @@ func NewEnvWith(t *unc.Table) *Env {
 	if t == nil {
 		t = unc.NewTable()
 	}
-	return &Env{vars: map[string]value.Value{}, funcs: map[string]fn{}, table: t, arena: prov.NewArena()}
+	return &Env{vars: map[string]value.Value{}, funcs: map[string]fn{}, table: t, arena: prov.NewArena(), bound: &boundArgs{measured: map[*parse.Call][]bool{}}}
 }
 
 func (e *Env) Arena() *prov.Arena { return e.arena }
@@ -86,6 +103,7 @@ func (e *Env) Get(name string) (value.Value, bool) {
 func (e *Env) child() *Env {
 	c := NewEnvWith(e.table)
 	c.arena = e.arena
+	c.bound = e.bound
 	c.line = e.line
 	for k, v := range e.vars {
 		c.vars[k] = v

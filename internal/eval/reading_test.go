@@ -42,6 +42,11 @@ func TestTheShadowReadsANameTheWayTheEvaluatorDid(t *testing.T) {
 		{[]string{"f(h) = 1/2 h"}, "f(5 s)"},
 		{[]string{"h = 12.3 ± 0.2 m", "g(h) = 1/2 h"}, "g(3)"},
 		{[]string{"k(h) = 1/2 h"}, "k(12.3 ± 0.2)"},
+		{[]string{"x = 3 ± 1", "f(h) = 1/2 h"}, "f(x*0 + 3)"},
+		{[]string{"x = 3 ± 1", "f(h) = 1/2 h"}, "f(x - x + 3)"},
+		{[]string{"x = 3 ± 1", "f(h) = 1/2 h"}, "f(x/x*3)"},
+		{[]string{"f(h) = 1/2 h", "g(t) = t + (1 ± 0.5)"}, "f(g(2))"},
+		{[]string{"f(h) = 1/2 h^2"}, "f(3)"},
 		{[]string{"h = 3"}, "1/2 h"},
 		{nil, "100 km / 2 h"},
 	}
@@ -54,7 +59,11 @@ func TestTheShadowReadsANameTheWayTheEvaluatorDid(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Parse(%q): %v", c.src, err)
 		}
-		if w := env.Warning(n, mustEval(t, env, c.src)); w != "" {
+		v, err := env.Eval(n)
+		if err != nil {
+			t.Fatalf("Eval(%q): %v", c.src, err)
+		}
+		if w := env.Warning(n, v); w != "" {
 			t.Errorf("%q after %v warned %q; the shadow read it differently from the evaluator", c.src, c.setup, w)
 		}
 	}

@@ -44,6 +44,7 @@ func (p *pass) note(v value.Value) value.Value {
 func (e *Env) Eval(n parse.Node) (value.Value, error) { return e.EvalCtx(n, DefaultCtx()) }
 
 func (e *Env) EvalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
+	e.bound.clear()
 	v, err := e.evalCtx(n, ctx)
 	if err != nil {
 		return value.Value{}, err
