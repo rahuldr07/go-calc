@@ -96,7 +96,7 @@ Options are the two-dashed names only, so a leading `-` begins an expression: `g
 
 **Constants.** CODATA 2022 with citations, pinned by checksum so the table cannot drift silently.
 
-A measured constant's uncertainty is reported by `info` and is **not yet propagated into calculations**. `info G` prints `0.0000000000667430 ± 0.0000000000000015 m^3/(kg·s^2)` with its CODATA citation, but `G` used in an expression answers `6.6743e-11 m^3/(kg·s^2)` as if it were exact, so a result that depends on `G` carries no contribution from it and no budget line for it. Spec 4.3 requires that propagation and it is not built; declared measurements (`h = 12.3 ± 0.2 m`) do propagate, and they are the only source of uncertainty in a result today.
+A measured constant's uncertainty is reported by `info` and is **not yet propagated into calculations**. `info G` prints `6.67430e-11 ± 1.5e-15 m^3/(kg·s^2)` with its CODATA citation, but `G` used in an expression answers `6.6743e-11 m^3/(kg·s^2)` as if it were exact, so a result that depends on `G` carries no contribution from it and no budget line for it. Spec 4.3 requires that propagation and it is not built; declared measurements (`h = 12.3 ± 0.2 m`) do propagate, and they are the only source of uncertainty in a result today.
 
 **Documents.** `gocalc run sheet.calc` evaluates a file in one environment, in dependency order, detecting cycles. `Doc.Edit` re-evaluates only the lines an edit actually staled.
 
