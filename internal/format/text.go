@@ -27,7 +27,10 @@ const definedSuffix = " defined"
 
 func (s Style) Text(v value.Value, notes []parse.Note) string {
 	if v.IsDefinition() {
-		return v.Def + definedSuffix
+		var b strings.Builder
+		b.WriteString(v.Def + definedSuffix)
+		writeReadings(&b, notes)
+		return b.String()
 	}
 	var b strings.Builder
 	mid, u, rounded := s.Uncertain(v)
@@ -63,10 +66,14 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 	if v.Unc.Warning != "" {
 		b.WriteString("\n  " + v.Unc.Warning)
 	}
+	writeReadings(&b, notes)
+	return b.String()
+}
+
+func writeReadings(b *strings.Builder, notes []parse.Note) {
 	for _, n := range notes {
 		b.WriteString("\n  read as " + strings.TrimPrefix(n.Msg, "read as "))
 	}
-	return b.String()
 }
 
 func (s Style) Number(v value.Value) string {

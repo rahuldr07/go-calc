@@ -897,53 +897,60 @@ func isBareUnit(v value.Value) bool {
 }
 
 func (p *pass) announceRegroupings(n parse.Node) {
-	if at, ok := regroupingSite(n); ok {
+	if at, ok := p.regroupingSite(n); ok {
 		p.notes = append(p.notes, parse.Note{Pos: at, Msg: "read as " + parse.Reading(p.effective(n))})
 	}
-	p.announceInside(n)
 }
 
-func (p *pass) announceInside(n parse.Node) {
+func (p *pass) regroupingSite(n parse.Node) (lex.Pos, bool) {
 	switch t := n.(type) {
 	case *parse.Unary:
-		p.announceInside(t.X)
-	case *parse.Binary:
-		p.announceInside(t.L)
-		p.announceInside(t.R)
-	case *parse.Call:
-		for _, a := range t.Args {
-			p.announceRegroupings(a)
-		}
-	case *parse.Assign:
-		if len(t.Params) == 0 {
-			p.announceRegroupings(t.Body)
-		}
-	}
-}
-
-func regroupingSite(n parse.Node) (lex.Pos, bool) {
-	switch t := n.(type) {
-	case *parse.Unary:
-		return regroupingSite(t.X)
+		return p.regroupingSite(t.X)
 	case *parse.Binary:
 		if t.Implicit && parse.InDenominator(t.L) {
 			return t.P, true
 		}
-		if at, ok := regroupingSite(t.L); ok {
+		if at, ok := p.regroupingSite(t.L); ok {
 			return at, true
 		}
-		return regroupingSite(t.R)
+		return p.regroupingSite(t.R)
+	case *parse.Call:
+		for _, a := range t.Args {
+			if at, ok := p.regroupingSite(a); ok {
+				return at, true
+			}
+		}
+	case *parse.Assign:
+		return p.regroupingSite(t.Body)
 	}
 	return lex.Pos{}, false
 }
 
 func (p *pass) effective(n parse.Node) parse.Node {
-	if u, ok := n.(*parse.Unary); ok {
-		x := p.effective(u.X)
-		if x == u.X {
-			return u
+	switch t := n.(type) {
+	case *parse.Unary:
+		x := p.effective(t.X)
+		if x == t.X {
+			return t
 		}
-		return &parse.Unary{Op: u.Op, X: x, P: u.P}
+		return &parse.Unary{Op: t.Op, X: x, P: t.P}
+	case *parse.Call:
+		args := make([]parse.Node, len(t.Args))
+		same := true
+		for i, a := range t.Args {
+			args[i] = p.effective(a)
+			same = same && args[i] == a
+		}
+		if same {
+			return t
+		}
+		return &parse.Call{Fn: t.Fn, Args: args, Keys: t.Keys, P: t.P}
+	case *parse.Assign:
+		body := p.effective(t.Body)
+		if body == t.Body {
+			return t
+		}
+		return &parse.Assign{Name: t.Name, Params: t.Params, Body: body, P: t.P}
 	}
 	b, ok := n.(*parse.Binary)
 	if !ok {

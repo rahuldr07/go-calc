@@ -177,12 +177,35 @@ func TestBothParenthesisationsOfADenominatorAgree(t *testing.T) {
 }
 
 func TestEveryNoteReadsBackToTheAnswerItDescribes(t *testing.T) {
-	setups := [][]string{nil, {"x = 3"}, {"h = 3"}, {"h = 12.3 ± 0.2 m"}, {"m = 4"}, {"f(h) = 1/2 h"}}
-	heads := []string{"1", "2", "100", "x", "m", "h", "kg", "sqrt(4)", "-1", "(1/2)"}
-	tails := []string{"h", "m", "x", "2", "m^2", "2^2", "h^2", "s", "kg 2^2", "pi^2", "sqrt(4)^2"}
-	joins := []string{" ", "/", " / ", "*", " "}
+	setups := [][]string{
+		nil,
+		{"x = 3"},
+		{"h = 3"},
+		{"h = 12.3 ± 0.2 m"},
+		{"m = 4"},
+		{"f(h) = 1/2 h"},
+		{"area(r) = pi r^2"},
+	}
+	heads := []string{"1", "2", "100", "x", "m", "h", "kg", "sqrt(4)", "-1", "(1/2)", "abs(1/2 h)"}
+	tails := []string{
+		"h", "m", "x", "2", "m^2", "2^2", "h^2", "s", "kg 2^2", "pi^2", "sqrt(4)^2",
+		"sqrt(3 h^2)", "abs(1/2 h)", "abs(2 m^2)", "sqrt(2 s^2)",
+	}
+	joins := []string{" ", "/", " / ", "*", " ", " + "}
 	checked := 0
 	for _, setup := range setups {
+		for _, line := range setup {
+			env := NewEnv()
+			if _, err := evaluate(env, line); err != nil {
+				continue
+			}
+			for _, note := range readings(NewEnv(), line) {
+				checked++
+				if _, _, err := parse.Parse(note); err != nil {
+					t.Errorf("the definition %q said it read %q, which does not parse: %v", line, note, err)
+				}
+			}
+		}
 		for _, head := range heads {
 			for _, tail := range tails {
 				for _, join := range joins {

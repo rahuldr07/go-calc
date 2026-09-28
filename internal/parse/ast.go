@@ -100,34 +100,34 @@ type Note struct {
 }
 
 func regroupings(n Node, notes []Note) []Note {
-	return append(notes, announceRegrouped(n, nil)...)
-}
-
-func announceRegrouped(n Node, out []Note) []Note {
-	if at, ok := regroupedSite(n); ok {
-		out = append(out, Note{Pos: at, Msg: "read as " + Reading(n)})
+	if decidedByEvaluator(n) {
+		return notes
 	}
-	return insideRegrouped(n, out)
+	if at, ok := regroupedSite(n); ok {
+		return append(notes, Note{Pos: at, Msg: "read as " + Reading(n)})
+	}
+	return notes
 }
 
-func insideRegrouped(n Node, out []Note) []Note {
+func decidedByEvaluator(n Node) bool {
 	switch t := n.(type) {
 	case *Unary:
-		return insideRegrouped(t.X, out)
+		return decidedByEvaluator(t.X)
 	case *Binary:
-		out = insideRegrouped(t.L, out)
-		return insideRegrouped(t.R, out)
+		if t.Implicit && InDenominator(t.L) {
+			return true
+		}
+		return decidedByEvaluator(t.L) || decidedByEvaluator(t.R)
 	case *Call:
 		for _, a := range t.Args {
-			out = announceRegrouped(a, out)
+			if decidedByEvaluator(a) {
+				return true
+			}
 		}
-		return out
 	case *Assign:
-		if len(t.Params) == 0 {
-			return announceRegrouped(t.Body, out)
-		}
+		return decidedByEvaluator(t.Body)
 	}
-	return out
+	return false
 }
 
 func regroupedSite(n Node) (lex.Pos, bool) {
@@ -145,6 +145,14 @@ func regroupedSite(n Node) (lex.Pos, bool) {
 			return at, true
 		}
 		return regroupedSite(t.R)
+	case *Call:
+		for _, a := range t.Args {
+			if at, ok := regroupedSite(a); ok {
+				return at, true
+			}
+		}
+	case *Assign:
+		return regroupedSite(t.Body)
 	}
 	return lex.Pos{}, false
 }
@@ -213,6 +221,17 @@ func reading(n Node) string {
 			return juxtaposed(bracket(t.L), bracket(t.R))
 		}
 		return bracket(t.L) + operatorSymbol(t.Op) + bracket(t.R)
+	case *Call:
+		parts := make([]string, len(t.Args))
+		for i, a := range t.Args {
+			parts[i] = t.Key(i) + reading(a)
+		}
+		return t.Fn + "(" + strings.Join(parts, ", ") + ")"
+	case *Assign:
+		if len(t.Params) == 0 {
+			return t.Name + " = " + reading(t.Body)
+		}
+		return t.Name + "(" + strings.Join(t.Params, ", ") + ") = " + reading(t.Body)
 	}
 	return n.String()
 }

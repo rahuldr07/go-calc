@@ -176,6 +176,31 @@ func (s *shadowPass) argWasMeasured(t *parse.Call, call, i int, sc scope) bool {
 	return s.uncertain(t.Args[i], sc)
 }
 
+func (s *shadowPass) measured(t *parse.Binary, l shown, sc scope, depth int) shown {
+	sites, entered := len(s.lost), s.snapshot()
+	r, ok := s.walkPositioned(t.R, sc, depth+1, false)
+	s.lost = s.lost[:sites]
+	if !ok {
+		s.calls = entered
+		s.count(t.R, depth+1)
+		return l
+	}
+	if bareNumber(l) && !bareNumber(r) {
+		return wearing(l.num, r.factor, r.dim)
+	}
+	return l
+}
+
+func bareNumber(v shown) bool { return v.dimless() && v.factor == 1 }
+
+func (s *shadowPass) snapshot() map[*parse.Call]int {
+	out := make(map[*parse.Call]int, len(s.calls))
+	for k, v := range s.calls {
+		out[k] = v
+	}
+	return out
+}
+
 func (s *shadowPass) count(n parse.Node, depth int) {
 	if depth > maxShadowDepth {
 		return
@@ -310,15 +335,7 @@ func (s *shadowPass) binary(t *parse.Binary, sc scope, depth int) (shown, bool) 
 		return shown{}, false
 	}
 	if t.Op == "±" || t.Op == "+-" {
-		r, ok := s.walkPositioned(t.R, sc, depth+1, false)
-		if !ok {
-			s.count(t.R, depth+1)
-			return l, true
-		}
-		if l.dimless() && l.factor == 1 && !r.dimless() {
-			return wearing(l.num, r.factor, r.dim), true
-		}
-		return l, true
+		return s.measured(t, l, sc, depth), true
 	}
 	if t.Implicit && parse.InDenominator(t.L) {
 		return s.implicitAfterDivision(t, l, sc, depth)
