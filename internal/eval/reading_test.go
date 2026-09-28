@@ -34,6 +34,42 @@ func TestANegativeExponentKeepsTheFollowingFactor(t *testing.T) {
 	}
 }
 
+func TestAUnarySignBindsTighterThanModAndOf(t *testing.T) {
+	cases := map[string]string{
+		"-7 mod 3":       "2",
+		"-7 mod -3":      "2",
+		"-2 mod 3":       "1",
+		"7 mod 3":        "1",
+		"(-7) mod 3":     "2",
+		"-(7 mod 3)":     "-1",
+		"-20% of 500":    "-100",
+		"sqrt(-7 mod 3)": "1.41421356237",
+	}
+	for src, want := range cases {
+		if got := spelled(t, NewEnv(), src); got != want {
+			t.Errorf("%q = %q, want %q", src, got, want)
+		}
+	}
+	if got := spelled(t, NewEnv(), "2 mod -2 m"); got != "0 m" {
+		t.Errorf("2 mod -2 m = %q, want 0 m", got)
+	}
+}
+
+func TestParenthesesCloseADenominator(t *testing.T) {
+	env := NewEnv()
+	cases := map[string]string{
+		"(1/2 h) m":  "1/7200  ≈ 0.000138888888889 (1/s)·m",
+		"(-1/2 h) m": "-1/7200  ≈ -0.000138888888889 (1/s)·m",
+		"1/2 h m":    "1/7200  ≈ 0.000138888888889 (1/s)/m",
+		"1/2 h":      "1/7200  ≈ 0.000138888888889 1/s",
+	}
+	for src, want := range cases {
+		if got := spelled(t, env, src); got != want {
+			t.Errorf("%q = %q, want %q", src, got, want)
+		}
+	}
+}
+
 func TestTheShadowReadsANameTheWayTheEvaluatorDid(t *testing.T) {
 	cases := []struct {
 		setup []string

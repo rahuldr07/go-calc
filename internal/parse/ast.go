@@ -131,7 +131,7 @@ func InDenominator(n Node) bool {
 	if b.Op == "/" || b.Op == "÷" {
 		return !b.Grouped
 	}
-	return b.Implicit && InDenominator(b.L)
+	return b.Implicit && !b.Grouped && InDenominator(b.L)
 }
 
 func regrouped(t *Binary) bool {

@@ -70,6 +70,7 @@ type repler struct {
 	degrees bool
 	last    eval.Explanation
 	answer  bool
+	read    string
 }
 
 type command struct {
@@ -214,7 +215,8 @@ func (r *repler) shadowed() map[string]bool {
 }
 
 func (r *repler) value(src string) (value.Value, eval.Explanation, error) {
-	node, _, err := parse.Parse(src)
+	node, notes, err := parse.Parse(src)
+	r.read = ""
 	if err != nil {
 		return value.Value{}, eval.Explanation{}, err
 	}
@@ -223,11 +225,13 @@ func (r *repler) value(src string) (value.Value, eval.Explanation, error) {
 	if err != nil {
 		return value.Value{}, eval.Explanation{}, err
 	}
+	r.read = readings(append(notes, r.env.Notes()...))
 	return v, r.env.WhyCtx(node, v, c), nil
 }
 
 func (r *repler) why(out io.Writer, rest string) bool {
 	x := r.last
+	r.read = ""
 	if rest != "" {
 		_, fresh, err := r.value(rest)
 		if err != nil {
@@ -237,12 +241,14 @@ func (r *repler) why(out io.Writer, rest string) bool {
 	} else if !r.answer {
 		return r.fail(out, "nothing has been worked out yet, so there is nothing to explain")
 	}
+	fmt.Fprint(out, r.read)
 	fmt.Fprintln(out, comparison(x, r.style))
 	return false
 }
 
 func (r *repler) trace(out io.Writer, rest string) bool {
 	held := r.last.Proven
+	r.read = ""
 	switch v, ok := r.env.Get(rest); {
 	case rest == "" && !r.answer:
 		return r.fail(out, "nothing has been worked out yet, so there is nothing to trace")
@@ -260,6 +266,7 @@ func (r *repler) trace(out io.Writer, rest string) bool {
 	if tree == "" {
 		return r.fail(out, "no provenance was recorded for that value")
 	}
+	fmt.Fprint(out, r.read)
 	fmt.Fprintln(out, tree)
 	return false
 }
