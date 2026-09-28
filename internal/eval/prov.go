@@ -60,7 +60,7 @@ func describe(n parse.Node, p *pass) prov.Node {
 	case *parse.Unary:
 		return prov.Node{Kind: prov.Operation, Label: t.Op, Children: []prov.NodeID{p.idOf(t.X)}}
 	case *parse.Binary:
-		return prov.Node{Kind: prov.Operation, Label: t.Op, Children: []prov.NodeID{p.idOf(t.L), p.idOf(t.R)}}
+		return prov.Node{Kind: prov.Operation, Label: operationLabel(t, p), Children: []prov.NodeID{p.idOf(t.L), p.idOf(t.R)}}
 	case *parse.Call:
 		kids := make([]prov.NodeID, 0, len(t.Args))
 		for _, a := range t.Args {
@@ -71,6 +71,13 @@ func describe(n parse.Node, p *pass) prov.Node {
 		return prov.Node{Kind: prov.Variable, Label: t.Name, Detail: definitionDetail(t)}
 	}
 	return prov.Node{Kind: prov.Operation, Label: n.String()}
+}
+
+func operationLabel(t *parse.Binary, p *pass) string {
+	if t.Implicit && p.divisor[t] {
+		return "/"
+	}
+	return t.Op
 }
 
 func definitionDetail(t *parse.Assign) string {
