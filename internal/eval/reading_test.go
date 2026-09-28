@@ -156,3 +156,63 @@ func TestTheConstantsHoldTheirDefiningRelations(t *testing.T) {
 		}
 	}
 }
+
+func TestBothParenthesisationsOfADenominatorAgree(t *testing.T) {
+	pairs := [][2]string{
+		{"1/(2 h) m", "(1/2 h) m"},
+		{"1/(h) m", "(1/h) m"},
+		{"1/(2 m) s", "(1/2 m) s"},
+		{"1/(2 kg) m", "(1/2 kg) m"},
+	}
+	for _, pair := range pairs {
+		a, b := spelled(t, NewEnv(), pair[0]), spelled(t, NewEnv(), pair[1])
+		if strings.SplitN(a, "\n", 2)[0] != strings.SplitN(b, "\n", 2)[0] {
+			t.Errorf("%q = %q but %q = %q; parentheses must close a denominator either way", pair[0], a, pair[1], b)
+		}
+	}
+	if got := spelled(t, NewEnv(), "1/(2) m"); got != "0.5 m" {
+		t.Errorf("1/(2) m = %q, want 0.5 m", got)
+	}
+}
+
+func TestEveryNoteReadsBackToTheAnswerItDescribes(t *testing.T) {
+	lines := []string{
+		"1/2 h", "1/2 m s", "-(1/2 m) s", "-(1/2 h) m", "(-1/2 h) m", "(1/2 m) s",
+		"100 km / 2 h", "100 W / 2 m^2", "3 m / 2 s / 4 s", "1/2 h m",
+		"2 m^2", "2 pi^2", "1/2 m s + 1/2 m s", "sqrt(1/2 h m)", "-(1/2 m s)",
+	}
+	for _, src := range lines {
+		env := NewEnv()
+		n, read, err := parse.Parse(src)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", src, err)
+		}
+		v, err := env.Eval(n)
+		if err != nil {
+			continue
+		}
+		for _, note := range append(read, env.Notes()...) {
+			said := strings.TrimPrefix(note.Msg, "read as ")
+			if !strings.HasPrefix(note.Msg, "read as ") || strings.Contains(said, " the ") {
+				continue
+			}
+			again, _, err := parse.Parse(said)
+			if err != nil {
+				t.Errorf("%q said %q, which does not parse: %v", src, note.Msg, err)
+				continue
+			}
+			w, err := NewEnv().Eval(again)
+			if err != nil {
+				t.Errorf("%q said %q, which does not evaluate: %v", src, note.Msg, err)
+				continue
+			}
+			if w.Dim != v.Dim {
+				t.Errorf("%q answered %s but says it read %q, which is %s", src, v.Dim.Words(), said, w.Dim.Words())
+				continue
+			}
+			if format.Default.Number(w) != format.Default.Number(v) {
+				t.Errorf("%q answered %q but says it read %q, which is %q", src, format.Default.Text(v, nil), said, format.Default.Text(w, nil))
+			}
+		}
+	}
+}

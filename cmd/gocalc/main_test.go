@@ -31,7 +31,7 @@ func TestRunShowsInterpretation(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
-	if !strings.Contains(out, "read as 1/(2·m)") {
+	if !strings.Contains(out, "read as 1/(2 m)") {
 		t.Errorf("out = %q, want the interpretation note", out)
 	}
 }
@@ -561,7 +561,7 @@ func TestTraceAndWhySayWhatTheyRead(t *testing.T) {
 		if code != 0 {
 			t.Fatalf("%s: exit %d: %s", command, code, out)
 		}
-		if !strings.HasPrefix(out, "read as (100·km)/(2·h)") {
+		if !strings.HasPrefix(out, "read as (100 km)/(2 h)") {
 			t.Errorf("%s never says what it read:\n%s", command, out)
 		}
 	}

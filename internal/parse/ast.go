@@ -12,25 +12,28 @@ type Node interface {
 }
 
 type NumLit struct {
-	Text string
-	P    lex.Pos
+	Text    string
+	P       lex.Pos
+	Grouped bool
 }
 
 func (n *NumLit) Pos() lex.Pos   { return n.P }
 func (n *NumLit) String() string { return n.Text }
 
 type Name struct {
-	Text string
-	P    lex.Pos
+	Text    string
+	P       lex.Pos
+	Grouped bool
 }
 
 func (n *Name) Pos() lex.Pos   { return n.P }
 func (n *Name) String() string { return n.Text }
 
 type Unary struct {
-	Op string
-	X  Node
-	P  lex.Pos
+	Op      string
+	X       Node
+	P       lex.Pos
+	Grouped bool
 }
 
 func (n *Unary) Pos() lex.Pos { return n.P }
@@ -53,10 +56,11 @@ func (n *Binary) Pos() lex.Pos   { return n.P }
 func (n *Binary) String() string { return "(" + n.L.String() + " " + n.Op + " " + n.R.String() + ")" }
 
 type Call struct {
-	Fn   string
-	Args []Node
-	Keys []string
-	P    lex.Pos
+	Fn      string
+	Args    []Node
+	Keys    []string
+	P       lex.Pos
+	Grouped bool
 }
 
 func (n *Call) Pos() lex.Pos { return n.P }
@@ -135,8 +139,34 @@ func InDenominator(n Node) bool {
 }
 
 func isGrouped(n Node) bool {
-	b, ok := n.(*Binary)
-	return ok && b.Grouped
+	switch t := n.(type) {
+	case *Binary:
+		return t.Grouped
+	case *Unary:
+		return t.Grouped
+	case *Name:
+		return t.Grouped
+	case *NumLit:
+		return t.Grouped
+	case *Call:
+		return t.Grouped
+	}
+	return false
+}
+
+func MarkGrouped(n Node) {
+	switch t := n.(type) {
+	case *Binary:
+		t.Grouped = true
+	case *Unary:
+		t.Grouped = true
+	case *Name:
+		t.Grouped = true
+	case *NumLit:
+		t.Grouped = true
+	case *Call:
+		t.Grouped = true
+	}
 }
 
 func regrouped(t *Binary) bool {
@@ -150,15 +180,24 @@ func regrouped(t *Binary) bool {
 func Reading(n Node) string { return reading(n) }
 
 func reading(n Node) string {
-	t, ok := n.(*Binary)
-	if !ok {
-		return n.String()
+	switch t := n.(type) {
+	case *Unary:
+		if t.Op == "%" || t.Op == "!" {
+			return bracket(t.X) + " " + t.Op
+		}
+		return t.Op + bracket(t.X)
+	case *Binary:
+		if t.Implicit {
+			return bracket(t.L) + " " + bracket(t.R)
+		}
+		return bracket(t.L) + operatorSymbol(t.Op) + bracket(t.R)
 	}
-	return bracket(t.L) + operatorSymbol(t.Op) + bracket(t.R)
+	return n.String()
 }
 
 func bracket(n Node) string {
-	if _, ok := n.(*Binary); ok {
+	switch n.(type) {
+	case *Binary, *Unary:
 		return "(" + reading(n) + ")"
 	}
 	return reading(n)

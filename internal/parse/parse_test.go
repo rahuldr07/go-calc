@@ -162,10 +162,10 @@ func TestEveryRegroupingIsAnnounced(t *testing.T) {
 		}
 	}
 	loud := map[string]string{
-		"2 m^2":       "read as 2·(m^2)",
-		"2 pi^2":      "read as 2·(pi^2)",
-		"(1/2) m^2":   "read as (1/2)·(m^2)",
-		"2 sqrt(x)^2": "read as 2·(sqrt(x)^2)",
+		"2 m^2":       "read as 2 (m^2)",
+		"2 pi^2":      "read as 2 (pi^2)",
+		"(1/2) m^2":   "read as (1/2) (m^2)",
+		"2 sqrt(x)^2": "read as 2 (sqrt(x)^2)",
 	}
 	for src, want := range loud {
 		_, notes, err := Parse(src)

@@ -101,6 +101,9 @@ func constantDetail(c consts.Const) string {
 	if detail == "" {
 		detail = c.Symbol
 	}
+	if c.Formula != "" {
+		return detail + " = " + c.Formula + ", " + workingPrecision + " · " + c.Source
+	}
 	return detail + " · " + c.Source
 }
 

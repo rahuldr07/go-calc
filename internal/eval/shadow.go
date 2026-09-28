@@ -130,10 +130,12 @@ func (s *shadowPass) name(t *parse.Name, sc scope) (shown, bool) {
 	}
 	if c, ok := consts.Lookup(t.Text); ok {
 		if c.Formula != "" {
-			if n, ok := formulaTree(c); ok {
-				return s.walk(n, nil, 0)
+			n, ok := formulaTree(c)
+			if !ok {
+				return shown{}, false
 			}
-			return shown{}, false
+			aside := &shadowPass{env: NewEnvWith(s.env.table), prec: s.prec, degrees: s.degrees}
+			return aside.walk(n, nil, 0)
 		}
 		if u, ok := units.Lookup(c.Unit); ok && c.Unit != "" {
 			if u.Offset.Sign() != 0 {
@@ -172,6 +174,14 @@ func (s *shadowPass) argWasMeasured(t *parse.Call, call, i int, sc scope) bool {
 		return known
 	}
 	return s.uncertain(t.Args[i], sc)
+}
+
+func (s *shadowPass) count(n parse.Node, sc scope, depth int) {
+	if s.calls == nil {
+		s.calls = map[*parse.Call]int{}
+	}
+	aside := &shadowPass{env: s.env, prec: s.prec, degrees: s.degrees, units: s.units, calls: s.calls}
+	aside.walk(n, sc, depth)
 }
 
 func (s *shadowPass) entering(t *parse.Call) int {
@@ -283,6 +293,7 @@ func (s *shadowPass) binary(t *parse.Binary, sc scope, depth int) (shown, bool) 
 		return shown{}, false
 	}
 	if t.Op == "±" || t.Op == "+-" {
+		s.count(t.R, sc, depth+1)
 		return l, true
 	}
 	if t.Implicit && parse.InDenominator(t.L) {

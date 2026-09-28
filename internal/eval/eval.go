@@ -938,6 +938,13 @@ func regroupingSite(n parse.Node) (lex.Pos, bool) {
 }
 
 func (p *pass) effective(n parse.Node) parse.Node {
+	if u, ok := n.(*parse.Unary); ok {
+		x := p.effective(u.X)
+		if x == u.X {
+			return u
+		}
+		return &parse.Unary{Op: u.Op, X: x, P: u.P}
+	}
 	b, ok := n.(*parse.Binary)
 	if !ok {
 		return n

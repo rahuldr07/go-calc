@@ -264,9 +264,7 @@ func (p *parser) parsePrimary() (Node, error) {
 			return nil, p.errorAt(p.peek(), "expected )")
 		}
 		p.next()
-		if b, ok := n.(*Binary); ok {
-			b.Grouped = true
-		}
+		MarkGrouped(n)
 		return n, nil
 	}
 	return nil, p.errorAt(t, "unexpected "+t.Kind.String())

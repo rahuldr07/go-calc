@@ -40,7 +40,7 @@ func (b *boundArgs) at(t *parse.Call, call, i int) (bool, bool) {
 		return false, false
 	}
 	if call >= len(calls) {
-		call = len(calls) - 1
+		return false, false
 	}
 	m := calls[call]
 	if i >= len(m) {

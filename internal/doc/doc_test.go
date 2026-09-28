@@ -436,7 +436,7 @@ func TestNotesTravelWithTheLine(t *testing.T) {
 	if len(lines[0].Notes) == 0 {
 		t.Fatal("want an interpretation note")
 	}
-	if !strings.Contains(format.Default.Text(lines[0].Value, lines[0].Notes), "read as 1/(2·m)") {
+	if !strings.Contains(format.Default.Text(lines[0].Value, lines[0].Notes), "read as 1/(2 m)") {
 		t.Errorf("notes = %v", lines[0].Notes)
 	}
 }
@@ -755,9 +755,9 @@ func TestANumeralTermAfterDivisionSplitsOnWhatTheNameIs(t *testing.T) {
 
 func TestAVariableDecidesTheDenominatorWhenItShadowsAUnitName(t *testing.T) {
 	cases := []struct{ binding, want, note string }{
-		{"h = 3", "1/7200  ≈ 0.000138888888889 1/s", "read as 1/(2·h)"},
-		{"h = 12.3 ± 0.2 m", "6.15 ± 0.10 m", "read as (1/2)·h"},
-		{"h = 5 s", "2.5 s", "read as (1/2)·h"},
+		{"h = 3", "1/7200  ≈ 0.000138888888889 1/s", "read as 1/(2 h)"},
+		{"h = 12.3 ± 0.2 m", "6.15 ± 0.10 m", "read as (1/2) h"},
+		{"h = 5 s", "2.5 s", "read as (1/2) h"},
 	}
 	for _, c := range cases {
 		lines := New().SetLines([]string{c.binding, "1/2 h"})
@@ -778,13 +778,13 @@ func TestAVariableDecidesTheDenominatorWhenItShadowsAUnitName(t *testing.T) {
 
 func TestBothReadingsAfterADivisionAreAnnounced(t *testing.T) {
 	spoken := map[string]string{
-		"100 km / 2 h":    "read as (100·km)/(2·h)",
-		"100 W / 2 m^2":   "read as (100·W)/(2·(m^2))",
-		"3 m / 2 s / 4 s": "read as ((3·m)/(2·s))/(4·s)",
-		"100 J / 2 mol K": "read as (100·J)/((2·mol)·K)",
-		"1/2 x":           "read as (1/2)·x",
-		"100 / 2 x":       "read as (100/2)·x",
-		"1/2 x^2":         "read as (1/2)·(x^2)",
+		"100 km / 2 h":    "read as (100 km)/(2 h)",
+		"100 W / 2 m^2":   "read as (100 W)/(2 (m^2))",
+		"3 m / 2 s / 4 s": "read as ((3 m)/(2 s))/(4 s)",
+		"100 J / 2 mol K": "read as (100 J)/((2 mol) K)",
+		"1/2 x":           "read as (1/2) x",
+		"100 / 2 x":       "read as (100/2) x",
+		"1/2 x^2":         "read as (1/2) (x^2)",
 	}
 	for src, want := range spoken {
 		lines := New().SetLines([]string{"x = 3", src})
