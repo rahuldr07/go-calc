@@ -444,7 +444,7 @@ func TestOptionsReadOnlyDoubleDashedNames(t *testing.T) {
 
 func TestJSONRunEmitsTheSheetDocument(t *testing.T) {
 	path := writeSheet(t, "1+1\n2+2\n3 +\nq = (1e16+1)-1e16\n")
-	out, code := runFileJSON(path, plain)
+	out, code, _ := runFileJSON(path, plain)
 	if code == 0 {
 		t.Errorf("exit 0 with a failing line: %s", out)
 	}
@@ -475,7 +475,7 @@ func TestJSONRunEmitsTheSheetDocument(t *testing.T) {
 }
 
 func TestJSONRunOnACleanSheetExitsZero(t *testing.T) {
-	out, code := runFileJSON(writeSheet(t, "1+1\n2+2\n"), plain)
+	out, code, _ := runFileJSON(writeSheet(t, "1+1\n2+2\n"), plain)
 	if code != 0 {
 		t.Errorf("exit %d on a clean sheet: %s", code, out)
 	}
@@ -483,7 +483,7 @@ func TestJSONRunOnACleanSheetExitsZero(t *testing.T) {
 
 func TestJSONIsRefusedWhereItIsNotProduced(t *testing.T) {
 	for _, args := range [][]string{{"trace", "1+1"}, {"why", "1+1"}, {"repl"}} {
-		out, code := dispatch(settings{json: true}, args, plain)
+		out, code, _ := dispatch(settings{json: true}, args, plain)
 		if code != 2 {
 			t.Errorf("--json %v: exit %d, want 2", args, code)
 		}
@@ -492,25 +492,25 @@ func TestJSONIsRefusedWhereItIsNotProduced(t *testing.T) {
 		}
 	}
 	for _, args := range [][]string{{"trace", "1+1"}, {"why", "1+1"}} {
-		if out, code := dispatch(settings{}, args, plain); code != 0 {
+		if out, code, _ := dispatch(settings{}, args, plain); code != 0 {
 			t.Errorf("%v without --json: exit %d: %s", args, code, out)
 		}
 	}
-	if out, code := dispatch(settings{}, []string{"repl"}, plain); code != startREPL {
+	if out, code, _ := dispatch(settings{}, []string{"repl"}, plain); code != startREPL {
 		t.Errorf("repl dispatched to %d: %s", code, out)
 	}
 }
 
 func TestDispatchSendsJSONRunToTheSheetDocument(t *testing.T) {
 	path := writeSheet(t, "1+1\n")
-	out, code := dispatch(settings{json: true}, []string{"run", path}, plain)
+	out, code, _ := dispatch(settings{json: true}, []string{"run", path}, plain)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
 	if !strings.HasPrefix(strings.TrimSpace(out), `{"schema":"`+doc.SheetSchema+`"`) {
 		t.Errorf("--json run emitted %q, want the sheet document", out)
 	}
-	plainOut, code := dispatch(settings{}, []string{"run", path}, plain)
+	plainOut, code, _ := dispatch(settings{}, []string{"run", path}, plain)
 	if code != 0 || !strings.Contains(plainOut, "= 2") {
 		t.Errorf("run without --json = %q (exit %d)", plainOut, code)
 	}
@@ -534,27 +534,30 @@ func TestRunPointsAtTheDocumentLine(t *testing.T) {
 
 func TestMachineReadableOutputGoesToStdoutEvenWhenALineFails(t *testing.T) {
 	path := writeSheet(t, "1+1\n3 +\n")
-	out, code := dispatch(settings{json: true}, []string{"run", path}, plain)
+	out, code, machine := dispatch(settings{json: true}, []string{"run", path}, plain)
 	if code == 0 {
 		t.Fatalf("exit 0 with a failing line: %s", out)
 	}
-	if destination(out, code, true) != os.Stdout {
+	if !machine || destination(code, machine) != os.Stdout {
 		t.Error("--json run sent the sheet document to stderr, where a pipe cannot read it")
 	}
-	if destination("unknown option --bogus", 2, true) != os.Stderr {
+	if _, _, machine := dispatch(settings{json: true}, []string{"run", "no-such-sheet.calc"}, plain); machine {
+		t.Error("a missing file reported itself as a sheet document")
+	}
+	if destination(2, false) != os.Stderr {
 		t.Error("a usage message went to stdout")
 	}
-	if destination("2", 0, false) != os.Stdout {
+	if destination(0, false) != os.Stdout {
 		t.Error("an answer went to stderr")
 	}
-	if destination("1:1: unknown name x", 1, false) != os.Stderr {
+	if destination(1, false) != os.Stderr {
 		t.Error("an error went to stdout")
 	}
 }
 
 func TestTraceAndWhySayWhatTheyRead(t *testing.T) {
 	for _, command := range []string{"trace", "why"} {
-		out, code := dispatch(settings{}, []string{command, "100 km / 2 h"}, plain)
+		out, code, _ := dispatch(settings{}, []string{command, "100 km / 2 h"}, plain)
 		if code != 0 {
 			t.Fatalf("%s: exit %d: %s", command, code, out)
 		}
@@ -562,7 +565,7 @@ func TestTraceAndWhySayWhatTheyRead(t *testing.T) {
 			t.Errorf("%s never says what it read:\n%s", command, out)
 		}
 	}
-	out, _ := dispatch(settings{}, []string{"trace", "1 + 1"}, plain)
+	out, _, _ := dispatch(settings{}, []string{"trace", "1 + 1"}, plain)
 	if strings.Contains(out, "read as") {
 		t.Errorf("trace invented a reading for an unambiguous line:\n%s", out)
 	}

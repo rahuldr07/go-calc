@@ -25,11 +25,11 @@ func main() {
 		emit(err.Error(), 2, false)
 	}
 	style := styleFor(opts)
-	out, code := dispatch(opts, args, style)
+	out, code, machine := dispatch(opts, args, style)
 	if code == startREPL {
 		os.Exit(repl(os.Stdin, os.Stdout, style))
 	}
-	emit(out, code, opts.json)
+	emit(out, code, machine)
 }
 
 const startREPL = -1
@@ -38,12 +38,12 @@ func styleFor(opts settings) format.Style {
 	return format.Style{Digits: format.Digits, Grouped: opts.grouped || opts.indian, Indian: opts.indian}
 }
 
-func dispatch(opts settings, args []string, style format.Style) (string, int) {
+func dispatch(opts settings, args []string, style format.Style) (string, int, bool) {
 	if len(args) == 1 && args[0] == "repl" {
 		if opts.json {
-			return noJSONFor("repl"), 2
+			return noJSONFor("repl"), 2, false
 		}
-		return "", startREPL
+		return "", startREPL, false
 	}
 	if len(args) > 1 {
 		switch args[0] {
@@ -51,15 +51,18 @@ func dispatch(opts settings, args []string, style format.Style) (string, int) {
 			if opts.json {
 				return runFileJSON(args[1], style)
 			}
-			return runFile(args[1], style)
+			out, code := runFile(args[1], style)
+			return out, code, false
 		case "trace", "why":
 			if opts.json {
-				return noJSONFor(args[0]), 2
+				return noJSONFor(args[0]), 2, false
 			}
-			return explain(strings.Join(args[1:], " "), args[0] == "why", style)
+			out, code := explain(strings.Join(args[1:], " "), args[0] == "why", style)
+			return out, code, false
 		}
 	}
-	return run(args, style, opts.json)
+	out, code := run(args, style, opts.json)
+	return out, code, false
 }
 
 type settings struct {
@@ -109,15 +112,15 @@ func noJSONFor(command string) string {
 	return "--json is not available for " + command + "; gocalc --json \"expression\" carries the same answer, warning and provenance graph as machine-readable " + format.Schema
 }
 
-func destination(out string, code int, asJSON bool) *os.File {
-	if code == 0 || (asJSON && json.Valid([]byte(out))) {
+func destination(code int, machine bool) *os.File {
+	if code == 0 || machine {
 		return os.Stdout
 	}
 	return os.Stderr
 }
 
-func emit(out string, code int, asJSON bool) {
-	fmt.Fprintln(destination(out, code, asJSON), out)
+func emit(out string, code int, machine bool) {
+	fmt.Fprintln(destination(code, machine), out)
 	os.Exit(code)
 }
 
@@ -282,17 +285,17 @@ func located(err error) bool {
 	return errors.As(err, &pointed)
 }
 
-func runFileJSON(path string, style format.Style) (string, int) {
+func runFileJSON(path string, style format.Style) (string, int, bool) {
 	src, err := sheetLines(path)
 	if err != nil {
-		return err.Error(), 1
+		return err.Error(), 1, false
 	}
 	req, err := json.Marshal(struct {
 		Lines  []string `json:"lines"`
 		Digits int      `json:"digits"`
 	}{Lines: src, Digits: style.Digits})
 	if err != nil {
-		return err.Error(), 1
+		return err.Error(), 1, false
 	}
 	answer := doc.EvalRequest(req)
 	var read struct {
@@ -301,12 +304,12 @@ func runFileJSON(path string, style format.Style) (string, int) {
 		} `json:"lines"`
 	}
 	if err := json.Unmarshal(answer, &read); err != nil {
-		return err.Error(), 1
+		return err.Error(), 1, false
 	}
 	for _, l := range read.Lines {
 		if l.Status == doc.StatusError {
-			return string(answer), 1
+			return string(answer), 1, true
 		}
 	}
-	return string(answer), 0
+	return string(answer), 0, true
 }
