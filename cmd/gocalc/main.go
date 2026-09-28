@@ -22,14 +22,14 @@ import (
 func main() {
 	opts, args, err := options(os.Args[1:])
 	if err != nil {
-		emit(err.Error(), 2)
+		emit(err.Error(), 2, false)
 	}
 	style := styleFor(opts)
 	out, code := dispatch(opts, args, style)
 	if code == startREPL {
 		os.Exit(repl(os.Stdin, os.Stdout, style))
 	}
-	emit(out, code)
+	emit(out, code, opts.json)
 }
 
 const startREPL = -1
@@ -109,12 +109,15 @@ func noJSONFor(command string) string {
 	return "--json is not available for " + command + "; gocalc --json \"expression\" carries the same answer, warning and provenance graph as machine-readable " + format.Schema
 }
 
-func emit(out string, code int) {
-	if code == 0 {
-		fmt.Println(out)
-	} else {
-		fmt.Fprintln(os.Stderr, out)
+func destination(out string, code int, asJSON bool) *os.File {
+	if code == 0 || (asJSON && json.Valid([]byte(out))) {
+		return os.Stdout
 	}
+	return os.Stderr
+}
+
+func emit(out string, code int, asJSON bool) {
+	fmt.Fprintln(destination(out, code, asJSON), out)
 	os.Exit(code)
 }
 
@@ -148,7 +151,7 @@ func evalWith(env *eval.Env, src string, ctx *eval.Ctx, style format.Style, asJS
 
 func explain(src string, why bool, style format.Style) (string, int) {
 	env := eval.NewEnv()
-	node, _, err := parse.Parse(src)
+	node, notes, err := parse.Parse(src)
 	if err != nil {
 		return err.Error(), 1
 	}
@@ -156,14 +159,23 @@ func explain(src string, why bool, style format.Style) (string, int) {
 	if err != nil {
 		return err.Error(), 1
 	}
+	read := readings(append(notes, env.Notes()...))
 	if why {
-		return comparison(env.Why(node, v), style), 0
+		return read + comparison(env.Why(node, v), style), 0
 	}
 	tree := strings.TrimRight(env.Arena().Tree(v.Prov), "\n")
 	if tree == "" {
 		return "no provenance was recorded for this expression", 1
 	}
-	return tree, 0
+	return read + tree, 0
+}
+
+func readings(notes []parse.Note) string {
+	var b strings.Builder
+	for _, n := range notes {
+		b.WriteString("read as " + strings.TrimPrefix(n.Msg, "read as ") + "\n")
+	}
+	return b.String()
 }
 
 func comparison(x eval.Explanation, style format.Style) string {

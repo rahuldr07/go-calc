@@ -531,3 +531,39 @@ func TestRunPointsAtTheDocumentLine(t *testing.T) {
 		t.Errorf("out = %q, want the warning on document line 4", out)
 	}
 }
+
+func TestMachineReadableOutputGoesToStdoutEvenWhenALineFails(t *testing.T) {
+	path := writeSheet(t, "1+1\n3 +\n")
+	out, code := dispatch(settings{json: true}, []string{"run", path}, plain)
+	if code == 0 {
+		t.Fatalf("exit 0 with a failing line: %s", out)
+	}
+	if destination(out, code, true) != os.Stdout {
+		t.Error("--json run sent the sheet document to stderr, where a pipe cannot read it")
+	}
+	if destination("unknown option --bogus", 2, true) != os.Stderr {
+		t.Error("a usage message went to stdout")
+	}
+	if destination("2", 0, false) != os.Stdout {
+		t.Error("an answer went to stderr")
+	}
+	if destination("1:1: unknown name x", 1, false) != os.Stderr {
+		t.Error("an error went to stdout")
+	}
+}
+
+func TestTraceAndWhySayWhatTheyRead(t *testing.T) {
+	for _, command := range []string{"trace", "why"} {
+		out, code := dispatch(settings{}, []string{command, "100 km / 2 h"}, plain)
+		if code != 0 {
+			t.Fatalf("%s: exit %d: %s", command, code, out)
+		}
+		if !strings.HasPrefix(out, "read as (100·km)/(2·h)") {
+			t.Errorf("%s never says what it read:\n%s", command, out)
+		}
+	}
+	out, _ := dispatch(settings{}, []string{"trace", "1 + 1"}, plain)
+	if strings.Contains(out, "read as") {
+		t.Errorf("trace invented a reading for an unambiguous line:\n%s", out)
+	}
+}
