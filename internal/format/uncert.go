@@ -3,6 +3,7 @@ package format
 import (
 	"math"
 	"math/big"
+	"strconv"
 
 	"github.com/rahuldr07/go-calc/internal/value"
 )
@@ -29,7 +30,21 @@ func (s Style) Uncertain(v value.Value) (string, string, bool) {
 	if !provenTo(v, decimals) {
 		return "", "", false
 	}
+	if tooSmallToSpellOut(ratScale(mid)) {
+		return sized(mid, decimals), sized(new(big.Rat).SetFloat64(u), decimals), true
+	}
 	return s.groupDecimal(at(mid, decimals)), at(new(big.Rat).SetFloat64(u), decimals), true
+}
+
+func sized(r *big.Rat, decimals int) string {
+	text := at(r, decimals)
+	rounded, ok := new(big.Rat).SetString(text)
+	if !ok || rounded.Sign() == 0 {
+		return text
+	}
+	e := ratScale(rounded)
+	m := new(big.Rat).Quo(rounded, ratPow10(e))
+	return m.FloatString(significantDigits(text)-1) + "e" + strconv.Itoa(e)
 }
 
 func reported(v value.Value) (float64, bool) {

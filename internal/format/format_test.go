@@ -362,3 +362,26 @@ func TestOrdinaryResultStillCarriesAValue(t *testing.T) {
 		t.Errorf("an ordinary result claimed to be a definition: %s", raw)
 	}
 }
+
+func TestASmallMeasuredValueIsSpeltInScientificNotation(t *testing.T) {
+	cases := []struct {
+		mid   string
+		sigma float64
+		want  string
+	}{
+		{"0.000000000000000000000000000000000662607015", 1e-42, "6.626070150e-34 ± 1.0e-42"},
+		{"0.00000000000000000001", 1e-22, "1.000e-20 ± 1.0e-22"},
+		{"0.000000000000000000123", 2e-21, "1.230e-19 ± 2.0e-21"},
+		{"0.0001", 0.000002, "0.0001000 ± 0.0000020"},
+		{"1.584", 0.0128765, "1.584 ± 0.013"},
+	}
+	for _, c := range cases {
+		got := Text(measuredValue(t, c.mid, c.sigma), nil)
+		if got != c.want {
+			t.Errorf("%s ± %g = %q, want %q", c.mid, c.sigma, got, c.want)
+		}
+		if len(got) > 40 {
+			t.Errorf("%s ± %g spells out %d characters", c.mid, c.sigma, len(got))
+		}
+	}
+}
