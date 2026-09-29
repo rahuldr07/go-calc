@@ -218,6 +218,29 @@ Four attempts. Read this before designing.
 2. **"Nothing enclosed — no boxes, rules, panels or dividers" is a poster law, not an app law.** With nothing to land in, answers stranded: an expression ending at x=180 with its own answer at x=820, and 770px of dead space beyond. For a dense scannable tool, removing all structure removes the alignment the task depends on.
 3. **The page had no composition.** Content occupied about a third; the rest was leftover doing no work. Worse, the product's differentiator — the budget and trace — was hidden behind a click *while the page had a hole in it*.
 
+### Measured evidence from the last attempt
+
+Screenshot: `.playwright-mcp/L-07-final.png`, 1440x900, six lines of real content. These are ink extents, not element boxes.
+
+| Fact | Number |
+|---|---|
+| `h * w` expression ends | x = 171 |
+| its answer begins | x = 664 |
+| **void inside one row** | **493 px**, over half the 782 px work column |
+| the same gap at 1024 px wide | **653 px** — it grows as the window narrows |
+| content ink ends | y = 293 |
+| footer begins | y = 875 |
+| **empty band below the work** | **1200 x 562 px**, about 62% of the page |
+
+Four more faults visible in that render, all of which a new design should be immune to by construction:
+
+- **The note is orphaned.** `READ AS (100 km)/(2 h)` renders under the expression on the far left while the value it describes is 500 px away on the right. A note belongs to a *value*, not to a line's left edge.
+- **The inspector reserves 360 px to report an absence** — "uncertainty · none declared — this answer is exact". Dedicating a third of the width to saying there is nothing to say is worse than leaving it blank.
+- **A phantom row.** The document's trailing empty line renders a trust badge, `○○○○○○ HELD`, for a line that does not exist.
+- **Status marks collide with their word**: `••••○○ESTIMATE`.
+
+**The structural lesson.** Fixing the page-level hole by adding a second pane immediately exposed that **the row is the broken unit, not the page.** Right-aligning a value to a far edge only reads as one row in a narrow column; at any real width the expression and its answer stop being connected. Any design that keeps "expression hard left, value hard right" must state what holds the two ends together — a leader, a tighter measure, a shared background, proximity — or abandon the arrangement.
+
 **Things that are engine behaviour, not UI bugs — do not design around them:**
 - `m·m` instead of `m²`. Units are not collapsed to powers.
 - `1/3  ≈ 0.333…` — exact form and approximation both shown.
