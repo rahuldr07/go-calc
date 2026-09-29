@@ -4,3 +4,8 @@
 .superpowers/
 /web/public/gocalc.wasm
 /web/public/wasm_exec.js
+web/node_modules
+web/dist
+web/public/gocalc.wasm
+web/public/wasm_exec.js
+.playwright-mcp/

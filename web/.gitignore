@@ -1,0 +1,4 @@
+node_modules
+dist
+public/gocalc.wasm
+public/wasm_exec.js
