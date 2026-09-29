@@ -265,4 +265,5 @@ If it is easier to point at an existing product and say "like that, but…", tha
 - Does the inspector earn permanent space, or open on demand?
 - Is the keypad worth its cost on desktop given most keys are inactive?
 - Should a long answer truncate, wrap, or move?
-- How many themes are worth shipping? Eight exist; two would also be defensible.
+- How many themes are worth shipping? Eight exist, but measured page backgrounds show only about four are distinct: `void` and `ember` differ by no more than 9 per channel, and `sepia`, `paper` and `slate` are indistinguishable side by side without reading the label. Either pull them apart or ship fewer.
+- Does a per-role corner system earn its complexity? It was built (`--radius-sheet` / `--radius-control` / `--radius-surface`) on the argument that a ruled column and a moulded keycap want different answers. That argument still holds, but nothing in the last render made the difference visible.
