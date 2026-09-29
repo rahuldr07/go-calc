@@ -236,3 +236,5 @@ body.pad-on .stage,body.pad-on .term{padding-bottom:330px}
 :root[data-theme="light"] .st,:root[data-theme="light"] .foot{color:var(--frost)}
 .cm-editor .val .num.clipped{cursor:help;border-bottom:1px dotted var(--dust)}
 .entry .ans b{max-width:38ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom}
+
+.tb .out,.tb .in{overflow-wrap:anywhere}

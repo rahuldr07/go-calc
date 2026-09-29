@@ -56,6 +56,20 @@ h * w
 
 `gocalc --json run sheet.calc` answers with one `go-calc.sheet/1` document for the whole file: a status, the proven digits, the qualifier that makes those digits honest, the contribution budget — `w` at 65% of the variance, `h` at 35% — and the provenance tree for every line.
 
+## The web app
+
+`web/` is a Svelte 5 and Vite front end over the same engine, compiled to WebAssembly and run inside a Web Worker so a deep precision retry cannot freeze the page. The whole document crosses the boundary once per keystroke as one `go-calc.sheet/1` request and every line's result comes back together; a response that a later keystroke has overtaken is dropped rather than painted.
+
+The front end formats and never computes. Every number on screen is a field of the engine's response — there is no second implementation of any arithmetic to drift.
+
+```
+cd web
+npm install
+npm run dev
+```
+
+`npm run build` writes a static `web/dist`. It runs `wasm/build.sh` first, so the module and the page can never be built from different revisions. Two views over one document: a notepad where each line's answer is drawn at the right of that line, and a terminal transcript. An optional keypad types into the sheet, so a key press and typed text produce the same line with the same proof. Opening a value slides in its uncertainty budget, provenance tree, digit guarantee and raw JSON.
+
 ## Install
 
 ```
@@ -146,13 +160,15 @@ go test ./cmd/gocalc/ -bench . -run XXX
 | --- | --- |
 | `gocalc` binary, `go build ./cmd/gocalc` | 4,547,026 (4.34 MiB) |
 | `gocalc.wasm`, raw | 5,058,747 (4.82 MiB) |
-| `gocalc.wasm`, `gzip -9` | 1,370,034 (1.31 MiB) |
+| `gocalc.wasm`, `gzip -9` | 1,393,833 (1.33 MiB) |
+| web bundle, JavaScript, `gzip -9` | 123,640 (121 KiB) |
+| web bundle, CSS, `gzip -9` | 4,090 (4.0 KiB) |
 
-`wasm/build.sh` builds the bundle, copies `wasm_exec.js` beside it and prints both sizes against the 4 MiB compressed budget.
+`wasm/build.sh` builds the bundle, copies `wasm_exec.js` beside it and prints both sizes against the 4 MiB compressed budget. CI fails if the front end's JavaScript passes 300 KiB compressed.
 
 ## Not built yet
 
-Symbolic maths — nothing differentiates, simplifies or solves in closed form; the derivatives behind uncertainty are numeric. Graphing. Monte Carlo uncertainty, so distributions that the Hessian cannot describe are reported as nonlinear rather than sampled. The web front end: `web/` holds design mockups that are not yet wired to `goCalcEval`, so the WASM bundle currently has no page to live in. The design for the rest is in `docs/superpowers/specs/` and `DESIGN.md`.
+Symbolic maths — nothing differentiates, simplifies or solves in closed form; the derivatives behind uncertainty are numeric. Graphing, so the keypad's calculus, algebra, matrix and statistics keys render inactive and say so rather than failing. Monte Carlo uncertainty, so distributions that the Hessian cannot describe are reported as nonlinear rather than sampled. Dependency lighting in the notepad, which needs the sheet schema to carry each line's dependents. Sharing, the command palette and a settings surface. The design for the rest is in `docs/superpowers/specs/` and `DESIGN.md`.
 
 ## Verification
 
