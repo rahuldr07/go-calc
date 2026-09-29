@@ -32,7 +32,7 @@
   }
 </script>
 
-<section class="pad" aria-label="Calculator keypad">
+<section class="pad on" aria-label="Calculator keypad">
   <div class="pad-in">
     <div class="entry"><span class="now"></span><span class="ans">ans <b>{answer}</b></span></div>
     <Tabs.Root bind:value={group}>

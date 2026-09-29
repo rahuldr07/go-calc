@@ -1,30 +1,36 @@
 declare const Go: new () => { importObject: WebAssembly.Imports; run(instance: WebAssembly.Instance): void }
+declare function importScripts(...urls: string[]): void
 declare function goCalcEval(request: string): string
 
 interface Incoming {
   id: number
   kind: "start" | "evaluate"
+  base?: string
   url?: string
   request?: string
 }
 
 let running: Promise<void> | null = null
 
-async function start(url: string) {
-  const loader = new URL("wasm_exec.js", self.location.href).href
-  ;(self as unknown as { importScripts(...urls: string[]): void }).importScripts(loader)
+async function start(base: string, url?: string) {
+  importScripts(new URL("wasm_exec.js", base).href)
   const go = new Go()
-  const answer = await fetch(url)
+  const answer = await fetch(url ?? new URL("gocalc.wasm", base).href)
   if (!answer.ok) throw new Error(`the engine could not be fetched (${answer.status})`)
-  const wasm = await WebAssembly.instantiate(await answer.arrayBuffer(), go.importObject)
+  const bytes = await answer.arrayBuffer()
+  const magic = new Uint8Array(bytes, 0, Math.min(4, bytes.byteLength))
+  if (magic[0] !== 0x00 || magic[1] !== 0x61 || magic[2] !== 0x73 || magic[3] !== 0x6d) {
+    throw new Error("the engine was served as something other than WebAssembly")
+  }
+  const wasm = await WebAssembly.instantiate(bytes, go.importObject)
   void go.run(wasm.instance)
 }
 
 self.onmessage = async (event: MessageEvent<Incoming>) => {
-  const { id, kind, url, request } = event.data
+  const { id, kind, base, url, request } = event.data
   try {
     if (kind === "start") {
-      running = start(url ?? "gocalc.wasm")
+      running = start(base ?? "/", url)
       await running
       self.postMessage({ id, ok: true })
       return

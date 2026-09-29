@@ -9,6 +9,8 @@
 </script>
 
 <footer class="foot">
-  <span>{sheet.engineStatus === "failed" ? sheet.failure : `wasm · codata 2022 · ${sheet.digits} digits`}</span>
+  <span class:failed={sheet.engineStatus === "failed"}
+    >{sheet.engineStatus === "failed" ? sheet.failure : `wasm · codata 2022 · ${sheet.digits} digits`}</span
+  >
   <span>{counted.lines} lines · {counted.measured} measured · {counted.errors} refused</span>
 </footer>

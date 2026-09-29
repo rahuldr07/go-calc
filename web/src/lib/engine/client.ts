@@ -14,6 +14,11 @@ interface Waiting {
 
 export type EngineStatus = "loading" | "ready" | "failed"
 
+function siteRoot(): string {
+  if (typeof location === "undefined") return "/"
+  return new URL(import.meta.env?.BASE_URL ?? "/", location.href).href
+}
+
 export class Engine {
   status: EngineStatus = "loading"
   readonly ready: Promise<void>
@@ -22,17 +27,18 @@ export class Engine {
   private issued = 0
   private newest = 0
 
-  constructor(options: { url?: string; worker?: Worker } = {}) {
-    this.worker =
-      options.worker ?? new Worker(new URL("./worker.ts", import.meta.url), { type: "module" })
+  constructor(options: { url?: string; base?: string; worker?: Worker } = {}) {
+    this.worker = options.worker ?? new Worker(new URL("./worker.ts", import.meta.url))
     this.worker.onmessage = (event: MessageEvent<Reply>) => this.settle(event.data)
     this.worker.onerror = (event) => this.fail(event.message || "the engine worker stopped")
-    this.ready = this.dispatch({ kind: "start", url: options.url }).then(
+    const base = options.base ?? siteRoot()
+    this.ready = this.dispatch({ kind: "start", base, url: options.url }).then(
       () => {
         this.status = "ready"
       },
       (err: Error) => {
         this.status = "failed"
+        console.error("go-calc engine failed to start:", err)
         throw err
       },
     )
@@ -47,7 +53,7 @@ export class Engine {
   }
 
   private dispatch(
-    message: { kind: "start" | "evaluate"; url?: string; request?: string },
+    message: { kind: "start" | "evaluate"; base?: string; url?: string; request?: string },
     ordered = false,
   ): Promise<Sheet> {
     const id = ++this.issued

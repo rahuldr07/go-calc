@@ -3,8 +3,26 @@ import { SUPERSEDED, type Angle, type Line } from "../engine/schema"
 
 const engine = new Engine()
 
+const DOCUMENT = "gocalc-document"
+
+function restored(): string {
+  try {
+    return localStorage.getItem(DOCUMENT) ?? ""
+  } catch {
+    return ""
+  }
+}
+
+function keep(text: string) {
+  try {
+    localStorage.setItem(DOCUMENT, text)
+  } catch {
+    return
+  }
+}
+
 export const sheet = $state({
-  source: "",
+  source: restored(),
   lines: [] as Line[],
   digits: 12,
   angle: "rad" as Angle,
@@ -35,6 +53,7 @@ export function selectedLine(): Line | undefined {
 
 export async function setSource(text: string) {
   sheet.source = text
+  keep(text)
   await recompute()
 }
 

@@ -4,6 +4,8 @@
   import { selectedLine, sheet } from "../state/sheet.svelte"
   import { openLayer, view } from "../state/view.svelte"
 
+  let pane = $state("budget")
+
   const line = $derived(selectedLine())
   const source = $derived(sheet.source.split("\n")[sheet.selected ?? 0] ?? "")
   const budget = $derived(line?.uncertainty?.budget ?? [])
@@ -45,7 +47,7 @@
     <div class="lbl">
       {line.uncertainty ? `gum first-order · ${line.uncertainty.coverage ?? "coverage k = 1"}` : line.status}
     </div>
-    <Tabs.Root value="budget">
+    <Tabs.Root bind:value={pane}>
       <Tabs.List class="tabs">
         <Tabs.Trigger value="budget">budget</Tabs.Trigger>
         <Tabs.Trigger value="trace">trace</Tabs.Trigger>
@@ -53,7 +55,7 @@
         <Tabs.Trigger value="json">json</Tabs.Trigger>
       </Tabs.List>
 
-      <Tabs.Content value="budget" class="pane on">
+      <Tabs.Content value="budget" class="pane {pane === 'budget' ? 'on' : ''}">
         {#if budget.length === 0}
           <div class="kv"><span>uncertainty</span><b>none declared — this answer is {line.status}</b></div>
         {:else}
@@ -76,11 +78,11 @@
         {/if}
       </Tabs.Content>
 
-      <Tabs.Content value="trace" class="pane">
+      <Tabs.Content value="trace" class="pane {pane === 'trace' ? 'on' : ''}">
         <div class="tree">{tree(line.trace)}</div>
       </Tabs.Content>
 
-      <Tabs.Content value="digits" class="pane">
+      <Tabs.Content value="digits" class="pane {pane === 'digits' ? 'on' : ''}">
         <div class="kv" style="margin-top:0">
           <span>proven digits</span><b>{line.digits}</b>
           <span>precision cap</span><b>{line.capped ? "reached" : "not reached"}</b>
@@ -91,7 +93,7 @@
         </div>
       </Tabs.Content>
 
-      <Tabs.Content value="json" class="pane">
+      <Tabs.Content value="json" class="pane {pane === 'json' ? 'on' : ''}">
         <div class="code">{JSON.stringify(line, null, 2)}</div>
       </Tabs.Content>
     </Tabs.Root>

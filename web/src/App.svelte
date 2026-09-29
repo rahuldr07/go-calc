@@ -16,6 +16,7 @@
 
   $effect(() => {
     document.body.classList.toggle("layer-on", view.layer && view.mode === "notepad")
+    document.body.classList.toggle("pad-on", view.keypad && view.mode === "notepad")
   })
 
   function shortcuts(event: KeyboardEvent) {
