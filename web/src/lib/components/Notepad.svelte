@@ -3,7 +3,7 @@
   import { EditorState } from "@codemirror/state"
   import { EditorView, keymap, placeholder } from "@codemirror/view"
   import { onMount } from "svelte"
-  import { caretLine, lineField, notepadTheme, setLines, valueField } from "../editor/notepad"
+  import { caretLine, focused, lineField, notepadTheme, setFocused, setLines, valueField } from "../editor/notepad"
   import { select, setSource, sheet } from "../state/sheet.svelte"
   import { openLayer } from "../state/view.svelte"
 
@@ -43,6 +43,7 @@
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           caretLine,
+          focused,
           lineField,
           valueField,
           notepadTheme,
@@ -51,10 +52,15 @@
           EditorView.updateListener.of((update) => {
             if (update.docChanged) void setSource(update.state.doc.toString())
           }),
+          EditorView.focusChangeEffect.of((_, focusing) => setFocused.of(focusing)),
         ],
       }),
     })
-    return () => editor?.destroy()
+    host.addEventListener("inspectline", inspect)
+    return () => {
+      host.removeEventListener("inspectline", inspect)
+      editor?.destroy()
+    }
   })
 
   $effect(() => {
@@ -62,16 +68,14 @@
     editor?.dispatch({ effects: setLines.of(lines) })
   })
 
-  function inspect(event: MouseEvent | KeyboardEvent) {
-    const target = (event.target as HTMLElement | null)?.closest(".val") as HTMLElement | null
-    if (!target?.dataset.line) return
-    if (event instanceof KeyboardEvent && event.key !== "Enter" && event.key !== " ") return
-    event.preventDefault()
-    select(Number(target.dataset.line))
+  function inspect(event: Event) {
+    const at = (event as CustomEvent<number>).detail
+    if (typeof at !== "number") return
+    select(at)
     openLayer(true)
   }
 </script>
 
 <main class="stage">
-  <div class="sheet" bind:this={host} onclick={inspect} onkeydown={inspect} role="presentation"></div>
+  <div class="sheet" bind:this={host}></div>
 </main>

@@ -3,6 +3,14 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from "@codemir
 import type { Line } from "../engine/schema"
 
 export const setLines = StateEffect.define<readonly Line[]>()
+export const setFocused = StateEffect.define<boolean>()
+
+const VALUE_WIDTH = 48
+
+function clipped(text: string): { shown: string; full: boolean } {
+  if (text.length <= VALUE_WIDTH) return { shown: text, full: true }
+  return { shown: `${text.slice(0, VALUE_WIDTH - 1)}…`, full: false }
+}
 
 const dots: Record<string, string> = {
   proven: "••••••",
@@ -39,11 +47,18 @@ class ValueWidget extends WidgetType {
     const wrap = document.createElement("span")
     wrap.className = "val"
     wrap.dataset.line = String(this.line.n)
+    wrap.addEventListener("mousedown", (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      wrap.dispatchEvent(new CustomEvent("inspectline", { bubbles: true, detail: this.line.n }))
+    })
     if (this.line.status === "error") {
       if (this.editing) return wrap
       const err = document.createElement("span")
       err.className = "num err-text"
-      err.textContent = this.line.error ?? "refused"
+      const message = clipped(this.line.error ?? "refused")
+      err.textContent = message.shown
+      err.title = this.line.error ?? "refused"
       const st = document.createElement("span")
       st.className = statusClass(this.line.status)
       st.textContent = "refused"
@@ -52,7 +67,12 @@ class ValueWidget extends WidgetType {
     }
     const num = document.createElement("span")
     num.className = "num"
-    num.textContent = this.line.text
+    const value = clipped(this.line.text)
+    num.textContent = value.shown
+    if (!value.full) {
+      num.classList.add("clipped")
+      num.title = `${this.line.text.length} characters — open the line to read it in full`
+    }
     const st = document.createElement("span")
     st.className = statusClass(this.line.status)
     st.textContent = dots[this.line.status] ?? this.line.status
@@ -105,6 +125,14 @@ function noteItems(line: Line): { label: string; text: string }[] {
   return items
 }
 
+export const focused = StateField.define<boolean>({
+  create: () => false,
+  update(current, tr) {
+    for (const effect of tr.effects) if (effect.is(setFocused)) return effect.value
+    return current
+  },
+})
+
 export const caretLine = StateField.define<number>({
   create: () => 0,
   update(current, tr) {
@@ -121,12 +149,17 @@ export const lineField = StateField.define<readonly Line[]>({
   },
 })
 
-function build(lines: readonly Line[], caret: number, doc: { lines: number; line(n: number): { to: number } }) {
+function build(
+  lines: readonly Line[],
+  caret: number,
+  editable: boolean,
+  doc: { lines: number; line(n: number): { to: number } },
+) {
   const marks = []
   for (const line of lines) {
     if (line.n < 0 || line.n >= doc.lines) continue
     const at = doc.line(line.n + 1).to
-    const editing = line.n === caret
+    const editing = editable && line.n === caret
     marks.push(Decoration.widget({ widget: new ValueWidget(line, editing), side: 1 }).range(at))
     if (editing) continue
     const items = noteItems(line)
@@ -139,10 +172,15 @@ function build(lines: readonly Line[], caret: number, doc: { lines: number; line
 export const valueField = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update(marks, tr) {
-    const linesChanged = tr.effects.some((e) => e.is(setLines))
+    const linesChanged = tr.effects.some((e) => e.is(setLines) || e.is(setFocused))
     const caretMoved = tr.startState.field(caretLine, false) !== tr.state.field(caretLine, false)
     if (!linesChanged && !caretMoved && !tr.docChanged) return marks
-    return build(tr.state.field(lineField), tr.state.field(caretLine), tr.state.doc)
+    return build(
+      tr.state.field(lineField),
+      tr.state.field(caretLine),
+      tr.state.field(focused),
+      tr.state.doc,
+    )
   },
   provide: (field) => EditorView.decorations.from(field),
 })

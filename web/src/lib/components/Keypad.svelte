@@ -17,6 +17,8 @@
     [...sheet.lines].reverse().find((line) => line.status !== "error" && line.text !== "")?.text ?? "—",
   )
 
+  const shown = $derived(answer.length > 40 ? `${answer.slice(0, 39)}…` : answer)
+
   function tap(key: Key) {
     const [label, text, state] = key
     if (state === "held") {
@@ -34,7 +36,7 @@
 
 <section class="pad on" aria-label="Calculator keypad">
   <div class="pad-in">
-    <div class="entry"><span class="now"></span><span class="ans">ans <b>{answer}</b></span></div>
+    <div class="entry"><span class="now"></span><span class="ans">ans <b title={answer}>{shown}</b></span></div>
     <Tabs.Root bind:value={group}>
       <Tabs.List class="groups">
         {#each GROUP_NAMES as [id, label] (id)}

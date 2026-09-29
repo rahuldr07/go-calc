@@ -4,18 +4,23 @@ import { SUPERSEDED, type Angle, type Line } from "../engine/schema"
 const engine = new Engine()
 
 const DOCUMENT = "gocalc-document"
+const DIGITS = "gocalc-digits"
 
-function restored(): string {
+function saved(key: string): string {
   try {
-    return localStorage.getItem(DOCUMENT) ?? ""
+    return localStorage.getItem(key) ?? ""
   } catch {
     return ""
   }
 }
 
-function keep(text: string) {
+function restored(): string {
+  return saved(DOCUMENT)
+}
+
+function keep(key: string, value: string) {
   try {
-    localStorage.setItem(DOCUMENT, text)
+    localStorage.setItem(key, value)
   } catch {
     return
   }
@@ -24,7 +29,7 @@ function keep(text: string) {
 export const sheet = $state({
   source: restored(),
   lines: [] as Line[],
-  digits: 12,
+  digits: Number(saved(DIGITS)) || 12,
   angle: "rad" as Angle,
   engineStatus: "loading" as EngineStatus,
   failure: "",
@@ -53,12 +58,13 @@ export function selectedLine(): Line | undefined {
 
 export async function setSource(text: string) {
   sheet.source = text
-  keep(text)
+  keep(DOCUMENT, text)
   await recompute()
 }
 
 export async function setDigits(digits: number) {
   sheet.digits = Math.min(1000, Math.max(1, Math.round(digits)))
+  keep(DIGITS, String(sheet.digits))
   await recompute()
 }
 
