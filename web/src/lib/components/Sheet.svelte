@@ -3,9 +3,8 @@
   import { EditorState } from "@codemirror/state"
   import { EditorView, keymap, placeholder } from "@codemirror/view"
   import { onMount } from "svelte"
-  import { caretLine, focused, lineField, notepadTheme, setFocused, setLines, valueField } from "../editor/notepad"
+  import { caretLine, focused, lineField, selectedField, setFocused, setLines, setSelected, valueField } from "../editor/notepad"
   import { select, setSource, sheet } from "../state/sheet.svelte"
-  import { openLayer } from "../state/view.svelte"
 
   let host: HTMLDivElement
   let editor: EditorView | undefined = $state()
@@ -34,6 +33,11 @@
     editor.focus()
   }
 
+  function inspect(event: Event) {
+    const at = (event as CustomEvent<number>).detail
+    if (typeof at === "number") select(at)
+  }
+
   onMount(() => {
     editor = new EditorView({
       parent: host,
@@ -45,14 +49,14 @@
           caretLine,
           focused,
           lineField,
+          selectedField,
           valueField,
-          notepadTheme,
           EditorView.lineWrapping,
-          placeholder("type an expression — 12.3 ± 0.2 m, 100 km / 2 h, 18% of 500"),
-          EditorView.updateListener.of((update) => {
-            if (update.docChanged) void setSource(update.state.doc.toString())
+          placeholder("12.3 ± 0.2 m · 100 km / 2 h · 18% of 500"),
+          EditorView.updateListener.of((u) => {
+            if (u.docChanged) void setSource(u.state.doc.toString())
           }),
-          EditorView.focusChangeEffect.of((_, focusing) => setFocused.of(focusing)),
+          EditorView.focusChangeEffect.of((_, on) => setFocused.of(on)),
         ],
       }),
     })
@@ -68,14 +72,17 @@
     editor?.dispatch({ effects: setLines.of(lines) })
   })
 
-  function inspect(event: Event) {
-    const at = (event as CustomEvent<number>).detail
-    if (typeof at !== "number") return
-    select(at)
-    openLayer(true)
-  }
+  $effect(() => {
+    const at = sheet.selected
+    editor?.dispatch({ effects: setSelected.of(at) })
+  })
 </script>
 
-<main class="stage">
-  <div class="sheet" bind:this={host}></div>
-</main>
+<div class="sheet-head">
+  <h2>Lab notes</h2>
+  <span class="pin">{sheet.selected === null ? "nothing pinned" : `lens pinned to line ${sheet.selected + 1}`}</span>
+</div>
+<div class="colheads" aria-hidden="true">
+  <span></span><span>expression</span><span>result</span><span>trust</span>
+</div>
+<div class="scroll" bind:this={host}></div>

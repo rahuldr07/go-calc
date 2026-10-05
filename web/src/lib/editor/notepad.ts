@@ -1,32 +1,27 @@
 import { StateEffect, StateField } from "@codemirror/state"
 import { Decoration, EditorView, WidgetType, type DecorationSet } from "@codemirror/view"
-import type { Line } from "../engine/schema"
+import type { Line, Status } from "../engine/schema"
 
 export const setLines = StateEffect.define<readonly Line[]>()
 export const setFocused = StateEffect.define<boolean>()
+export const setSelected = StateEffect.define<number | null>()
 
-const VALUE_WIDTH = 48
+const VALUE_CHARS = 42
 
-function clipped(text: string): { shown: string; full: boolean } {
-  if (text.length <= VALUE_WIDTH) return { shown: text, full: true }
-  return { shown: `${text.slice(0, VALUE_WIDTH - 1)}…`, full: false }
+const WORD: Record<Status, string> = {
+  exact: "exact",
+  proven: "proven",
+  estimate: "estimate",
+  held: "held",
+  error: "error",
 }
 
-const dots: Record<string, string> = {
-  proven: "••••••",
-  estimate: "••••○○",
-  held: "○○○○○○",
+function clip(text: string): { shown: string; full: boolean } {
+  if (text.length <= VALUE_CHARS) return { shown: text, full: true }
+  return { shown: `${text.slice(0, VALUE_CHARS - 1)}…`, full: false }
 }
 
-function statusClass(status: Line["status"]): string {
-  if (status === "proven") return "st proven"
-  if (status === "estimate") return "st est"
-  if (status === "held") return "st hold"
-  if (status === "error") return "st err"
-  return "st"
-}
-
-class ValueWidget extends WidgetType {
+class AnswerWidget extends WidgetType {
   constructor(
     readonly line: Line,
     readonly editing: boolean,
@@ -34,7 +29,7 @@ class ValueWidget extends WidgetType {
     super()
   }
 
-  eq(other: ValueWidget) {
+  eq(other: AnswerWidget) {
     return (
       other.line.text === this.line.text &&
       other.line.status === this.line.status &&
@@ -44,43 +39,47 @@ class ValueWidget extends WidgetType {
   }
 
   toDOM() {
-    const wrap = document.createElement("span")
-    wrap.className = "val"
-    wrap.dataset.line = String(this.line.n)
-    wrap.addEventListener("mousedown", (event) => {
+    const frag = document.createElement("span")
+    frag.className = "answer-group"
+    const refused = this.line.status === "error"
+
+    const spine = document.createElement("span")
+    spine.className = "spine"
+    const rune = document.createElement("span")
+    rune.className = `rune ${this.line.status}`
+    if (this.line.status === "estimate") rune.textContent = "±"
+    if (refused) {
+      const mark = document.createElement("i")
+      mark.textContent = "×"
+      rune.append(mark)
+    }
+    rune.setAttribute("aria-hidden", "true")
+    spine.append(rune)
+
+    const result = document.createElement("span")
+    result.className = refused ? "result refused" : "result"
+    const body = refused ? (this.line.error ?? "refused") : this.line.text
+    const shown = clip(body)
+    result.textContent = refused && this.editing ? "" : shown.shown
+    if (!shown.full) {
+      result.classList.add("clipped")
+      result.title = `${body.length} characters — open the line to read it in full`
+    }
+
+    const status = document.createElement("span")
+    status.className = refused ? "status error" : "status"
+    status.textContent = refused && this.editing ? "" : WORD[this.line.status]
+
+    frag.append(spine, result, status)
+    frag.dataset.line = String(this.line.n)
+    frag.setAttribute("role", "button")
+    frag.tabIndex = 0
+    frag.addEventListener("mousedown", (event) => {
       event.preventDefault()
       event.stopPropagation()
-      wrap.dispatchEvent(new CustomEvent("inspectline", { bubbles: true, detail: this.line.n }))
+      frag.dispatchEvent(new CustomEvent("inspectline", { bubbles: true, detail: this.line.n }))
     })
-    if (this.line.status === "error") {
-      if (this.editing) return wrap
-      const err = document.createElement("span")
-      err.className = "num err-text"
-      const message = clipped(this.line.error ?? "refused")
-      err.textContent = message.shown
-      err.title = this.line.error ?? "refused"
-      const st = document.createElement("span")
-      st.className = statusClass(this.line.status)
-      st.textContent = "refused"
-      wrap.append(err, st)
-      return wrap
-    }
-    const num = document.createElement("span")
-    num.className = "num"
-    const value = clipped(this.line.text)
-    num.textContent = value.shown
-    if (!value.full) {
-      num.classList.add("clipped")
-      num.title = `${this.line.text.length} characters — open the line to read it in full`
-    }
-    const st = document.createElement("span")
-    st.className = statusClass(this.line.status)
-    st.textContent = dots[this.line.status] ?? this.line.status
-    st.title = this.line.status
-    wrap.append(num, st)
-    wrap.tabIndex = 0
-    wrap.setAttribute("role", "button")
-    return wrap
+    return frag
   }
 
   ignoreEvent() {
@@ -88,40 +87,41 @@ class ValueWidget extends WidgetType {
   }
 }
 
-class NoteWidget extends WidgetType {
-  constructor(readonly items: { label: string; text: string }[]) {
+class AnnotationWidget extends WidgetType {
+  constructor(readonly items: { kind: string; label: string; text: string }[]) {
     super()
   }
 
-  eq(other: NoteWidget) {
+  eq(other: AnnotationWidget) {
     return JSON.stringify(other.items) === JSON.stringify(this.items)
   }
 
   toDOM() {
     const holder = document.createElement("div")
-    holder.className = "notes"
     for (const item of this.items) {
-      const note = document.createElement("div")
-      note.className = "note"
+      const row = document.createElement("div")
+      row.className = item.kind === "warn" ? "note-block" : "note-block read"
       const label = document.createElement("b")
       label.textContent = item.label
-      note.append(label, document.createTextNode(item.text))
-      holder.append(note)
+      const text = document.createElement("span")
+      text.textContent = item.text
+      row.append(label, text)
+      holder.append(row)
     }
     return holder
   }
 }
 
-function noteItems(line: Line): { label: string; text: string }[] {
-  const items: { label: string; text: string }[] = []
+function annotations(line: Line) {
+  const items: { kind: string; label: string; text: string }[] = []
   for (const note of line.notes ?? []) {
-    items.push({ label: "read as", text: note.text.replace(/^read as /, "") })
+    items.push({ kind: "note", label: "read as", text: note.text.replace(/^read as /, "") })
   }
   for (const qualifier of line.qualifiers ?? []) {
-    items.push({ label: "digits", text: qualifier })
+    items.push({ kind: "qual", label: "digits", text: qualifier })
   }
-  if (line.warning) items.push({ label: "signal lost", text: line.warning })
-  if (line.stopped) items.push({ label: "stopped", text: line.stopped })
+  if (line.warning) items.push({ kind: "warn", label: "float64", text: line.warning })
+  if (line.stopped) items.push({ kind: "qual", label: "stopped", text: line.stopped })
   return items
 }
 
@@ -141,6 +141,14 @@ export const caretLine = StateField.define<number>({
   },
 })
 
+export const selectedField = StateField.define<number | null>({
+  create: () => null,
+  update(current, tr) {
+    for (const effect of tr.effects) if (effect.is(setSelected)) return effect.value
+    return current
+  },
+})
+
 export const lineField = StateField.define<readonly Line[]>({
   create: () => [],
   update(current, tr) {
@@ -153,18 +161,26 @@ function build(
   lines: readonly Line[],
   caret: number,
   editable: boolean,
-  doc: { lines: number; line(n: number): { to: number } },
+  selected: number | null,
+  doc: { lines: number; line(n: number): { from: number; to: number } },
 ) {
   const marks = []
+  for (let n = 0; n < doc.lines; n++) {
+    const at = doc.line(n + 1)
+    const attributes: Record<string, string> = { "data-n": String(n + 1) }
+    if (n === selected) attributes.class = "sel"
+    marks.push(Decoration.line({ attributes }).range(at.from))
+  }
   for (const line of lines) {
     if (line.n < 0 || line.n >= doc.lines) continue
-    const at = doc.line(line.n + 1).to
+    const at = doc.line(line.n + 1)
+    if (at.from === at.to) continue
     const editing = editable && line.n === caret
-    marks.push(Decoration.widget({ widget: new ValueWidget(line, editing), side: 1 }).range(at))
+    marks.push(Decoration.widget({ widget: new AnswerWidget(line, editing), side: 1 }).range(at.to))
     if (editing) continue
-    const items = noteItems(line)
+    const items = annotations(line)
     if (items.length === 0) continue
-    marks.push(Decoration.widget({ widget: new NoteWidget(items), side: 2, block: true }).range(at))
+    marks.push(Decoration.widget({ widget: new AnnotationWidget(items), side: 2, block: true }).range(at.to))
   }
   return Decoration.set(marks, true)
 }
@@ -172,33 +188,16 @@ function build(
 export const valueField = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update(marks, tr) {
-    const linesChanged = tr.effects.some((e) => e.is(setLines) || e.is(setFocused))
-    const caretMoved = tr.startState.field(caretLine, false) !== tr.state.field(caretLine, false)
-    if (!linesChanged && !caretMoved && !tr.docChanged) return marks
+    const changed = tr.effects.some((e) => e.is(setLines) || e.is(setFocused) || e.is(setSelected))
+    const moved = tr.startState.field(caretLine, false) !== tr.state.field(caretLine, false)
+    if (!changed && !moved && !tr.docChanged) return marks
     return build(
       tr.state.field(lineField),
       tr.state.field(caretLine),
       tr.state.field(focused),
+      tr.state.field(selectedField),
       tr.state.doc,
     )
   },
   provide: (field) => EditorView.decorations.from(field),
-})
-
-export const notepadTheme = EditorView.theme({
-  "&": { color: "var(--ivory)", background: "transparent", fontSize: "14px", height: "100%" },
-  ".cm-scroller": { fontFamily: "var(--mono)", lineHeight: "1.55", overflow: "auto" },
-  ".cm-content": { padding: "4px 0 40vh", caretColor: "var(--signal)" },
-  ".cm-line": { padding: "2px 0 2px 18px", position: "relative" },
-  ".cm-line::before": {
-    content: '"›"',
-    position: "absolute",
-    left: "0",
-    color: "var(--dust)",
-  },
-  ".cm-activeLine": { backgroundColor: "transparent" },
-  "&.cm-focused": { outline: "none" },
-  ".cm-cursor": { borderLeftColor: "var(--signal)", borderLeftWidth: "2px" },
-  ".cm-selectionBackground, ::selection": { backgroundColor: "var(--signal)" },
-  ".cm-gutters": { display: "none" },
 })

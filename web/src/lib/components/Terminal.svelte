@@ -1,21 +1,20 @@
 <script lang="ts">
-  import { setSource, sheet } from "../state/sheet.svelte"
   import type { Line } from "../engine/schema"
+  import { setSource, sheet } from "../state/sheet.svelte"
 
   let entry = $state("")
   let scroller: HTMLElement | undefined = $state()
 
-  const transcript = $derived(
+  const rows = $derived(
     sheet.source
       .split("\n")
       .map((src, n) => ({ src, line: sheet.lines.find((l) => l.n === n) }))
-      .filter((row) => row.src.trim() !== ""),
+      .filter((r) => r.src.trim() !== ""),
   )
 
-  function answerOf(line: Line | undefined): string {
+  function answerOf(line: Line | undefined) {
     if (!line) return ""
-    if (line.status === "error") return line.error ?? "refused"
-    return line.text
+    return line.status === "error" ? (line.error ?? "refused") : line.text
   }
 
   async function submit(event: SubmitEvent) {
@@ -23,25 +22,24 @@
     const typed = entry.trim()
     if (typed === "") return
     entry = ""
-    const next = sheet.source === "" ? typed : `${sheet.source}\n${typed}`
-    await setSource(next)
+    await setSource(sheet.source === "" ? typed : `${sheet.source}\n${typed}`)
     queueMicrotask(() => scroller?.scrollTo({ top: scroller.scrollHeight }))
   }
 </script>
 
-<main class="term" bind:this={scroller}>
-  <div class="tb"><div class="out">go-calc · wasm · codata 2022 · the same document as the notepad</div></div>
-  {#each transcript as row (row.src + row.line?.n)}
-    <div class="tb">
-      <div class="in">{row.src}</div>
-      <div class="out"><b>{answerOf(row.line)}</b>
-        {#if row.line}<span class="st-word">{row.line.status}</span>{/if}
+<div class="term" bind:this={scroller}>
+  {#each rows as row (row.src + row.line?.n)}
+    <div class="term-row">
+      <div class="term-in">{row.src}</div>
+      <div class="term-out">
+        <b>{answerOf(row.line)}</b>
+        {#if row.line}<span class="cap" style="margin-left:10px">{row.line.status}</span>{/if}
         {#each row.line?.notes ?? [] as note}<br />{note.text}{/each}
         {#if row.line?.warning}<br />{row.line.warning}{/if}
       </div>
     </div>
   {/each}
-  <form class="prompt" onsubmit={submit}>
-    <input bind:value={entry} aria-label="Terminal input" autocomplete="off" spellcheck="false" placeholder="type an expression" />
-  </form>
-</main>
+</div>
+<form class="prompt" onsubmit={submit}>
+  <input bind:value={entry} aria-label="Terminal input" autocomplete="off" spellcheck="false" placeholder="type an expression" />
+</form>

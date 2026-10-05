@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Tabs } from "bits-ui"
   import { CORE, GROUP_NAMES, HELD_NOTE, PAD_GROUPS, type Key } from "../editor/keys"
   import { sheet } from "../state/sheet.svelte"
 
@@ -7,17 +6,14 @@
     insert: (text: string) => void
     press: (command: "back" | "clear" | "newline") => void
   }
-
   const { insert, press }: Props = $props()
 
   let group = $state("sci")
   let note = $state("")
 
   const answer = $derived(
-    [...sheet.lines].reverse().find((line) => line.status !== "error" && line.text !== "")?.text ?? "—",
+    [...sheet.lines].reverse().find((l) => l.status !== "error" && l.text !== "")?.text ?? "",
   )
-
-  const shown = $derived(answer.length > 40 ? `${answer.slice(0, 39)}…` : answer)
 
   function tap(key: Key) {
     const [label, text, state] = key
@@ -29,41 +25,28 @@
     if (text === "BACK") return press("back")
     if (text === "CLEAR") return press("clear")
     if (text === "EQ") return press("newline")
-    if (text === "ans") return insert(answer === "—" ? "" : answer)
+    if (text === "ans") return insert(answer)
     insert(text)
   }
 </script>
 
-<section class="pad on" aria-label="Calculator keypad">
-  <div class="pad-in">
-    <div class="entry"><span class="now"></span><span class="ans">ans <b title={answer}>{shown}</b></span></div>
-    <Tabs.Root bind:value={group}>
-      <Tabs.List class="groups">
-        {#each GROUP_NAMES as [id, label] (id)}
-          <Tabs.Trigger value={id}>{label}</Tabs.Trigger>
-        {/each}
-      </Tabs.List>
-      {#each GROUP_NAMES as [id] (id)}
-        <Tabs.Content value={id}>
-          <div class="grid">
-            {#each PAD_GROUPS[id] as key (key[0])}
-              <button
-                type="button"
-                class="k"
-                class:dim={key[2] === "held"}
-                aria-disabled={key[2] === "held"}
-                onclick={() => tap(key)}
-              >{key[0]}</button>
-            {/each}
-          </div>
-        </Tabs.Content>
-      {/each}
-    </Tabs.Root>
-    <div class="core">
-      {#each CORE as key (key[0])}
-        <button type="button" class="k" class:act={key[2] === "act"} onclick={() => tap(key)}>{key[0]}</button>
-      {/each}
-    </div>
-    <div class="pad-note">{note}</div>
+<section class="pad" aria-label="Keypad">
+  <div class="pad-groups" role="tablist">
+    {#each GROUP_NAMES as [id, label] (id)}
+      <button type="button" role="tab" aria-selected={group === id} data-state={group === id ? "active" : ""}
+        onclick={() => (group = id)}>{label}</button>
+    {/each}
   </div>
+  <div class="pad-keys">
+    {#each PAD_GROUPS[group] as key (key[0])}
+      <button type="button" class="key" class:off={key[2] === "held"} aria-disabled={key[2] === "held"}
+        onclick={() => tap(key)}>{key[0]}</button>
+    {/each}
+  </div>
+  <div class="pad-core">
+    {#each CORE as key (key[0])}
+      <button type="button" class="key" class:go={key[2] === "act"} onclick={() => tap(key)}>{key[0]}</button>
+    {/each}
+  </div>
+  <div class="pad-note" role="status">{note}</div>
 </section>

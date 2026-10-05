@@ -1,5 +1,4 @@
 export type Mode = "notepad" | "terminal"
-export type Theme = "dark" | "light"
 
 function saved(key: string): string | null {
   try {
@@ -25,34 +24,23 @@ function matches(query: string): boolean {
   }
 }
 
-function firstTheme(): Theme {
-  const stored = saved("gocalc-theme")
-  if (stored === "light" || stored === "dark") return stored
-  return matches("(prefers-color-scheme: light)") ? "light" : "dark"
-}
-
 function firstKeypad(): boolean {
   const stored = saved("gocalc-keypad")
   if (stored === "open") return true
   if (stored === "closed") return false
-  return matches("(max-width: 860px)")
+  return matches("(max-width: 860px)") && !matches("(min-width: 861px)")
 }
 
 export const view = $state({
   mode: "notepad" as Mode,
-  theme: firstTheme(),
   keypad: firstKeypad(),
   layer: false,
+  studio: false,
 })
 
 export function setMode(mode: Mode) {
   view.mode = mode
   if (mode === "terminal") view.layer = false
-}
-
-export function toggleTheme() {
-  view.theme = view.theme === "light" ? "dark" : "light"
-  remember("gocalc-theme", view.theme)
 }
 
 export function toggleKeypad() {
