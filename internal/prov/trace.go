@@ -13,6 +13,7 @@ type NodeOut struct {
 	Kind     string   `json:"kind"`
 	Label    string   `json:"label"`
 	Detail   string   `json:"detail,omitempty"`
+	Value    string   `json:"value,omitempty"`
 	Line     int      `json:"line,omitempty"`
 	Children []NodeID `json:"children,omitempty"`
 }
@@ -89,6 +90,7 @@ func (a *Arena) Export(id NodeID) Export {
 			Kind:     n.Kind.String(),
 			Label:    n.Label,
 			Detail:   n.Detail,
+			Value:    n.Value,
 			Line:     n.Line,
 			Children: n.Children,
 		})

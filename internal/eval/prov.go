@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/rahuldr07/go-calc/internal/consts"
+	"github.com/rahuldr07/go-calc/internal/format"
 	"github.com/rahuldr07/go-calc/internal/lex"
 	"github.com/rahuldr07/go-calc/internal/parse"
 	"github.com/rahuldr07/go-calc/internal/prov"
@@ -20,7 +21,26 @@ func (e *Env) eval(n parse.Node, p *pass) (value.Value, error) {
 		return value.Value{}, &lex.Error{Pos: n.Pos(), Msg: TooLargeMessage}
 	}
 	v.Prov = e.stamp(n, p)
+	e.arena.SetValue(v.Prov, briefValue(v))
 	return v, nil
+}
+
+const briefNumberLimit = 28
+
+func briefValue(v value.Value) (text string) {
+	defer func() {
+		if recover() != nil {
+			text = ""
+		}
+	}()
+	text, _ = format.Default.Decimal(v)
+	if runes := []rune(text); len(runes) > briefNumberLimit {
+		text = string(runes[:briefNumberLimit-1]) + "…"
+	}
+	if v.Unit != "" {
+		text += " " + v.Unit
+	}
+	return text
 }
 
 func (p *pass) mark(n parse.Node, id prov.NodeID) {

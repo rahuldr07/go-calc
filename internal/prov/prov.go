@@ -40,6 +40,7 @@ type Node struct {
 	Kind     NodeKind
 	Label    string
 	Detail   string
+	Value    string
 	Line     int
 	Children []NodeID
 }
@@ -74,6 +75,12 @@ func (a *Arena) Get(id NodeID) Node {
 	n := a.nodes[id]
 	n.Children = append([]NodeID(nil), n.Children...)
 	return n
+}
+
+func (a *Arena) SetValue(id NodeID, s string) {
+	if a.Has(id) {
+		a.nodes[id].Value = s
+	}
 }
 
 func (a *Arena) Len() int { return len(a.nodes) }

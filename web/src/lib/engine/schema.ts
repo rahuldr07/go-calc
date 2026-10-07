@@ -45,6 +45,8 @@ export interface TraceNode {
   kind: string
   label: string
   detail?: string
+  value?: string
+  line?: number
   children?: number[]
 }
 
