@@ -55,6 +55,11 @@ type Binary struct {
 func (n *Binary) Pos() lex.Pos   { return n.P }
 func (n *Binary) String() string { return "(" + n.L.String() + " " + n.Op + " " + n.R.String() + ")" }
 
+const (
+	ListFn  = "[]"
+	RangeFn = lex.RangeOp
+)
+
 type Call struct {
 	Fn      string
 	Args    []Node
@@ -63,11 +68,19 @@ type Call struct {
 	Grouped bool
 }
 
-func (n *Call) Pos() lex.Pos { return n.P }
-func (n *Call) String() string {
+func (n *Call) Pos() lex.Pos   { return n.P }
+func (n *Call) String() string { return n.text(Node.String) }
+
+func (n *Call) text(part func(Node) string) string {
 	parts := make([]string, len(n.Args))
 	for i, a := range n.Args {
-		parts[i] = n.Key(i) + a.String()
+		parts[i] = n.Key(i) + part(a)
+	}
+	switch n.Fn {
+	case ListFn:
+		return "[" + strings.Join(parts, ", ") + "]"
+	case RangeFn:
+		return strings.Join(parts, RangeFn)
 	}
 	return n.Fn + "(" + strings.Join(parts, ", ") + ")"
 }
@@ -222,11 +235,7 @@ func reading(n Node) string {
 		}
 		return bracket(t.L) + operatorSymbol(t.Op) + bracket(t.R)
 	case *Call:
-		parts := make([]string, len(t.Args))
-		for i, a := range t.Args {
-			parts[i] = t.Key(i) + reading(a)
-		}
-		return t.Fn + "(" + strings.Join(parts, ", ") + ")"
+		return t.text(reading)
 	case *Assign:
 		if len(t.Params) == 0 {
 			return t.Name + " = " + reading(t.Body)

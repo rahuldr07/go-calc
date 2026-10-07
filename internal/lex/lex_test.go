@@ -1,6 +1,9 @@
 package lex
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestScanNumbersAndOperators(t *testing.T) {
 	toks, err := Scan("12.3 + 1_000 * 0xFF")
@@ -138,6 +141,69 @@ func TestScanComparisonOperators(t *testing.T) {
 	for i := range want {
 		if ops[i] != want[i] {
 			t.Errorf("operator %d = %q, want %q", i, ops[i], want[i])
+		}
+	}
+}
+
+func kindsOf(t *testing.T, src string) []Kind {
+	t.Helper()
+	toks, err := Scan(src)
+	if err != nil {
+		t.Fatalf("Scan(%q): %v", src, err)
+	}
+	kinds := make([]Kind, len(toks))
+	for i, tok := range toks {
+		kinds[i] = tok.Kind
+	}
+	return kinds
+}
+
+func TestScanBracketsAndRange(t *testing.T) {
+	got := kindsOf(t, "[1, 2]..3")
+	want := []Kind{LBracket, Num, Comma, Num, RBracket, Op, Num, EOF}
+	if len(got) != len(want) {
+		t.Fatalf("kinds = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("kind %d = %v, want %v", i, got[i], want[i])
+		}
+	}
+	toks, _ := Scan("1..10")
+	if len(toks) != 4 || toks[0].Text != "1" || toks[1].Text != RangeOp || toks[2].Text != "10" {
+		t.Errorf("Scan(1..10) = %v, want 1 .. 10", toks)
+	}
+	toks, _ = Scan("1.5..2.5")
+	if toks[0].Text != "1.5" || toks[1].Text != RangeOp || toks[2].Text != "2.5" {
+		t.Errorf("Scan(1.5..2.5) = %v, want 1.5 .. 2.5", toks)
+	}
+}
+
+func TestCommasSeparateInsideListsAndCalls(t *testing.T) {
+	cases := []struct {
+		src  string
+		want []string
+	}{
+		{"[100,200]", []string{"[", "100", ",", "200", "]"}},
+		{"[1,234]", []string{"[", "1", ",", "234", "]"}},
+		{"max(10,200,300)", []string{"max", "(", "10", ",", "200", ",", "300", ")"}},
+		{"(1,000)", []string{"(", "1,000", ")"}},
+		{"max((1,000), 2)", []string{"max", "(", "(", "1,000", ")", ",", "2", ")"}},
+		{"[(1,000), 2]", []string{"[", "(", "1,000", ")", ",", "2", "]"}},
+		{"5 in (1,000)", []string{"5", "in", "(", "1,000", ")"}},
+		{"1,000 + max(1,2)", []string{"1,000", "+", "max", "(", "1", ",", "2", ")"}},
+	}
+	for _, c := range cases {
+		toks, err := Scan(c.src)
+		if err != nil {
+			t.Fatalf("Scan(%q): %v", c.src, err)
+		}
+		var got []string
+		for _, tok := range toks[:len(toks)-1] {
+			got = append(got, tok.Text)
+		}
+		if strings.Join(got, " ") != strings.Join(c.want, " ") {
+			t.Errorf("Scan(%q) = %q, want %q", c.src, got, c.want)
 		}
 	}
 }

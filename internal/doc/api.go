@@ -144,7 +144,7 @@ func (d *Doc) sheetLine(i int, e *entry, style format.Style) lineOut {
 		out.Column = columnOf(e.err)
 	case Blank(e.src):
 		out.Status = StatusHeld
-	case e.value.IsDefinition() || e.value.IsSymbolic():
+	case e.value.IsDefinition() || e.value.IsSymbolic() || e.value.IsList() || e.value.IsComplex():
 		out.Status = StatusHeld
 		out.Text, out.Qualifiers = answer(style, e.value)
 	default:

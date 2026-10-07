@@ -84,6 +84,9 @@ func (e *Env) evalName(t *parse.Name, p *pass) (value.Value, error) {
 	case "e":
 		e.record(t, p, prov.Node{Kind: prov.Constant, Label: t.Text, Detail: workingPrecision})
 		return value.ScalarNum(num.NumBall(elem.E(p.prec()))), nil
+	case imaginaryUnit:
+		e.record(t, p, prov.Node{Kind: prov.Constant, Label: t.Text, Detail: "the imaginary unit, i^2 = -1"})
+		return imaginary(), nil
 	}
 	if u, ok := units.Lookup(t.Text); ok {
 		e.record(t, p, prov.Node{Kind: prov.Unit, Label: t.Text, Detail: unitDetail(u)})
@@ -175,6 +178,12 @@ func namedArgumentError(t *parse.Call) error {
 }
 
 func (e *Env) evalCall(t *parse.Call, p *pass) (value.Value, error) {
+	switch t.Fn {
+	case parse.ListFn:
+		return e.listLiteral(t, p)
+	case parse.RangeFn:
+		return e.rangeCall(t, p)
+	}
 	if !e.knowsFunction(t.Fn) {
 		return value.Value{}, e.unknownFunction(t)
 	}
@@ -255,7 +264,17 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		}
 		return args[0].Num.Ball(prec), nil
 	}
+	if !acceptsLists(t.Fn) {
+		for _, a := range args {
+			if a.IsList() {
+				return fail(t.Fn + " takes a number, not a list")
+			}
+		}
+	}
 	switch t.Fn {
+	case "sum", "product", "mean", "median", "min", "max", "count", "stdev", "variance", "stdevp", "variancep":
+		v, err := e.statistic(t, args, p)
+		return v, err, true
 	case "abs":
 		if len(args) != 1 {
 			return fail("abs takes one argument")
@@ -291,6 +310,13 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 			return value.WithUnitNum(n, units.SIUnit(half)).WithJet(j)
 		}
 		if inner.IsExact() && inner.Exact().Sign() < 0 {
+			if half.IsNone() && !arg.IsMeasured() {
+				out, err := complexSqrt(value.ScalarNum(inner), prec)
+				if err != nil {
+					return fail("sqrt: " + err.Error())
+				}
+				return out, nil, true
+			}
 			return fail("sqrt: square root of a negative number")
 		}
 		if inner.IsExact() {
@@ -575,6 +601,9 @@ func (e *Env) evalUnary(t *parse.Unary, p *pass) (value.Value, error) {
 	if x.IsBoolean() {
 		return value.Value{}, &lex.Error{Pos: t.P, Msg: "cannot do arithmetic on a true/false value"}
 	}
+	if x.IsList() {
+		return value.Value{}, &lex.Error{Pos: t.P, Msg: arithmeticOnList}
+	}
 	switch t.Op {
 	case "-":
 		x.Num = x.Num.Neg()
@@ -645,6 +674,9 @@ func (e *Env) evalBinary(t *parse.Binary, p *pass) (value.Value, error) {
 		return value.Value{}, &lex.Error{Pos: t.P, Msg: "cannot do arithmetic on a true/false value"}
 	}
 	prec := p.prec()
+	if eitherComplex(l, r) {
+		return complexBinary(t, l, r, prec)
+	}
 	switch t.Op {
 	case "+", "-":
 		if l.IsAffine() || r.IsAffine() {
@@ -830,11 +862,21 @@ func markUnitPositions(n parse.Node, inherited bool, marked map[parse.Node]bool)
 
 func (e *Env) evalPositioned(n parse.Node, p *pass, unitPosition bool) (value.Value, error) {
 	if !unitPosition {
-		return e.eval(n, p)
+		return e.operand(n, p)
 	}
 	p.units.enter(n)
 	defer p.units.leave(n)
-	return e.eval(n, p)
+	return e.operand(n, p)
+}
+
+const arithmeticOnList = "cannot do arithmetic on a list: use sum, mean or another statistic to reduce it to a number"
+
+func (e *Env) operand(n parse.Node, p *pass) (value.Value, error) {
+	v, err := e.eval(n, p)
+	if err == nil && v.IsList() {
+		return value.Value{}, &lex.Error{Pos: n.Pos(), Msg: arithmeticOnList}
+	}
+	return v, err
 }
 
 func (e *Env) attachUnit(t *parse.Binary, l value.Value, p *pass) (value.Value, error, bool) {
@@ -1128,7 +1170,7 @@ func unitOrNone(v value.Value) string {
 }
 
 func (e *Env) convert(t *parse.Binary, p *pass) (value.Value, error) {
-	l, err := e.eval(t.L, p)
+	l, err := e.operand(t.L, p)
 	if err != nil {
 		return value.Value{}, err
 	}

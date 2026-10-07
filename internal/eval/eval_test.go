@@ -617,9 +617,6 @@ func TestUnsetForgetsNamesAndFunctions(t *testing.T) {
 
 func TestAnExactDomainFailureStatesTheFactAndABallHedges(t *testing.T) {
 	certain := map[string]string{
-		"sqrt(-1)":     "square root of a negative number",
-		"sqrt(-1.5)":   "square root of a negative number",
-		"sqrt(0 - 4)":  "square root of a negative number",
 		"sqrt(-1 m^2)": "square root of a negative number",
 		"ln(0)":        "log of zero",
 		"log(0)":       "log of zero",
@@ -733,5 +730,33 @@ func TestASmallProvenMagnitudeIsWrittenInScientificForm(t *testing.T) {
 		if got := format.Text(v, nil); got != c[1] {
 			t.Errorf("%s = %q, want %q", c[0], got, c[1])
 		}
+	}
+}
+
+func TestASquareRootOfANegativeIsComplex(t *testing.T) {
+	want := map[string]string{
+		"sqrt(-1)":    "i",
+		"sqrt(-4)":    "2i",
+		"sqrt(0 - 4)": "2i",
+	}
+	for src, text := range want {
+		v, err := answer(t, src)
+		if err != nil {
+			t.Errorf("%s was refused: %v", src, err)
+			continue
+		}
+		if !v.IsComplex() {
+			t.Errorf("%s = %v, want a complex number", src, v.Num)
+			continue
+		}
+		if got := v.Cx.String(); got != text {
+			t.Errorf("%s = %s, want %s", src, got, text)
+		}
+		if !v.Cx.IsExact() {
+			t.Errorf("%s was not exact", src)
+		}
+	}
+	if _, err := answer(t, "sqrt(-1 m^2)"); err == nil {
+		t.Error("a negative square metre was answered")
 	}
 }

@@ -46,12 +46,24 @@ type Uncertainty struct {
 	Warning    string         `json:"warning,omitempty"`
 }
 
+type ItemOut struct {
+	Value       *ValueOut    `json:"value"`
+	Unit        *UnitOut     `json:"unit,omitempty"`
+	Uncertainty *Uncertainty `json:"uncertainty,omitempty"`
+}
+
+type ListOut struct {
+	Count int       `json:"count"`
+	Items []ItemOut `json:"items,omitempty"`
+}
+
 type result struct {
 	Schema      string       `json:"schema"`
 	Input       string       `json:"input"`
 	Definition  string       `json:"definition,omitempty"`
 	Value       *ValueOut    `json:"value,omitempty"`
 	Unit        *UnitOut     `json:"unit,omitempty"`
+	List        *ListOut     `json:"list,omitempty"`
 	Uncertainty *Uncertainty `json:"uncertainty,omitempty"`
 	Provenance  *prov.Export `json:"provenance,omitempty"`
 	Warning     string       `json:"warning,omitempty"`
@@ -77,6 +89,14 @@ func JSONDetail(input string, v value.Value, notes []parse.Note, d Detail) ([]by
 	if v.IsDefinition() {
 		return json.MarshalIndent(result{Schema: Schema, Input: input, Definition: v.Def, Notes: msgs}, "", "  ")
 	}
+	if v.IsList() {
+		r := result{Schema: Schema, Input: input, List: Default.listOut(v.List.Items), Notes: msgs, Warning: d.Warning}
+		if d.Arena != nil && d.Arena.Has(v.Prov) {
+			trace := d.Arena.Export(v.Prov)
+			r.Provenance = &trace
+		}
+		return json.MarshalIndent(r, "", "  ")
+	}
 	out, unit := Default.ValueDetail(v)
 	r := result{Schema: Schema, Input: input, Value: out, Unit: unit, Notes: msgs, Uncertainty: UncertaintyOf(v), Warning: d.Warning}
 	if d.Arena != nil && d.Arena.Has(v.Prov) {
@@ -86,8 +106,20 @@ func JSONDetail(input string, v value.Value, notes []parse.Note, d Detail) ([]by
 	return json.MarshalIndent(r, "", "  ")
 }
 
+func (s Style) listOut(items []value.Value) *ListOut {
+	out := &ListOut{Count: len(items)}
+	for _, item := range items {
+		amount, unit := s.ValueDetail(item)
+		out.Items = append(out.Items, ItemOut{Value: amount, Unit: unit, Uncertainty: UncertaintyOf(item)})
+	}
+	return out
+}
+
 func (s Style) ValueDetail(v value.Value) (*ValueOut, *UnitOut) {
 	out := &ValueOut{}
+	if v.IsList() {
+		return out, nil
+	}
 	if v.Num.IsExact() {
 		out.Exact = v.Num.Exact().String()
 	} else {

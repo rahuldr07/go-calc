@@ -71,6 +71,31 @@
       ],
     },
     {
+      title: "Lists and statistics",
+      note: "Exact in, exact out. All elements must share a dimension.",
+      rows: [
+        ["[1, 2, 3]   1..10   1..10..2", "a list, a range, a step"],
+        ["sum(1..10)", "55"],
+        ["mean(1,2)", "1.5, held exactly as 3/2"],
+        ["median(1,2,3,4)", "2.5"],
+        ["variance(1..4)", "5/3  ≈ 1.66666666667"],
+        ["stdev  stdevp", "sample (n-1) and population (n)"],
+        ["sum(1 m, 2 s)", "refused: cannot mix length with time"],
+      ],
+    },
+    {
+      title: "Complex numbers",
+      note: "Exact wherever the arithmetic stays rational.",
+      rows: [
+        ["sqrt(-1)", "i"],
+        ["sqrt(-4)", "2i"],
+        ["(1+2i)*(3+4i)", "-5+10i"],
+        ["1/(1+i)", "1/2-(1/2)i"],
+        ["(1+i)^8", "16"],
+        ["sqrt(-2)", "(1.41421356237 ± 1.5e-36)i"],
+      ],
+    },
+    {
       title: "Typing help",
       note: "Suggestions appear as you type, and a misspelling still finds the name.",
       rows: [
@@ -98,6 +123,8 @@
     "sinh", "cosh", "tanh", "exp", "ln", "log", "log2", "log10",
     "sqrt", "root", "abs", "floor", "ceil", "round", "mod",
     "gcd", "lcm", "isprime", "expand", "solve", "deriv",
+    "sum", "product", "mean", "median", "min", "max", "count",
+    "stdev", "stdevp", "variance", "variancep",
   ]
 
   const CONSTANTS: [string, string][] = [

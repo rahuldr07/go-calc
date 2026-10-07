@@ -33,6 +33,9 @@ func briefValue(v value.Value) (text string) {
 			text = ""
 		}
 	}()
+	if v.IsList() {
+		return "list of " + strconv.Itoa(len(v.List.Items))
+	}
 	text, _ = format.Default.Decimal(v)
 	if runes := []rune(text); len(runes) > briefNumberLimit {
 		text = string(runes[:briefNumberLimit-1]) + "…"
@@ -86,11 +89,21 @@ func describe(n parse.Node, p *pass) prov.Node {
 		for _, a := range t.Args {
 			kids = append(kids, p.idOf(a))
 		}
-		return prov.Node{Kind: prov.Function, Label: t.Fn, Children: kids}
+		return prov.Node{Kind: prov.Function, Label: functionLabel(t), Children: kids}
 	case *parse.Assign:
 		return prov.Node{Kind: prov.Variable, Label: t.Name, Detail: definitionDetail(t)}
 	}
 	return prov.Node{Kind: prov.Operation, Label: n.String()}
+}
+
+func functionLabel(t *parse.Call) string {
+	switch t.Fn {
+	case parse.ListFn:
+		return "list"
+	case parse.RangeFn:
+		return "range"
+	}
+	return t.Fn
 }
 
 func operationLabel(t *parse.Binary, p *pass) string {

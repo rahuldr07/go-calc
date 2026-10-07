@@ -1,6 +1,9 @@
 package parse
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func parseOK(t *testing.T, src string) Node {
 	t.Helper()
@@ -233,5 +236,72 @@ func TestSolveTakesAnEquationArgument(t *testing.T) {
 	}
 	if got := call.Args[0].String(); got != "(((x ^ 2) - 4) = 0)" {
 		t.Errorf("equation = %s", got)
+	}
+}
+
+func TestListsAndRangesParse(t *testing.T) {
+	cases := map[string]string{
+		"[1, 2, 3]":      "[1, 2, 3]",
+		"[]":             "[]",
+		"[1+2, x]":       "[(1 + 2), x]",
+		"[[1], 2]":       "[[1], 2]",
+		"1..10":          "1..10",
+		"1..10..2":       "1..10..2",
+		"1..n+1":         "1..(n + 1)",
+		"-3..3":          "(-3)..3",
+		"sum(1..10)":     "sum(1..10)",
+		"sum(1, 2, 3)":   "sum(1, 2, 3)",
+		"mean([1,2],3)":  "mean([1, 2], 3)",
+		"[1,2]!":         "([1, 2] !)",
+		"x = [1,2]":      "x = [1, 2]",
+		"max(100,200)":   "max(100, 200)",
+		"max(1,234)":     "max(1, 234)",
+		"1,000 + [1,22]": "(1,000 + [1, 22])",
+	}
+	for src, want := range cases {
+		if got := parseOK(t, src).String(); got != want {
+			t.Errorf("Parse(%q) = %s, want %s", src, got, want)
+		}
+	}
+}
+
+func TestARangeStepIsTheThirdArgument(t *testing.T) {
+	call, ok := parseOK(t, "1..10..2").(*Call)
+	if !ok || call.Fn != RangeFn || len(call.Args) != 3 {
+		t.Fatalf("1..10..2 = %#v, want one range call with three arguments", call)
+	}
+	grouped, ok := parseOK(t, "(1..10)..2").(*Call)
+	if !ok || len(grouped.Args) != 2 {
+		t.Fatalf("(1..10)..2 = %#v, want a range whose start is itself a range", grouped)
+	}
+}
+
+func TestListSyntaxErrors(t *testing.T) {
+	for src, want := range map[string]string{
+		"[1, 2":      "expected ]",
+		"[1,]":       "unexpected ]",
+		"1..2..3..4": "a range takes a start, an end and at most a step",
+		"1..":        "unexpected end of input",
+	} {
+		_, _, err := Parse(src)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("Parse(%q) error = %v, want it to contain %q", src, err, want)
+		}
+	}
+}
+
+func TestBracketsLeaveExistingReadingsAlone(t *testing.T) {
+	cases := map[string]string{
+		"2(x + 1)":      "(2 * (x + 1))",
+		"f(1, 2)":       "f(1, 2)",
+		"1.5 + 2":       "(1.5 + 2)",
+		"1,000 + 2":     "(1,000 + 2)",
+		"(1,000) + 2":   "(1,000 + 2)",
+		"18,50,000 * 2": "(18,50,000 * 2)",
+	}
+	for src, want := range cases {
+		if got := parseOK(t, src).String(); got != want {
+			t.Errorf("Parse(%q) = %s, want %s", src, got, want)
+		}
 	}
 }

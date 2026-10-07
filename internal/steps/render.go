@@ -109,6 +109,22 @@ func wrap(c child, needs int) string {
 }
 
 func call(label string, kids []child) string {
+	switch label {
+	case "range":
+		if len(kids) == 2 || len(kids) == 3 {
+			parts := make([]string, len(kids))
+			for i, k := range kids {
+				parts[i] = wrap(k, precAtom)
+			}
+			return strings.Join(parts, "..")
+		}
+	case "list":
+		parts := make([]string, len(kids))
+		for i, k := range kids {
+			parts[i] = k.text
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
+	}
 	if len(kids) == 0 {
 		return label + "(" + elided + ")"
 	}

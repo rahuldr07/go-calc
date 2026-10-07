@@ -1,6 +1,7 @@
 package value
 
 import (
+	"github.com/rahuldr07/go-calc/internal/cplx"
 	"strings"
 
 	"github.com/rahuldr07/go-calc/internal/num"
@@ -24,6 +25,8 @@ type Value struct {
 	Truth   Truth
 	Sym     string
 	Solved  *Solution
+	Cx      *cplx.Complex
+	List    *Listing
 }
 
 type Truth int
@@ -41,6 +44,10 @@ type Solution struct {
 	Searched string
 }
 
+type Listing struct {
+	Items []Value
+}
+
 func Boolean(holds bool) Value {
 	if holds {
 		v := Scalar(num.FromInt(1))
@@ -56,6 +63,14 @@ func (v Value) IsBoolean() bool { return v.Truth != NotLogical }
 
 func (v Value) IsSymbolic() bool { return v.Sym != "" }
 
+func (v Value) IsComplex() bool { return v.Cx != nil }
+
+func Complex(c cplx.Complex) Value {
+	v := Value{Cx: &c}
+	v.Num = c.Re()
+	return v
+}
+
 func Symbolic(text string) Value {
 	return Value{Sym: text}
 }
@@ -67,6 +82,14 @@ func Solved(s Solution) Value {
 	v.Solved = &s
 	return v
 }
+
+func List(items []Value) Value {
+	v := Scalar(num.FromInt(0))
+	v.List = &Listing{Items: items}
+	return v
+}
+
+func (v Value) IsList() bool { return v.List != nil }
 
 func Definition(name string, params []string) Value {
 	v := Scalar(num.FromInt(0))

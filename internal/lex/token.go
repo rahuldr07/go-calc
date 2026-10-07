@@ -11,6 +11,8 @@ const (
 	LParen
 	RParen
 	Comma
+	LBracket
+	RBracket
 	Comment
 	EOF
 )
@@ -29,6 +31,10 @@ func (k Kind) String() string {
 		return ")"
 	case Comma:
 		return ","
+	case LBracket:
+		return "["
+	case RBracket:
+		return "]"
 	case Comment:
 		return "comment"
 	default:

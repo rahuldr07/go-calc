@@ -66,11 +66,11 @@ func countMeasurements(n parse.Node) int {
 }
 
 func (e *Env) measure(t *parse.Binary, p *pass) (value.Value, error) {
-	l, err := e.eval(t.L, p)
+	l, err := e.operand(t.L, p)
 	if err != nil {
 		return value.Value{}, err
 	}
-	r, err := e.eval(t.R, p)
+	r, err := e.operand(t.R, p)
 	if err != nil {
 		return value.Value{}, err
 	}

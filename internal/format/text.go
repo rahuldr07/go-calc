@@ -32,6 +32,12 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 		writeReadings(&b, notes)
 		return b.String()
 	}
+	if v.IsComplex() {
+		var b strings.Builder
+		b.WriteString(v.Cx.String())
+		writeReadings(&b, notes)
+		return b.String()
+	}
 	if v.IsSymbolic() {
 		var b strings.Builder
 		b.WriteString(v.Sym)
@@ -44,6 +50,15 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 			b.WriteString("true")
 		} else {
 			b.WriteString("false")
+		}
+		writeReadings(&b, notes)
+		return b.String()
+	}
+	if v.IsList() {
+		var b strings.Builder
+		b.WriteString(s.list(v.List.Items))
+		if len(v.List.Items) > listShown {
+			b.WriteString("\n  " + strconv.Itoa(len(v.List.Items)) + " values")
 		}
 		writeReadings(&b, notes)
 		return b.String()
@@ -96,6 +111,44 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 	}
 	writeReadings(&b, notes)
 	return b.String()
+}
+
+const (
+	listShown = 12
+	listEdge  = 5
+)
+
+func (s Style) list(items []value.Value) string {
+	shown := make([]string, 0, listShown)
+	if len(items) <= listShown {
+		for _, item := range items {
+			shown = append(shown, s.element(item))
+		}
+	} else {
+		for _, item := range items[:listEdge] {
+			shown = append(shown, s.element(item))
+		}
+		shown = append(shown, "…")
+		for _, item := range items[len(items)-listEdge:] {
+			shown = append(shown, s.element(item))
+		}
+	}
+	return "[" + strings.Join(shown, ", ") + "]"
+}
+
+func (s Style) element(v value.Value) string {
+	var text string
+	if mid, u, ok := s.Uncertain(v); ok {
+		text = mid + " ± " + u
+	} else if decimal, complete := s.Decimal(v); complete || !v.Num.IsExact() {
+		text = decimal
+	} else {
+		text = v.Num.Exact().Rat().RatString()
+	}
+	if v.Unit != "" {
+		text += " " + v.Unit
+	}
+	return text
 }
 
 func writeReadings(b *strings.Builder, notes []parse.Note) {

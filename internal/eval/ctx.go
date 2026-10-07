@@ -53,6 +53,9 @@ func (e *Env) EvalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
 }
 
 func (e *Env) report(v value.Value) (value.Value, error) {
+	if v.IsList() {
+		return e.reportList(v)
+	}
 	if !v.IsMeasured() {
 		return v, nil
 	}
@@ -71,6 +74,19 @@ func (e *Env) report(v value.Value) (value.Value, error) {
 	case e.table.Nonlinear(v.Sens, v.Curv):
 		v.Unc.Warning = unc.NonlinearWarning
 	}
+	return v, nil
+}
+
+func (e *Env) reportList(v value.Value) (value.Value, error) {
+	items := make([]value.Value, len(v.List.Items))
+	for i, item := range v.List.Items {
+		reported, err := e.report(item)
+		if err != nil {
+			return value.Value{}, err
+		}
+		items[i] = reported
+	}
+	v.List = &value.Listing{Items: items}
 	return v, nil
 }
 

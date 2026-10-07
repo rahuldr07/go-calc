@@ -1,6 +1,7 @@
 package parse
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -102,6 +103,7 @@ func (p *parser) parseStatement() (Node, error) {
 
 var binPower = map[string]int{
 	"<": 2, ">": 2, "<=": 2, ">=": 2, "==": 2, "!=": 2,
+	"..": 3,
 	"to": 5, "in": 5,
 	"+": 10, "-": 10, "±": 10, "+-": 10,
 	"*": 20, "/": 20, "×": 20, "÷": 20, "·": 20, "mod": 20, "of": 20,
@@ -152,8 +154,25 @@ func (p *parser) parseExpr(min int) (Node, error) {
 		if err != nil {
 			return nil, err
 		}
+		if op == RangeFn {
+			left, err = p.extendRange(left, right, t)
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
 		left = &Binary{Op: op, L: left, R: right, P: t.Pos}
 	}
+}
+
+func (p *parser) extendRange(left, right Node, at lex.Token) (Node, error) {
+	if open, ok := left.(*Call); ok && open.Fn == RangeFn && !open.Grouped {
+		if len(open.Args) == 3 {
+			return nil, p.errorAt(at, "a range takes a start, an end and at most a step")
+		}
+		return &Call{Fn: RangeFn, Args: append(slices.Clone(open.Args), right), P: open.P}, nil
+	}
+	return &Call{Fn: RangeFn, Args: []Node{left, right}, P: at.Pos}, nil
 }
 
 func (p *parser) namedArgument() string {
@@ -267,6 +286,12 @@ func (p *parser) parsePrimary() (Node, error) {
 			return &Call{Fn: t.Text, Args: args, Keys: keys, P: t.Pos}, nil
 		}
 		return &Name{Text: t.Text, P: t.Pos}, nil
+	case lex.LBracket:
+		items, err := p.listItems()
+		if err != nil {
+			return nil, err
+		}
+		return &Call{Fn: ListFn, Args: items, P: t.Pos}, nil
 	case lex.LParen:
 		n, err := p.parseExpr(0)
 		if err != nil {
@@ -280,6 +305,28 @@ func (p *parser) parsePrimary() (Node, error) {
 		return n, nil
 	}
 	return nil, p.errorAt(t, "unexpected "+t.Kind.String())
+}
+
+func (p *parser) listItems() ([]Node, error) {
+	var items []Node
+	if p.peek().Kind != lex.RBracket {
+		for {
+			item, err := p.parseExpr(0)
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, item)
+			if p.peek().Kind != lex.Comma {
+				break
+			}
+			p.next()
+		}
+	}
+	if p.peek().Kind != lex.RBracket {
+		return nil, p.errorAt(p.peek(), "expected ]")
+	}
+	p.next()
+	return items, nil
 }
 
 func concise(t lex.Token) (Node, bool) {

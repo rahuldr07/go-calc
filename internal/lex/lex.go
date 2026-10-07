@@ -11,6 +11,10 @@ const operators = "+-*/^!%×÷·±=<>≤≥≠"
 
 const pairedWithEquals = "<>=!"
 
+const RangeOp = ".."
+
+var wordOperators = map[string]bool{"mod": true, "to": true, "in": true, "of": true}
+
 var comparisonSymbols = map[rune]string{'≤': "<=", '≥': ">=", '≠': "!="}
 
 func Scan(src string) ([]Token, error) { return ScanFrom(src, 1) }
@@ -22,6 +26,8 @@ func ScanFrom(src string, first int) ([]Token, error) {
 	}
 	line, col := first, 1
 	rs := []rune(src)
+	var separating []bool
+	groupsDigits := func() bool { return len(separating) == 0 || !separating[len(separating)-1] }
 	for i := 0; i < len(rs); {
 		r := rs[i]
 		start := Pos{Line: line, Col: col}
@@ -42,10 +48,14 @@ func ScanFrom(src string, first int) ([]Token, error) {
 			col += j - i
 			i = j
 		case unicode.IsDigit(r) || (r == '.' && i+1 < len(rs) && unicode.IsDigit(rs[i+1])):
-			j := scanNumber(rs, i)
+			j := scanNumber(rs, i, groupsDigits())
 			toks = append(toks, Token{Num, string(rs[i:j]), start})
 			col += j - i
 			i = j
+		case r == '.' && i+1 < len(rs) && rs[i+1] == '.':
+			toks = append(toks, Token{Op, RangeOp, start})
+			i += 2
+			col += 2
 		case unicode.IsLetter(r) || r == '_':
 			j := i
 			for j < len(rs) && (unicode.IsLetter(rs[j]) || unicode.IsDigit(rs[j]) || rs[j] == '_') {
@@ -55,11 +65,23 @@ func ScanFrom(src string, first int) ([]Token, error) {
 			col += j - i
 			i = j
 		case r == '(':
+			separating = append(separating, followsCallName(toks))
 			toks = append(toks, Token{LParen, "(", start})
 			i++
 			col++
 		case r == ')':
+			separating = pop(separating)
 			toks = append(toks, Token{RParen, ")", start})
+			i++
+			col++
+		case r == '[':
+			separating = append(separating, true)
+			toks = append(toks, Token{LBracket, "[", start})
+			i++
+			col++
+		case r == ']':
+			separating = pop(separating)
+			toks = append(toks, Token{RBracket, "]", start})
 			i++
 			col++
 		case r == ',':
@@ -91,7 +113,22 @@ func ScanFrom(src string, first int) ([]Token, error) {
 	return append(toks, Token{EOF, "", Pos{Line: line, Col: col}}), nil
 }
 
-func scanNumber(rs []rune, i int) int {
+func followsCallName(toks []Token) bool {
+	if len(toks) == 0 {
+		return false
+	}
+	last := toks[len(toks)-1]
+	return last.Kind == Ident && !wordOperators[last.Text]
+}
+
+func pop(stack []bool) []bool {
+	if len(stack) == 0 {
+		return stack
+	}
+	return stack[:len(stack)-1]
+}
+
+func scanNumber(rs []rune, i int, groupsDigits bool) int {
 	if rs[i] == '0' && i+1 < len(rs) && strings.ContainsRune("xXbBoO", rs[i+1]) {
 		j := i + 2
 		for j < len(rs) && (unicode.IsLetter(rs[j]) || unicode.IsDigit(rs[j]) || rs[j] == '_') {
@@ -114,7 +151,7 @@ func scanNumber(rs []rune, i int) int {
 			}
 			seenSpread = true
 			j = end
-		case rs[j] == ',' && !seenDot && !seenExp && leadingGroup(rs, i, j):
+		case rs[j] == ',' && groupsDigits && !seenDot && !seenExp && leadingGroup(rs, i, j):
 			end := groupedDigits(rs, j)
 			if end == j {
 				return j

@@ -418,3 +418,75 @@ func mantissaOf(text string) string {
 	}
 	return text
 }
+
+func integerList(from, to int64) value.Value {
+	var items []value.Value
+	for i := from; i <= to; i++ {
+		items = append(items, value.Scalar(num.FromInt(i)))
+	}
+	return value.List(items)
+}
+
+func TestTextShowsAShortListInFull(t *testing.T) {
+	if got := Text(integerList(1, 3), nil); got != "[1, 2, 3]" {
+		t.Errorf("Text = %q, want [1, 2, 3]", got)
+	}
+	if got := Text(value.List(nil), nil); got != "[]" {
+		t.Errorf("Text = %q, want []", got)
+	}
+}
+
+func TestTextTruncatesALongListInTheMiddle(t *testing.T) {
+	got := Text(integerList(1, 10000), nil)
+	want := "[1, 2, 3, 4, 5, …, 9996, 9997, 9998, 9999, 10000]\n  10000 values"
+	if got != want {
+		t.Errorf("Text = %q, want %q", got, want)
+	}
+	if got := Text(integerList(1, 12), nil); strings.Contains(got, "…") {
+		t.Errorf("Text = %q, want twelve elements shown in full", got)
+	}
+}
+
+func TestTextKeepsExactFractionsAndUnitsInsideAList(t *testing.T) {
+	u, _ := units.Lookup("m")
+	list := value.List([]value.Value{
+		value.Scalar(mustRat(t, "1/3")),
+		value.Scalar(mustRat(t, "3/10")),
+		value.WithUnit(num.FromInt(2), u),
+	})
+	if got := Text(list, nil); got != "[1/3, 0.3, 2 m]" {
+		t.Errorf("Text = %q, want [1/3, 0.3, 2 m]", got)
+	}
+}
+
+func TestJSONOfAListCarriesEveryElement(t *testing.T) {
+	data, err := JSON("[1, 2]", integerList(1, 2), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Value *ValueOut `json:"value"`
+		List  struct {
+			Count int `json:"count"`
+			Items []struct {
+				Value ValueOut `json:"value"`
+			} `json:"items"`
+		} `json:"list"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Value != nil {
+		t.Errorf("a list has no single value, got %+v", out.Value)
+	}
+	if out.List.Count != 2 || len(out.List.Items) != 2 || out.List.Items[1].Value.Exact != "2" {
+		t.Errorf("list = %+v, want two exact elements", out.List)
+	}
+}
+
+func TestValueDetailOfAListIsEmptyButPresent(t *testing.T) {
+	out, unit := Default.ValueDetail(integerList(1, 2))
+	if out == nil || out.Exact != "" || unit != nil {
+		t.Errorf("ValueDetail = %+v, %+v, want an empty value and no unit", out, unit)
+	}
+}
