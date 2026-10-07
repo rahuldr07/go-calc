@@ -58,13 +58,16 @@ class AnswerWidget extends WidgetType {
 
     const result = document.createElement("span")
     result.className = refused ? "result refused" : "result"
+    const value = document.createElement("span")
+    value.className = "value"
     const body = refused ? (this.line.error ?? "refused") : this.line.text
     const shown = clip(body)
-    result.textContent = refused && this.editing ? "" : shown.shown
+    value.textContent = refused && this.editing ? "" : shown.shown
     if (!shown.full) {
       result.classList.add("clipped")
       result.title = `${body.length} characters — open the line to read it in full`
     }
+    result.append(value)
 
     const status = document.createElement("span")
     status.className = refused ? "status error" : "status"
