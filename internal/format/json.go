@@ -14,12 +14,12 @@ import (
 
 const Schema = "go-calc.result/1"
 
-type unitOut struct {
+type UnitOut struct {
 	Symbol string         `json:"symbol"`
 	Dims   map[string]int `json:"dims,omitempty"`
 }
 
-type valueOut struct {
+type ValueOut struct {
 	Exact   string `json:"exact,omitempty"`
 	Ball    string `json:"ball,omitempty"`
 	Decimal string `json:"decimal,omitempty"`
@@ -50,8 +50,8 @@ type result struct {
 	Schema      string       `json:"schema"`
 	Input       string       `json:"input"`
 	Definition  string       `json:"definition,omitempty"`
-	Value       *valueOut    `json:"value,omitempty"`
-	Unit        *unitOut     `json:"unit,omitempty"`
+	Value       *ValueOut    `json:"value,omitempty"`
+	Unit        *UnitOut     `json:"unit,omitempty"`
 	Uncertainty *Uncertainty `json:"uncertainty,omitempty"`
 	Provenance  *prov.Export `json:"provenance,omitempty"`
 	Warning     string       `json:"warning,omitempty"`
@@ -77,28 +77,33 @@ func JSONDetail(input string, v value.Value, notes []parse.Note, d Detail) ([]by
 	if v.IsDefinition() {
 		return json.MarshalIndent(result{Schema: Schema, Input: input, Definition: v.Def, Notes: msgs}, "", "  ")
 	}
-	out := valueOut{}
+	out, unit := Default.ValueDetail(v)
+	r := result{Schema: Schema, Input: input, Value: out, Unit: unit, Notes: msgs, Uncertainty: UncertaintyOf(v), Warning: d.Warning}
+	if d.Arena != nil && d.Arena.Has(v.Prov) {
+		trace := d.Arena.Export(v.Prov)
+		r.Provenance = &trace
+	}
+	return json.MarshalIndent(r, "", "  ")
+}
+
+func (s Style) ValueDetail(v value.Value) (*ValueOut, *UnitOut) {
+	out := &ValueOut{}
 	if v.Num.IsExact() {
 		out.Exact = v.Num.Exact().String()
 	} else {
 		out.Ball = tightBounds(v.Num.Ball(ballPrec))
 	}
-	out.Decimal, out.Digits, out.Capped = Default.Proven(v)
-	r := result{Schema: Schema, Input: input, Value: &out, Notes: msgs, Uncertainty: UncertaintyOf(v), Warning: d.Warning}
-	if d.Arena != nil && d.Arena.Has(v.Prov) {
-		trace := d.Arena.Export(v.Prov)
-		r.Provenance = &trace
+	out.Decimal, out.Digits, out.Capped = s.Proven(v)
+	if v.Unit == "" {
+		return out, nil
 	}
-	if v.Unit != "" {
-		dims := map[string]int{}
-		for i, e := range v.Dim {
-			if e != 0 {
-				dims[dimKeys[i]] = e
-			}
+	dims := map[string]int{}
+	for i, e := range v.Dim {
+		if e != 0 {
+			dims[dimKeys[i]] = e
 		}
-		r.Unit = &unitOut{Symbol: v.Unit, Dims: dims}
 	}
-	return json.MarshalIndent(r, "", "  ")
+	return out, &UnitOut{Symbol: v.Unit, Dims: dims}
 }
 
 func (s Style) Proven(v value.Value) (string, int, bool) {

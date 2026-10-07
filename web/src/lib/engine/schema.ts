@@ -18,11 +18,26 @@ export interface Contribution {
 export interface Uncertainty {
   value?: string
   reported?: string
-  standard?: string
+  standard?: number
+  degenerate?: boolean
+  warning?: string
   coverage?: string
   factor?: number
   budget?: Contribution[]
   nonlinear?: string
+}
+
+export interface ValueDetail {
+  exact?: string
+  ball?: string
+  decimal?: string
+  digits: number
+  capped?: boolean
+}
+
+export interface UnitDetail {
+  symbol: string
+  dims?: Record<string, number>
 }
 
 export interface TraceNode {
@@ -40,6 +55,8 @@ export interface Line {
   status: Status
   digits: number
   capped?: boolean
+  value?: ValueDetail
+  unit?: UnitDetail
   stopped?: string
   error?: string
   column?: number

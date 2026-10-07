@@ -51,6 +51,8 @@ type lineOut struct {
 	Status      string              `json:"status"`
 	Digits      int                 `json:"digits"`
 	Capped      bool                `json:"capped,omitempty"`
+	Value       *format.ValueOut    `json:"value,omitempty"`
+	Unit        *format.UnitOut     `json:"unit,omitempty"`
 	Stopped     string              `json:"stopped,omitempty"`
 	Error       string              `json:"error,omitempty"`
 	Column      int                 `json:"column,omitempty"`
@@ -148,7 +150,8 @@ func (d *Doc) sheetLine(i int, e *entry, style format.Style) lineOut {
 	default:
 		out.Status = statusOf(e.value)
 		out.Text, out.Qualifiers = answer(style, e.value)
-		_, out.Digits, out.Capped = style.Proven(e.value)
+		out.Value, out.Unit = style.ValueDetail(e.value)
+		out.Digits, out.Capped = out.Value.Digits, out.Value.Capped
 		out.Stopped = whyStopped(e.value.Stopped)
 		out.Uncertainty = format.UncertaintyOf(e.value)
 		out.Trace = d.arena.Export(e.value.Prov).Nodes

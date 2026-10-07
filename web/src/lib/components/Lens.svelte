@@ -1,10 +1,12 @@
 <script lang="ts">
+  import Bracket from "./Bracket.svelte"
   import Canvas from "./Canvas.svelte"
-  import type { TraceNode } from "../engine/schema"
+  import Trace from "./Trace.svelte"
   import { selectedLine, sheet } from "../state/sheet.svelte"
+  import { readingOf } from "../viz/bracket"
   import { packetFor } from "../viz/registry"
 
-  type View = "visual" | "why" | "sources" | "origin" | "digits" | "data"
+  type View = "visual" | "shape" | "why" | "origin" | "digits" | "data"
 
   let chosen = $state<View | null>(null)
   let layer = $state<"model" | "uncertainty" | "evidence">("model")
@@ -12,14 +14,15 @@
   const line = $derived(selectedLine())
   const expression = $derived(line ? (sheet.source.split("\n")[line.n] ?? "") : "")
   const budget = $derived(line?.uncertainty?.budget ?? [])
+  const reading = $derived(readingOf(line))
   const packet = $derived(line ? packetFor({ line, expression }) : null)
 
   const views = $derived(
     (
       [
-        ["visual", packet !== null],
+        ["visual", reading !== null],
+        ["shape", packet !== null],
         ["why", budget.length > 0],
-        ["sources", budget.length > 0],
         ["origin", (line?.trace ?? []).length > 0],
         ["digits", true],
         ["data", true],
@@ -31,37 +34,32 @@
     chosen && views.some(([v]) => v === chosen) ? chosen : (views[0]?.[0] ?? "data"),
   )
 
+  const WORD: Record<string, string> = {
+    exact: "held exactly",
+    proven: "proven to bounds",
+    estimate: "measured, with uncertainty",
+    held: "held",
+    error: "refused",
+  }
+
   $effect(() => {
     void line?.n
     chosen = null
   })
-
-  function tree(nodes: TraceNode[] | undefined): string {
-    if (!nodes || nodes.length === 0) return "no provenance recorded"
-    const byId = new Map(nodes.map((n) => [n.id, n]))
-    const out: string[] = []
-    const walk = (node: TraceNode, prefix: string, last: boolean, top: boolean) => {
-      out.push(`${top ? "" : prefix + (last ? "└─ " : "├─ ")}${node.label}${node.detail ? "   " + node.detail : ""}`)
-      const kids = (node.children ?? []).map((id) => byId.get(id)).filter((n): n is TraceNode => !!n)
-      kids.forEach((k, i) => walk(k, top ? "" : prefix + (last ? "   " : "│  "), i === kids.length - 1, false))
-    }
-    walk(nodes[0], "", true, true)
-    return out.join("\n")
-  }
 </script>
 
 {#if !line}
   <div class="panel">
     <p class="empty">
       <b>No line selected</b>
-      Click any answer to see how far to trust it — the uncertainty budget, where each number came from, and how many
-      digits are guaranteed.
+      Click any answer to see how far to trust it — the interval it was proved to lie in, what drives the ±, and where
+      every number came from.
     </p>
   </div>
 {:else}
   <div class="lens-head">
     <div>
-      <div class="kicker">{line.status}, line {line.n + 1}</div>
+      <div class="kicker">{WORD[line.status] ?? line.status} · line {line.n + 1}</div>
       <h1>{expression}</h1>
       <div class="big">{line.status === "error" ? (line.error ?? "refused") : line.text}</div>
     </div>
@@ -78,17 +76,16 @@
         <button type="button" role="tab" aria-selected={view === name} onclick={() => (chosen = name)}>{name}</button>
       {/each}
     </div>
-    <p class="plot-note">Structure now; sampled plots when the engine provides points</p>
   </div>
 
   <div class="panel">
-
-    {#if view === "visual" && packet}
-      <div class="context">
-        <span class="tag">selected · line {line.n + 1}</span>
-        <span class="expr">{expression}</span>
-        <span class="tag">{packet.kind.replace("-", " ")}</span>
-      </div>
+    {#if view === "visual" && reading}
+      <h2>How far this is pinned down</h2>
+      <p class="sub">drawn from the engine's own bounds — not a redrawing of the decimal</p>
+      <Bracket {reading} />
+    {:else if view === "shape" && packet}
+      <h2>What the expression builds</h2>
+      <p class="sub">{packet.kind.replace("-", " ")} · geometry is explanatory, not to scale</p>
       <div class="layerbar">
         <div class="pills" role="tablist" aria-label="Canvas layer">
           {#each ["model", "uncertainty", "evidence"] as name (name)}
@@ -96,18 +93,11 @@
               onclick={() => (layer = name as typeof layer)}>{name}</button>
           {/each}
         </div>
-        <span class="packet" class:contract={packet.source === "contract"}>
-          <span class="dot" aria-hidden="true"></span>{packet.source === "contract" ? "contract · no engine packet" : "engine values · UI drawing"}
-        </span>
       </div>
       <div class="graph-shell"><div class="graph-core"><Canvas {packet} {layer} /></div></div>
     {:else if view === "why"}
       <h2>What drives the ±</h2>
       <p class="sub">bar length = share of the combined uncertainty</p>
-      <p class="empty">
-        Each input carries its own uncertainty. The engine propagates them to first order, so a contribution is that
-        input's uncertainty multiplied by how strongly the answer responds to it.
-      </p>
       <div class="budget">
         {#each budget as item, i (item.name)}
           <div class="budget-row">
@@ -117,28 +107,34 @@
           </div>
         {/each}
       </div>
-    {:else if view === "sources"}
-      <h2>Sources of the ±</h2>
       <dl class="facts">
         {#each budget as item (item.name)}
           <dt>u({item.name})</dt><dd>{item.sigma}</dd>
           <dt>∂/∂{item.name}</dt><dd>{item.sensitivity}</dd>
-          <dt>share</dt><dd>{(item.share * 100).toFixed(1)}%</dd>
         {/each}
-        {#if line.uncertainty?.standard}<dt>combined</dt><dd>{line.uncertainty.standard}</dd>{/if}
-        {#if line.uncertainty?.nonlinear}<dt>linearity</dt><dd>{line.uncertainty.nonlinear}</dd>{/if}
+        {#if line.uncertainty?.standard !== undefined}
+          <dt>combined</dt><dd>{line.uncertainty.standard}</dd>
+        {/if}
+        {#if line.uncertainty?.coverage}<dt>coverage</dt><dd>{line.uncertainty.coverage}</dd>{/if}
       </dl>
+      <p class="honesty">
+        Propagated to first order: each contribution is that input's uncertainty times how strongly the answer responds
+        to it. No distribution is assumed.
+      </p>
     {:else if view === "origin"}
-      <h2>Provenance graph</h2>
-      <p class="sub">trace nodes and child links</p>
-      <pre class="tree">{tree(line.trace)}</pre>
-      <p class="honesty">The graph formats trace[]. It does not infer hidden operations.</p>
+      <h2>Where every number came from</h2>
+      <p class="sub">the trace the engine recorded, root first</p>
+      <Trace nodes={line.trace} />
+      <p class="honesty">This draws trace[] as recorded. It does not infer hidden steps.</p>
     {:else if view === "digits"}
+      <h2>Digits you can stand on</h2>
       <div class="big-digit">{line.digits}</div>
       <div class="ruler" aria-hidden="true">
-        {#each Array(12) as _, i (i)}<i class:on={i < line.digits} data-n={i + 1}></i>{/each}
+        {#each Array(Math.max(12, Math.min(line.digits, 24))) as _, i (i)}
+          <i class:on={i < line.digits} data-n={i + 1}></i>
+        {/each}
       </div>
-      <dl class="facts" style="margin-top:18px">
+      <dl class="facts">
         <dt>guaranteed</dt><dd>{line.digits}</dd>
         <dt>precision cap</dt><dd>{line.capped ? "reached" : "not reached"}</dd>
         {#each line.qualifiers ?? [] as q}<dt>guarantee</dt><dd>{q}</dd>{/each}
