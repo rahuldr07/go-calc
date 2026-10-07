@@ -4,7 +4,7 @@ declare function goCalcEval(request: string): string
 
 interface Incoming {
   id: number
-  kind: "start" | "evaluate"
+  kind: "start" | "evaluate" | "vocabulary"
   base?: string
   url?: string
   request?: string
@@ -37,6 +37,11 @@ self.onmessage = async (event: MessageEvent<Incoming>) => {
     }
     if (!running) throw new Error("the engine was never started")
     await running
+    if (kind === "vocabulary") {
+      const read = (self as unknown as { goCalcVocabulary?: () => string }).goCalcVocabulary
+      self.postMessage({ id, ok: true, answer: read ? read() : "" })
+      return
+    }
     self.postMessage({ id, ok: true, answer: goCalcEval(request ?? "") })
   } catch (err) {
     self.postMessage({ id, ok: false, error: err instanceof Error ? err.message : String(err) })

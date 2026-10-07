@@ -14,6 +14,7 @@ import (
 	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/parse"
 	"github.com/rahuldr07/go-calc/internal/prov"
+	"github.com/rahuldr07/go-calc/internal/suggest"
 	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/units"
 	"github.com/rahuldr07/go-calc/internal/value"
@@ -88,7 +89,7 @@ func (e *Env) evalName(t *parse.Name, p *pass) (value.Value, error) {
 		e.record(t, p, prov.Node{Kind: prov.Unit, Label: t.Text, Detail: unitDetail(u)})
 		return value.WithUnit(num.FromInt(1), u), nil
 	}
-	return value.Value{}, &lex.Error{Pos: t.P, Msg: "unknown name " + t.Text}
+	return value.Value{}, &lex.Error{Pos: t.P, Msg: suggest.Did("unknown name "+t.Text, t.Text, e.nameCandidates())}
 }
 
 func (e *Env) derived(c consts.Const, p *pass) (value.Value, error) {
@@ -174,6 +175,9 @@ func namedArgumentError(t *parse.Call) error {
 }
 
 func (e *Env) evalCall(t *parse.Call, p *pass) (value.Value, error) {
+	if !e.knowsFunction(t.Fn) {
+		return value.Value{}, e.unknownFunction(t)
+	}
 	if err := namedArgumentError(t); err != nil {
 		return value.Value{}, err
 	}
@@ -200,10 +204,11 @@ func (e *Env) evalCall(t *parse.Call, p *pass) (value.Value, error) {
 	if t.Fn == "deriv" {
 		return e.derivCall(t, p)
 	}
-	if v, err, handled := e.builtin(t, p); handled {
-		return v, err
+	v, err, handled := e.builtin(t, p)
+	if !handled {
+		return value.Value{}, e.unknownFunction(t)
 	}
-	return value.Value{}, &lex.Error{Pos: t.P, Msg: "unknown function " + t.Fn}
+	return v, err
 }
 
 const maxDegree = 100000
@@ -1133,7 +1138,7 @@ func (e *Env) convert(t *parse.Binary, p *pass) (value.Value, error) {
 	}
 	to, ok := units.Lookup(target)
 	if !ok {
-		return value.Value{}, &lex.Error{Pos: t.R.Pos(), Msg: "unknown unit " + target}
+		return value.Value{}, &lex.Error{Pos: t.R.Pos(), Msg: suggest.Did("unknown unit "+target, target, units.Symbols())}
 	}
 	out, err := units.ConvertNumber(l.Num, l.Unwrap(), to, p.prec())
 	if err != nil {

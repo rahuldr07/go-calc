@@ -3,6 +3,9 @@
   import { EditorState } from "@codemirror/state"
   import { EditorView, keymap, placeholder } from "@codemirror/view"
   import { onMount } from "svelte"
+  import { completionKeymap } from "@codemirror/autocomplete"
+  import { completion } from "../editor/complete"
+  import { vocabulary } from "../state/vocabulary.svelte"
   import { caretLine, focused, lineField, selectedField, setFocused, setLines, setSelected, valueField } from "../editor/notepad"
   import { select, setSource, sheet } from "../state/sheet.svelte"
 
@@ -45,7 +48,8 @@
         doc: sheet.source,
         extensions: [
           history(),
-          keymap.of([...defaultKeymap, ...historyKeymap]),
+          keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap]),
+          completion(() => vocabulary.words),
           caretLine,
           focused,
           lineField,

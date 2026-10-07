@@ -24,6 +24,7 @@ export class Engine {
   readonly ready: Promise<void>
   private readonly worker: Worker
   private readonly waiting = new Map<number, Waiting>()
+  private readonly rawWaiting = new Map<number, (answer: string) => void>()
   private issued = 0
   private newest = 0
 
@@ -48,6 +49,14 @@ export class Engine {
     return this.dispatch({ kind: "evaluate", request: JSON.stringify(request) }, true)
   }
 
+  vocabulary(): Promise<string> {
+    const id = ++this.issued
+    return new Promise<string>((resolve) => {
+      this.rawWaiting.set(id, resolve)
+      this.worker.postMessage({ id, kind: "vocabulary" })
+    })
+  }
+
   terminate() {
     this.worker.terminate()
   }
@@ -65,6 +74,12 @@ export class Engine {
   }
 
   private settle(reply: Reply) {
+    const raw = this.rawWaiting.get(reply.id)
+    if (raw) {
+      this.rawWaiting.delete(reply.id)
+      raw(reply.ok ? (reply.answer ?? "") : "")
+      return
+    }
     const pending = this.waiting.get(reply.id)
     if (!pending) return
     this.waiting.delete(reply.id)
@@ -80,6 +95,10 @@ export class Engine {
 
   private fail(message: string) {
     this.status = "failed"
+    for (const [id, raw] of this.rawWaiting) {
+      this.rawWaiting.delete(id)
+      raw("")
+    }
     for (const [id, pending] of this.waiting) {
       this.waiting.delete(id)
       pending.reject(new Error(message))

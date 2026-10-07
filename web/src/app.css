@@ -461,3 +461,41 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   .help-rows.wide { grid-template-columns: 6.5em minmax(0, 1fr); }
   .help-rows.wide dd { margin-bottom: 0; }
 }
+
+/* ---------- completion ---------- */
+.cm-editor .cm-tooltip.cm-tooltip-autocomplete {
+  border: 0;
+  border-radius: var(--control-radius);
+  background: var(--paper);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .14), inset 0 0 0 1px var(--seam-strong);
+  overflow: hidden;
+}
+.cm-editor .cm-tooltip-autocomplete > ul {
+  max-height: 16em;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.cm-editor .cm-tooltip-autocomplete > ul > li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 11px;
+  color: var(--ink);
+}
+.cm-editor .cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.cm-editor .cm-tooltip-autocomplete .cm-completionLabel { font-weight: 500; }
+.cm-editor .cm-tooltip-autocomplete .cm-completionMatchedText {
+  text-decoration: none;
+  color: var(--accent);
+  font-weight: 600;
+}
+.cm-editor .cm-tooltip-autocomplete .cm-completionDetail {
+  margin-left: auto;
+  font-family: var(--ui);
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--muted);
+}

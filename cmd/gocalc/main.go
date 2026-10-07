@@ -56,6 +56,8 @@ func dispatch(opts settings, args []string, style format.Style) (string, int, bo
 			}
 			out, code := runFile(args[1], style)
 			return out, code, false
+		case "steps":
+			return showSteps(args[1:], style, opts.json)
 		case "trace", "why":
 			if opts.json {
 				return noJSONFor(args[0]), 2, false
@@ -79,6 +81,7 @@ const usage = "usage: gocalc [--json] [--indian] [--group] \"expression\"\n" +
 	"       gocalc [--json] run sheet.calc\n" +
 	"       gocalc trace \"expression\"\n" +
 	"       gocalc why \"expression\"\n" +
+	"       gocalc [--json] steps \"expression\"\n" +
 	"       gocalc serve [--addr :8080] [--cors-origin origin]\n" +
 	"options start with two dashes, so a leading - begins an expression: gocalc \"-2^2\""
 

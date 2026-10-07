@@ -1,4 +1,5 @@
 import { Engine, type EngineStatus } from "../engine/client"
+import { adopt } from "./vocabulary.svelte"
 import { SUPERSEDED, type Angle, type Line } from "../engine/schema"
 
 const engine = new Engine()
@@ -40,6 +41,7 @@ export const sheet = $state({
 engine.ready.then(
   () => {
     sheet.engineStatus = "ready"
+    void engine.vocabulary().then(adopt)
     void recompute()
   },
   (err: Error) => {

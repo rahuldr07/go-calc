@@ -10,6 +10,7 @@ import (
 
 func main() {
 	js.Global().Set("goCalcEval", js.FuncOf(sheet))
+	js.Global().Set("goCalcVocabulary", js.FuncOf(vocabulary))
 	select {}
 }
 

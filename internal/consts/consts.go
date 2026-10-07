@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
+	"sort"
 	"strings"
 
 	"github.com/rahuldr07/go-calc/internal/num"
@@ -68,6 +69,15 @@ func All() []Const {
 	for _, c := range table {
 		out = append(out, c)
 	}
+	return out
+}
+
+func Symbols() []string {
+	out := make([]string, 0, len(table))
+	for sym := range table {
+		out = append(out, sym)
+	}
+	sort.Strings(out)
 	return out
 }
 

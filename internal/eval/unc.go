@@ -8,6 +8,7 @@ import (
 	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/parse"
 	"github.com/rahuldr07/go-calc/internal/prov"
+	"github.com/rahuldr07/go-calc/internal/suggest"
 	"github.com/rahuldr07/go-calc/internal/unc"
 	"github.com/rahuldr07/go-calc/internal/units"
 	"github.com/rahuldr07/go-calc/internal/value"
@@ -114,7 +115,7 @@ func (e *Env) declareCorr(t *parse.Assign, p *pass) (value.Value, error) {
 	for i, name := range t.Params {
 		v, ok := e.vars[name]
 		if !ok {
-			return value.Value{}, &lex.Error{Pos: t.P, Msg: "unknown name " + name}
+			return value.Value{}, &lex.Error{Pos: t.P, Msg: suggest.Did("unknown name "+name, name, e.nameCandidates())}
 		}
 		id, ok := unc.Elementary(v.Sens)
 		if !ok {

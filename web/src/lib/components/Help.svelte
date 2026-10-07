@@ -71,6 +71,16 @@
       ],
     },
     {
+      title: "Typing help",
+      note: "Suggestions appear as you type, and a misspelling still finds the name.",
+      rows: [
+        ["sqr…", "completes to sqrt"],
+        ["sqre(4)", "did you mean sqrt?"],
+        ["sin(pii)", "did you mean pi?"],
+        ["10 km in mils", "did you mean mile?"],
+      ],
+    },
+    {
       title: "Names and functions",
       rows: [
         ["x = 3", "define a value"],
