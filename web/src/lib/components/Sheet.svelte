@@ -80,7 +80,7 @@
 
 <div class="sheet-head">
   <h2>Lab notes</h2>
-  <span class="pin">{sheet.selected === null ? "nothing pinned" : `lens pinned to line ${sheet.selected + 1}`}</span>
+  <span class="pin">{sheet.selected === null ? "" : `line ${sheet.selected + 1} selected`}</span>
 </div>
 <div class="colheads" aria-hidden="true">
   <span></span><span>expression</span><span>result</span><span>trust</span>

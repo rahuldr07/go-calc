@@ -1,6 +1,5 @@
 <script lang="ts">
   import Keypad from "./lib/components/Keypad.svelte"
-  import Lens from "./lib/components/Lens.svelte"
   import Sheet from "./lib/components/Sheet.svelte"
   import Terminal from "./lib/components/Terminal.svelte"
   import TopBar from "./lib/components/TopBar.svelte"
@@ -38,9 +37,6 @@
       {#if view.keypad && view.mode === "notepad"}
         <Keypad insert={(t) => sheetPane?.insert(t)} press={(c) => sheetPane?.press(c)} />
       {/if}
-    </section>
-    <section class="lens-pane" aria-label="Analysis lens">
-      <Lens />
     </section>
   </div>
   </div>
