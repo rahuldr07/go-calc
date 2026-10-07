@@ -119,3 +119,25 @@ func TestMalformedGroupingLeavesACommaToken(t *testing.T) {
 		t.Fatalf("Scan(48,18) = %v, want 48 , 18 and EOF", toks)
 	}
 }
+
+func TestScanComparisonOperators(t *testing.T) {
+	toks, err := Scan("a < b > c <= d >= e == f != g ≤ h ≥ i ≠ j = k 5!")
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	var ops []string
+	for _, tok := range toks {
+		if tok.Kind == Op {
+			ops = append(ops, tok.Text)
+		}
+	}
+	want := []string{"<", ">", "<=", ">=", "==", "!=", "<=", ">=", "!=", "=", "!"}
+	if len(ops) != len(want) {
+		t.Fatalf("operators = %v, want %v", ops, want)
+	}
+	for i := range want {
+		if ops[i] != want[i] {
+			t.Errorf("operator %d = %q, want %q", i, ops[i], want[i])
+		}
+	}
+}

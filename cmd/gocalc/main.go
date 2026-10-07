@@ -45,6 +45,9 @@ func dispatch(opts settings, args []string, style format.Style) (string, int, bo
 		}
 		return "", startREPL, false
 	}
+	if len(args) > 0 && args[0] == "serve" {
+		return serve(args[1:])
+	}
 	if len(args) > 1 {
 		switch args[0] {
 		case "run":
@@ -76,6 +79,7 @@ const usage = "usage: gocalc [--json] [--indian] [--group] \"expression\"\n" +
 	"       gocalc [--json] run sheet.calc\n" +
 	"       gocalc trace \"expression\"\n" +
 	"       gocalc why \"expression\"\n" +
+	"       gocalc serve [--addr :8080] [--cors-origin origin]\n" +
 	"options start with two dashes, so a leading - begins an expression: gocalc \"-2^2\""
 
 var errHelp = errors.New(usage)

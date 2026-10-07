@@ -32,6 +32,34 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 		writeReadings(&b, notes)
 		return b.String()
 	}
+	if v.IsSymbolic() {
+		var b strings.Builder
+		b.WriteString(v.Sym)
+		writeReadings(&b, notes)
+		return b.String()
+	}
+	if v.IsBoolean() {
+		var b strings.Builder
+		if v.Holds() {
+			b.WriteString("true")
+		} else {
+			b.WriteString("false")
+		}
+		writeReadings(&b, notes)
+		return b.String()
+	}
+	if v.Solved != nil {
+		var b strings.Builder
+		b.WriteString(s.roots(*v.Solved))
+		if method := v.Solved.Method; method != "" {
+			b.WriteString("\n  " + method)
+		}
+		if v.Solved.Searched != "" {
+			b.WriteString("\n  searched " + v.Solved.Searched)
+		}
+		writeReadings(&b, notes)
+		return b.String()
+	}
 	var b strings.Builder
 	mid, u, rounded := s.Uncertain(v)
 	switch {
@@ -325,4 +353,15 @@ func covarianceNote(v value.Value) string {
 		}
 	}
 	return ""
+}
+
+func (s Style) roots(sol value.Solution) string {
+	if len(sol.Roots) == 0 {
+		return "no root"
+	}
+	parts := make([]string, len(sol.Roots))
+	for i, r := range sol.Roots {
+		parts[i] = sol.Var + " = " + s.Number(value.ScalarNum(r))
+	}
+	return strings.Join(parts, ",  ")
 }

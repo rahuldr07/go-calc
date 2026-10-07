@@ -194,6 +194,12 @@ func (e *Env) evalCall(t *parse.Call, p *pass) (value.Value, error) {
 		e.bound.record(t, measured)
 		return inner.eval(f.body, p)
 	}
+	if t.Fn == "solve" {
+		return e.solveCall(t, p)
+	}
+	if t.Fn == "deriv" {
+		return e.derivCall(t, p)
+	}
 	if v, err, handled := e.builtin(t, p); handled {
 		return v, err
 	}
@@ -561,6 +567,9 @@ func (e *Env) evalUnary(t *parse.Unary, p *pass) (value.Value, error) {
 	if err != nil {
 		return value.Value{}, err
 	}
+	if x.IsBoolean() {
+		return value.Value{}, &lex.Error{Pos: t.P, Msg: "cannot do arithmetic on a true/false value"}
+	}
 	switch t.Op {
 	case "-":
 		x.Num = x.Num.Neg()
@@ -620,6 +629,15 @@ func (e *Env) evalBinary(t *parse.Binary, p *pass) (value.Value, error) {
 	}
 	if t.Op == "/" || t.Op == "÷" {
 		p.divisor[t] = !t.Grouped
+	}
+	if comparisons[t.Op] {
+		return e.compare(t, l, r, p)
+	}
+	if t.Op == "=" {
+		return value.Value{}, &lex.Error{Pos: t.P, Msg: "an equation has no value of its own: use solve(" + parse.Reading(t) + ", x)"}
+	}
+	if l.IsBoolean() || r.IsBoolean() {
+		return value.Value{}, &lex.Error{Pos: t.P, Msg: "cannot do arithmetic on a true/false value"}
 	}
 	prec := p.prec()
 	switch t.Op {

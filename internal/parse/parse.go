@@ -11,7 +11,7 @@ var functionNames = map[string]bool{
 	"sin": true, "cos": true, "tan": true, "asin": true, "acos": true, "atan": true,
 	"sqrt": true, "exp": true, "log": true, "log10": true, "log2": true, "abs": true,
 	"floor": true, "ceil": true, "round": true, "gcd": true, "lcm": true, "isprime": true,
-	"root": true, "binomial": true, "integrate": true, "diff": true, "plot": true, "expand": true,
+	"root": true, "binomial": true, "integrate": true, "diff": true, "plot": true, "expand": true, "solve": true,
 }
 
 var keywords = map[string]bool{"mod": true, "to": true, "in": true, "of": true}
@@ -101,6 +101,7 @@ func (p *parser) parseStatement() (Node, error) {
 }
 
 var binPower = map[string]int{
+	"<": 2, ">": 2, "<=": 2, ">=": 2, "==": 2, "!=": 2,
 	"to": 5, "in": 5,
 	"+": 10, "-": 10, "±": 10, "+-": 10,
 	"*": 20, "/": 20, "×": 20, "÷": 20, "·": 20, "mod": 20, "of": 20,
@@ -230,10 +231,21 @@ func (p *parser) parsePrimary() (Node, error) {
 			named := false
 			if p.peek().Kind != lex.RParen {
 				for {
-					key := p.namedArgument()
+					key := ""
+					if t.Text != "solve" {
+						key = p.namedArgument()
+					}
 					a, err := p.parseExpr(0)
 					if err != nil {
 						return nil, err
+					}
+					if t.Text == "solve" && p.peek().Kind == lex.Op && p.peek().Text == "=" {
+						equals := p.next()
+						right, err := p.parseExpr(0)
+						if err != nil {
+							return nil, err
+						}
+						a = &Binary{Op: "=", L: a, R: right, P: equals.Pos}
 					}
 					args = append(args, a)
 					keys = append(keys, key)

@@ -98,6 +98,9 @@ func (e *Env) evalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
 		}
 		e.notes = distinct(p.notes)
 		if err != nil {
+			if isUndecided(err) && raisePrecision(ctx) {
+				continue
+			}
 			return value.Value{}, err
 		}
 		if v.Num.IsExact() {
@@ -117,10 +120,22 @@ func (e *Env) evalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
 			v.Stopped = value.StopDeadline
 			return v, nil
 		}
-		if next := ctx.Prec * 2; next < ctx.MaxPrec {
-			ctx.Prec = next
-		} else {
-			ctx.Prec = ctx.MaxPrec
-		}
+		raise(ctx)
 	}
+}
+
+func raise(ctx *Ctx) {
+	if next := ctx.Prec * 2; next < ctx.MaxPrec {
+		ctx.Prec = next
+	} else {
+		ctx.Prec = ctx.MaxPrec
+	}
+}
+
+func raisePrecision(ctx *Ctx) bool {
+	if ctx.Prec >= ctx.MaxPrec || (!ctx.Deadline.IsZero() && !time.Now().Before(ctx.Deadline)) {
+		return false
+	}
+	raise(ctx)
+	return true
 }

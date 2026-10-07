@@ -36,6 +36,7 @@ export const view = $state({
   keypad: firstKeypad(),
   layer: false,
   studio: false,
+  help: false,
 })
 
 export function setMode(mode: Mode) {
@@ -46,6 +47,10 @@ export function setMode(mode: Mode) {
 export function toggleKeypad() {
   view.keypad = !view.keypad
   remember("gocalc-keypad", view.keypad ? "open" : "closed")
+}
+
+export function toggleHelp() {
+  view.help = !view.help
 }
 
 export function openLayer(open: boolean) {

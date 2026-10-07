@@ -21,6 +21,51 @@ type Value struct {
 	Unc     unc.Report
 	Prov    prov.NodeID
 	Def     string
+	Truth   Truth
+	Sym     string
+	Solved  *Solution
+}
+
+type Truth int
+
+const (
+	NotLogical Truth = iota
+	False
+	True
+)
+
+type Solution struct {
+	Var      string
+	Roots    []num.Number
+	Method   string
+	Searched string
+}
+
+func Boolean(holds bool) Value {
+	if holds {
+		v := Scalar(num.FromInt(1))
+		v.Truth = True
+		return v
+	}
+	v := Scalar(num.FromInt(0))
+	v.Truth = False
+	return v
+}
+
+func (v Value) IsBoolean() bool { return v.Truth != NotLogical }
+
+func (v Value) IsSymbolic() bool { return v.Sym != "" }
+
+func Symbolic(text string) Value {
+	return Value{Sym: text}
+}
+
+func (v Value) Holds() bool { return v.Truth == True }
+
+func Solved(s Solution) Value {
+	v := ScalarNum(s.Roots[0])
+	v.Solved = &s
+	return v
 }
 
 func Definition(name string, params []string) Value {

@@ -7,7 +7,11 @@ import (
 
 const Version = "0.1.0"
 
-const operators = "+-*/^!%×÷·±="
+const operators = "+-*/^!%×÷·±=<>≤≥≠"
+
+const pairedWithEquals = "<>=!"
+
+var comparisonSymbols = map[rune]string{'≤': "<=", '≥': ">=", '≠': "!="}
 
 func Scan(src string) ([]Token, error) { return ScanFrom(src, 1) }
 
@@ -68,6 +72,14 @@ func ScanFrom(src string, first int) ([]Token, error) {
 				text = "+-"
 				i++
 				col++
+			}
+			if strings.ContainsRune(pairedWithEquals, r) && i+1 < len(rs) && rs[i+1] == '=' {
+				text = string(r) + "="
+				i++
+				col++
+			}
+			if symbol, ok := comparisonSymbols[r]; ok {
+				text = symbol
 			}
 			toks = append(toks, Token{Op, text, start})
 			i++

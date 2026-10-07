@@ -197,3 +197,41 @@ func TestNegativeExponentDoesNotSwallowTheImplicitProduct(t *testing.T) {
 		}
 	}
 }
+
+func TestComparisonsBindLooserThanArithmetic(t *testing.T) {
+	cases := map[string]string{
+		"1 + 2 < 3 * 4":  "((1 + 2) < (3 * 4))",
+		"2 x >= 3 - y":   "((2 * x) >= (3 - y))",
+		"3 km to m == 3": "(((3 * km) to m) == 3)",
+		"a != b":         "(a != b)",
+	}
+	for src, want := range cases {
+		if got := parseOK(t, src).String(); got != want {
+			t.Errorf("Parse(%q) = %s, want %s", src, got, want)
+		}
+	}
+}
+
+func TestAssignmentIsStillAssignment(t *testing.T) {
+	if _, ok := parseOK(t, "x = 3").(*Assign); !ok {
+		t.Error("x = 3 no longer parses as an assignment")
+	}
+	f, ok := parseOK(t, "f(x) = x^2").(*Assign)
+	if !ok || len(f.Params) != 1 {
+		t.Error("f(x) = x^2 no longer parses as a function definition")
+	}
+}
+
+func TestSolveTakesAnEquationArgument(t *testing.T) {
+	call, ok := parseOK(t, "solve(x^2 - 4 = 0, x)").(*Call)
+	if !ok || len(call.Args) != 2 {
+		t.Fatal("solve did not parse as a call with two arguments")
+	}
+	eq, ok := call.Args[0].(*Binary)
+	if !ok || eq.Op != "=" {
+		t.Fatalf("first argument = %v, want an equation", call.Args[0])
+	}
+	if got := call.Args[0].String(); got != "(((x ^ 2) - 4) = 0)" {
+		t.Errorf("equation = %s", got)
+	}
+}

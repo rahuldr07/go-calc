@@ -1,6 +1,6 @@
 <script lang="ts">
   import { setAngle, setDigits, sheet } from "../state/sheet.svelte"
-  import { setMode, toggleKeypad, view } from "../state/view.svelte"
+  import { setMode, toggleHelp, toggleKeypad, view } from "../state/view.svelte"
   import { current, setTheme } from "../theme/theme.svelte"
   import { THEME_LIST } from "../theme/themes"
 
@@ -32,6 +32,7 @@
     </span>
     <button class="chip" type="button" onclick={() => void setAngle(sheet.angle === "rad" ? "deg" : "rad")}>{sheet.angle}</button>
     <button class="chip" type="button" aria-pressed={view.keypad} onclick={toggleKeypad}>keypad</button>
+    <button class="chip" type="button" aria-pressed={view.help} onclick={toggleHelp}>help</button>
     <span class="chip theme">
       {#each THEME_LIST as entry (entry.id)}
         <button type="button" aria-pressed={current().id === entry.id} title={entry.note} onclick={() => setTheme(entry.id)}
