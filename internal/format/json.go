@@ -19,6 +19,20 @@ type UnitOut struct {
 	Dims   map[string]int `json:"dims,omitempty"`
 }
 
+type PartOut struct {
+	Exact   string `json:"exact,omitempty"`
+	Ball    string `json:"ball,omitempty"`
+	Decimal string `json:"decimal,omitempty"`
+}
+
+type ComplexOut struct {
+	Real      PartOut `json:"real"`
+	Imaginary PartOut `json:"imaginary"`
+	Exact     bool    `json:"exact"`
+	Digits    int     `json:"digits"`
+	Text      string  `json:"text"`
+}
+
 type ValueOut struct {
 	Exact   string `json:"exact,omitempty"`
 	Ball    string `json:"ball,omitempty"`
@@ -203,4 +217,43 @@ func UncertaintyOf(v value.Value) *Uncertainty {
 		})
 	}
 	return out
+}
+
+func (s Style) partOf(n num.Number) PartOut {
+	out := PartOut{}
+	if n.IsExact() {
+		out.Exact = n.Exact().String()
+	} else {
+		out.Ball = tightBounds(n.Ball(ballPrec))
+	}
+	out.Decimal, _ = s.Decimal(value.ScalarNum(n))
+	return out
+}
+
+func (s Style) ComplexDetail(v value.Value) *ComplexOut {
+	if v.Cx == nil {
+		return nil
+	}
+	digits := weakestDigits(s, v.Cx.Re(), v.Cx.Im())
+	return &ComplexOut{
+		Real:      s.partOf(v.Cx.Re()),
+		Imaginary: s.partOf(v.Cx.Im()),
+		Exact:     v.Cx.IsExact(),
+		Digits:    digits,
+		Text:      v.Cx.String(),
+	}
+}
+
+func weakestDigits(s Style, parts ...num.Number) int {
+	weakest := 0
+	for _, part := range parts {
+		_, digits, _ := s.Proven(value.ScalarNum(part))
+		if part.IsExact() && part.Exact().Sign() == 0 {
+			continue
+		}
+		if weakest == 0 || digits < weakest {
+			weakest = digits
+		}
+	}
+	return weakest
 }

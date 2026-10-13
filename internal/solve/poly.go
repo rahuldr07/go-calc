@@ -22,6 +22,8 @@ func (p Poly) trimmed() Poly {
 
 func (p Poly) Degree() int { return len(p.trimmed()) - 1 }
 
+func (p Poly) Coefficient(i int) num.Exact { return p.coefficient(i) }
+
 func (p Poly) coefficient(i int) num.Exact {
 	if i < len(p) {
 		return p[i]

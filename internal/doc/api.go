@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rahuldr07/go-calc/internal/eval"
 	"github.com/rahuldr07/go-calc/internal/format"
@@ -52,6 +53,7 @@ type lineOut struct {
 	Digits      int                 `json:"digits"`
 	Capped      bool                `json:"capped,omitempty"`
 	Value       *format.ValueOut    `json:"value,omitempty"`
+	Complex     *format.ComplexOut  `json:"complex,omitempty"`
 	Unit        *format.UnitOut     `json:"unit,omitempty"`
 	Stopped     string              `json:"stopped,omitempty"`
 	Error       string              `json:"error,omitempty"`
@@ -67,22 +69,26 @@ type sheetOut struct {
 	Lines  []lineOut `json:"lines"`
 }
 
-func EvalRequest(req []byte) []byte { return evalSheet(req, documentUnder) }
+func EvalRequest(req []byte) []byte { return evalSheet(req, documentUnder, time.Time{}) }
 
-func evalSheet(req []byte, open func(*eval.Ctx) *Doc) (out []byte) {
+func EvalRequestBefore(req []byte, deadline time.Time) []byte {
+	return evalSheet(req, documentUnder, deadline)
+}
+
+func evalSheet(req []byte, open func(*eval.Ctx) *Doc, deadline time.Time) (out []byte) {
 	defer func() {
 		if r := recover(); r != nil {
 			out = errorSheet(failure(r))
 		}
 	}()
-	answer, err := sheetOf(req, open)
+	answer, err := sheetOf(req, open, deadline)
 	if err != nil {
 		return errorSheet(err)
 	}
 	return answer
 }
 
-func sheetOf(req []byte, open func(*eval.Ctx) *Doc) ([]byte, error) {
+func sheetOf(req []byte, open func(*eval.Ctx) *Doc, deadline time.Time) ([]byte, error) {
 	var r sheetRequest
 	if err := json.Unmarshal(req, &r); err != nil {
 		return nil, err
@@ -91,6 +97,7 @@ func sheetOf(req []byte, open func(*eval.Ctx) *Doc) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx.Deadline = deadline
 	d := open(ctx)
 	d.SetLines(r.Lines)
 	return json.Marshal(sheetOut{Schema: SheetSchema, Lines: d.sheet(format.Style{Digits: ctx.Digits})})
@@ -144,7 +151,13 @@ func (d *Doc) sheetLine(i int, e *entry, style format.Style) lineOut {
 		out.Column = columnOf(e.err)
 	case Blank(e.src):
 		out.Status = StatusHeld
-	case e.value.IsDefinition() || e.value.IsSymbolic() || e.value.IsList() || e.value.IsComplex():
+	case e.value.IsComplex():
+		out.Status = statusOfComplex(e.value)
+		out.Text, out.Qualifiers = answer(style, e.value)
+		out.Complex = style.ComplexDetail(e.value)
+		out.Digits = out.Complex.Digits
+		out.Trace = d.arena.Export(e.value.Prov).Nodes
+	case e.value.IsDefinition() || e.value.IsSymbolic() || e.value.IsList():
 		out.Status = StatusHeld
 		out.Text, out.Qualifiers = answer(style, e.value)
 	default:
@@ -157,6 +170,13 @@ func (d *Doc) sheetLine(i int, e *entry, style format.Style) lineOut {
 		out.Trace = d.arena.Export(e.value.Prov).Nodes
 	}
 	return out
+}
+
+func statusOfComplex(v value.Value) string {
+	if v.Cx.IsExact() {
+		return StatusExact
+	}
+	return StatusProven
 }
 
 func statusOf(v value.Value) string {

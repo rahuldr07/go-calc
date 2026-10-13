@@ -1,6 +1,7 @@
 package eval
 
 import (
+	"errors"
 	"time"
 
 	"github.com/rahuldr07/go-calc/internal/parse"
@@ -15,6 +16,36 @@ type Ctx struct {
 	Digits   int
 	Degrees  bool
 	Deadline time.Time
+	ticks    uint
+	expired  bool
+}
+
+const deadlineCheckMask = 7
+
+const DeadlineMessage = "the calculation ran past its time limit and was stopped"
+
+type DeadlineError struct{}
+
+func (DeadlineError) Error() string { return DeadlineMessage }
+
+func IsDeadline(err error) bool {
+	var d DeadlineError
+	return errors.As(err, &d)
+}
+
+func (ctx *Ctx) overdue() bool {
+	if ctx.Deadline.IsZero() {
+		return false
+	}
+	if ctx.expired {
+		return true
+	}
+	ctx.ticks++
+	if ctx.ticks&deadlineCheckMask != 0 {
+		return false
+	}
+	ctx.expired = !time.Now().Before(ctx.Deadline)
+	return ctx.expired
 }
 
 func DefaultCtx() *Ctx {
@@ -108,6 +139,9 @@ func (e *Env) evalCtx(n parse.Node, ctx *Ctx) (value.Value, error) {
 		}
 		p := &pass{ctx: ctx, prov: map[parse.Node]prov.NodeID{}, divisor: map[parse.Node]bool{}}
 		v, err := e.eval(n, p)
+		if ctx.expired {
+			return value.Value{}, DeadlineError{}
+		}
 		reclaim = reclaim && !p.assigned
 		if err == nil {
 			p.announceRegroupings(n)

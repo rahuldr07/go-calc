@@ -21,13 +21,18 @@ func (e *Env) eval(n parse.Node, p *pass) (value.Value, error) {
 		return value.Value{}, &lex.Error{Pos: n.Pos(), Msg: TooLargeMessage}
 	}
 	v.Prov = e.stamp(n, p)
-	e.arena.SetValue(v.Prov, briefValue(v))
+	e.arena.SetValue(v.Prov, briefValue(v, p.ctx.Digits))
 	return v, nil
 }
 
-const briefNumberLimit = 28
+const (
+	briefNumberFloor = 28
+	briefNumberSlack = 16
+)
 
-func briefValue(v value.Value) (text string) {
+func briefLimit(digits int) int { return max(briefNumberFloor, digits+briefNumberSlack) }
+
+func briefValue(v value.Value, digits int) (text string) {
 	defer func() {
 		if recover() != nil {
 			text = ""
@@ -36,9 +41,9 @@ func briefValue(v value.Value) (text string) {
 	if v.IsList() {
 		return "list of " + strconv.Itoa(len(v.List.Items))
 	}
-	text, _ = format.Default.Decimal(v)
-	if runes := []rune(text); len(runes) > briefNumberLimit {
-		text = string(runes[:briefNumberLimit-1]) + "…"
+	text, _ = format.Style{Digits: digits}.Decimal(v)
+	if limit := briefLimit(digits); len([]rune(text)) > limit {
+		text = string([]rune(text)[:limit-1]) + "…"
 	}
 	if v.Unit != "" {
 		text += " " + v.Unit

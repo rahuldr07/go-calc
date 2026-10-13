@@ -247,3 +247,43 @@ func TestDecodeRejectsAnEmptySheet(t *testing.T) {
 		t.Error("garbage should not decode")
 	}
 }
+
+func TestSolveSubstitutesTheQuadraticCoefficients(t *testing.T) {
+	rule := derive(t, "solve(x^2 - 4 = 0, x)").Steps[0].Rule
+	for _, want := range []string{"a = 1, b = 0, c = -4", "(-0 ± sqrt(0^2 - 4·1·(-4))) / (2·1)", "x = -2,  x = 2", "discriminant 16"} {
+		if !strings.Contains(rule, want) {
+			t.Errorf("rule %q lacks %q", rule, want)
+		}
+	}
+}
+
+func TestSolveSubstitutesTheLinearCoefficients(t *testing.T) {
+	rule := derive(t, "solve(2x + 6 = 0, x)").Steps[0].Rule
+	for _, want := range []string{"a = 2, b = 6", "x = -6/2", "x = -3"} {
+		if !strings.Contains(rule, want) {
+			t.Errorf("rule %q lacks %q", rule, want)
+		}
+	}
+}
+
+func TestSolveBisectionReportsWhatItDid(t *testing.T) {
+	rule := derive(t, "solve(cos(x) = x, x)").Steps[0].Rule
+	for _, want := range []string{"bisection", "over [-100, 100]", "bisected", "times down to the bracket [0.7390851332151"} {
+		if !strings.Contains(rule, want) {
+			t.Errorf("rule %q lacks %q", rule, want)
+		}
+	}
+	if strings.Contains(rule, "sqrt") {
+		t.Errorf("rule %q invents a closed formula", rule)
+	}
+}
+
+func TestStepValuesHonourTheRequestedDigits(t *testing.T) {
+	d, err := Of("sqrt(2)+1", 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Steps[0].Result; got != "1.41421356237309504880168872421" {
+		t.Errorf("sqrt step = %q", got)
+	}
+}

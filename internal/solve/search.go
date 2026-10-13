@@ -15,7 +15,8 @@ type Bracket struct {
 }
 
 type Found struct {
-	Lo, Hi num.Exact
+	Lo, Hi     num.Exact
+	Bisections int
 }
 
 func (f Found) Exact() bool { return f.Lo.Cmp(f.Hi) == 0 }
@@ -58,14 +59,16 @@ func Refine(sign Sign, continuous Continuous, b Bracket, bits uint) (Found, bool
 	loSign, _ := sign(b.Lo)
 	tolerance := toleranceFor(b, bits)
 	lo, hi := b.Lo, b.Hi
+	bisections := 0
 	for hi.Sub(lo).Cmp(tolerance) > 0 {
 		mid, _ := lo.Add(hi).Div(num.FromInt(2))
 		s, ok := sign(mid)
 		if !ok {
 			break
 		}
+		bisections++
 		if s == 0 {
-			return Found{Lo: mid, Hi: mid}, true
+			return Found{Lo: mid, Hi: mid, Bisections: bisections}, true
 		}
 		if s == loSign {
 			lo = mid
@@ -76,7 +79,7 @@ func Refine(sign Sign, continuous Continuous, b Bracket, bits uint) (Found, bool
 	if !continuous(lo, hi) {
 		return Found{}, false
 	}
-	return Found{Lo: lo, Hi: hi}, true
+	return Found{Lo: lo, Hi: hi, Bisections: bisections}, true
 }
 
 func toleranceFor(b Bracket, bits uint) num.Exact {

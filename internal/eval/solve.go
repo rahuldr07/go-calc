@@ -3,7 +3,9 @@ package eval
 import (
 	"fmt"
 	"sort"
+	"strconv"
 
+	"github.com/rahuldr07/go-calc/internal/format"
 	"github.com/rahuldr07/go-calc/internal/lex"
 	"github.com/rahuldr07/go-calc/internal/num"
 	"github.com/rahuldr07/go-calc/internal/parse"
@@ -18,6 +20,14 @@ const (
 	methodLinear      = "exact linear solution"
 	methodQuadratic   = "quadratic formula"
 	methodBisection   = "bisection on proven sign-change brackets"
+
+	termVariable     = "variable"
+	termDiscriminant = "discriminant"
+	termSearched     = "searched"
+	termExact        = "exact root"
+	termBracket      = "bracket"
+	termBisections   = "bisections"
+	bracketDigits    = 24
 )
 
 func (e *Env) solveCall(t *parse.Call, p *pass) (value.Value, error) {
@@ -38,18 +48,18 @@ func (e *Env) solveCall(t *parse.Call, p *pass) (value.Value, error) {
 		if span, err = e.explicitSpan(t, p); err != nil {
 			return value.Value{}, err
 		}
-	} else if sol, handled, err := e.closedForm(t, residual, variable.Text, p); handled {
-		return e.solved(t, p, sol, err)
+	} else if sol, terms, handled, err := e.closedForm(t, residual, variable.Text, p); handled {
+		return e.solved(t, p, sol, terms, err)
 	}
-	sol, err := e.bisect(t, residual, variable.Text, span, p)
-	return e.solved(t, p, sol, err)
+	sol, terms, err := e.bisect(t, residual, variable.Text, span, p)
+	return e.solved(t, p, sol, terms, err)
 }
 
-func (e *Env) solved(t *parse.Call, p *pass, sol value.Solution, err error) (value.Value, error) {
+func (e *Env) solved(t *parse.Call, p *pass, sol value.Solution, terms []prov.Term, err error) (value.Value, error) {
 	if err != nil {
 		return value.Value{}, err
 	}
-	e.record(t, p, prov.Node{Kind: prov.Function, Label: "solve", Detail: sol.Method})
+	e.record(t, p, prov.Node{Kind: prov.Function, Label: "solve", Detail: sol.Method, Terms: terms})
 	return value.Solved(sol), nil
 }
 
@@ -80,25 +90,46 @@ func (e *Env) explicitSpan(t *parse.Call, p *pass) (searchSpan, error) {
 	return searchSpan{lo: bounds[0], hi: bounds[1]}, nil
 }
 
-func (e *Env) closedForm(t *parse.Call, residual parse.Node, variable string, p *pass) (value.Solution, bool, error) {
+func (e *Env) closedForm(t *parse.Call, residual parse.Node, variable string, p *pass) (value.Solution, []prov.Term, bool, error) {
 	poly, ok := solve.Extract(residual, variable, e.exactConstant)
 	if !ok {
-		return value.Solution{}, false, nil
+		return value.Solution{}, nil, false, nil
 	}
 	equation := parse.Reading(t.Args[0])
 	switch poly.Degree() {
 	case 1:
-		return e.closedFormResult(t, solve.Linear(poly), variable, methodLinear, equation)
+		sol, handled, err := e.closedFormResult(t, solve.Linear(poly), variable, methodLinear, equation)
+		return sol, linearTerms(poly, variable), handled, err
 	case 2:
 		r, err := solve.Quadratic(poly, p.prec())
 		if err != nil {
-			return value.Solution{}, true, &lex.Error{Pos: t.P, Msg: "solve: " + err.Error()}
+			return value.Solution{}, nil, true, &lex.Error{Pos: t.P, Msg: "solve: " + err.Error()}
 		}
-		return e.closedFormResult(t, r, variable, methodQuadratic, equation)
+		sol, handled, err := e.closedFormResult(t, r, variable, methodQuadratic, equation)
+		return sol, quadraticTerms(poly, r, variable), handled, err
 	case 0, -1:
-		return e.closedFormResult(t, solve.Linear(poly), variable, methodLinear, equation)
+		sol, handled, err := e.closedFormResult(t, solve.Linear(poly), variable, methodLinear, equation)
+		return sol, nil, handled, err
 	}
-	return value.Solution{}, false, nil
+	return value.Solution{}, nil, false, nil
+}
+
+func linearTerms(poly solve.Poly, variable string) []prov.Term {
+	return []prov.Term{
+		{Name: termVariable, Value: variable},
+		{Name: "a", Value: poly.Coefficient(1).String()},
+		{Name: "b", Value: poly.Coefficient(0).String()},
+	}
+}
+
+func quadraticTerms(poly solve.Poly, r solve.Result, variable string) []prov.Term {
+	return []prov.Term{
+		{Name: termVariable, Value: variable},
+		{Name: "a", Value: poly.Coefficient(2).String()},
+		{Name: "b", Value: poly.Coefficient(1).String()},
+		{Name: "c", Value: poly.Coefficient(0).String()},
+		{Name: termDiscriminant, Value: r.Discriminant.String()},
+	}
 }
 
 func (e *Env) exactConstant(name string) (num.Exact, bool) {
@@ -165,19 +196,21 @@ func (r *residualProbe) continuousOn(lo, hi num.Exact) bool {
 	return err == nil
 }
 
-func (e *Env) bisect(t *parse.Call, residual parse.Node, variable string, span searchSpan, p *pass) (value.Solution, error) {
+func (e *Env) bisect(t *parse.Call, residual parse.Node, variable string, span searchSpan, p *pass) (value.Solution, []prov.Term, error) {
 	probe := e.probeFor(residual, variable, p)
 	scan := solve.Grid(probe.sign, span.lo, span.hi, searchSteps)
 	searched := "[" + span.lo.String() + ", " + span.hi.String() + "]"
 	if scan.Decided == 0 {
 		if probe.firstErr != nil {
-			return value.Solution{}, probe.firstErr
+			return value.Solution{}, nil, probe.firstErr
 		}
-		return value.Solution{}, &lex.Error{Pos: t.P, Msg: "solve could not evaluate the equation anywhere in " + searched}
+		return value.Solution{}, nil, &lex.Error{Pos: t.P, Msg: "solve could not evaluate the equation anywhere in " + searched}
 	}
 	roots := make([]num.Number, 0, len(scan.Exact)+len(scan.Brackets))
+	terms := []prov.Term{{Name: termVariable, Value: variable}, {Name: termSearched, Value: searched}}
 	for _, x := range scan.Exact {
 		roots = append(roots, num.NumExact(x))
+		terms = append(terms, prov.Term{Name: termExact, Value: exactText(x)})
 	}
 	rejected := 0
 	for _, b := range scan.Brackets {
@@ -187,13 +220,29 @@ func (e *Env) bisect(t *parse.Call, residual parse.Node, variable string, span s
 			continue
 		}
 		roots = append(roots, rootNumber(found, p.prec()))
+		terms = append(terms, bracketTerms(found)...)
 	}
 	if len(roots) == 0 {
-		return value.Solution{}, &lex.Error{Pos: t.P, Msg: noRootMessage(variable, searched, rejected)}
+		return value.Solution{}, nil, &lex.Error{Pos: t.P, Msg: noRootMessage(variable, searched, rejected)}
 	}
 	prec := p.prec()
 	sort.Slice(roots, func(i, j int) bool { return roots[i].Ball(prec).Mid.Cmp(roots[j].Ball(prec).Mid) < 0 })
-	return value.Solution{Var: variable, Roots: roots, Method: methodBisection, Searched: searched}, nil
+	return value.Solution{Var: variable, Roots: roots, Method: methodBisection, Searched: searched}, terms, nil
+}
+
+func exactText(x num.Exact) string {
+	text, _ := format.Style{Digits: bracketDigits}.Decimal(value.Scalar(x))
+	return text
+}
+
+func bracketTerms(f solve.Found) []prov.Term {
+	if f.Exact() {
+		return []prov.Term{{Name: termExact, Value: exactText(f.Lo)}}
+	}
+	return []prov.Term{
+		{Name: termBracket, Value: "[" + exactText(f.Lo) + ", " + exactText(f.Hi) + "]"},
+		{Name: termBisections, Value: strconv.Itoa(f.Bisections)},
+	}
 }
 
 func rootNumber(f solve.Found, prec uint) num.Number {

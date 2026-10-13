@@ -21,6 +21,9 @@ import (
 )
 
 func (e *Env) evalNode(n parse.Node, p *pass) (value.Value, error) {
+	if p.ctx.overdue() {
+		return value.Value{}, DeadlineError{}
+	}
 	switch t := n.(type) {
 	case *parse.NumLit:
 		x, err := num.ParseExact(t.Text)

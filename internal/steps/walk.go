@@ -12,9 +12,9 @@ const (
 	kindUnit     = "unit"
 	kindFunction = "function"
 
+	solveLabel       = "solve"
 	conversionPrefix = "to "
 	quadraticRule    = "quadratic formula"
-	quadraticFormula = "x = (-b ± sqrt(b^2 - 4ac)) / 2a"
 )
 
 type walker struct {
@@ -87,7 +87,7 @@ func (w *walker) stepOf(n prov.NodeOut) (Step, bool) {
 	case kindConstant:
 		return Step{Expr: n.Label, Result: n.Value, Source: n.Detail}, true
 	case kindUnit, kindFunction, "operation":
-		return Step{Expr: w.expression(n), From: w.operands(n), Result: w.result(n), Rule: ruleOf(n)}, true
+		return Step{Expr: w.expression(n), From: w.operands(n), Result: w.result(n), Rule: w.rule(n)}, true
 	}
 	return Step{}, false
 }
@@ -123,12 +123,16 @@ func (w *walker) operands(n prov.NodeOut) []string {
 	return out
 }
 
+func (w *walker) rule(n prov.NodeOut) string {
+	if n.Label == solveLabel {
+		return solveRule(n, w.result(n))
+	}
+	return ruleOf(n)
+}
+
 func ruleOf(n prov.NodeOut) string {
 	if n.Detail == "" {
 		return ""
-	}
-	if n.Detail == quadraticRule {
-		return quadraticRule + ": " + quadraticFormula
 	}
 	if n.Kind != kindUnit {
 		return n.Detail

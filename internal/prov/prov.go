@@ -36,10 +36,16 @@ func (k NodeKind) String() string {
 	return "unknown"
 }
 
+type Term struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 type Node struct {
 	Kind     NodeKind
 	Label    string
 	Detail   string
+	Terms    []Term
 	Value    string
 	Line     int
 	Children []NodeID
@@ -74,6 +80,7 @@ func (a *Arena) Get(id NodeID) Node {
 	}
 	n := a.nodes[id]
 	n.Children = append([]NodeID(nil), n.Children...)
+	n.Terms = append([]Term(nil), n.Terms...)
 	return n
 }
 

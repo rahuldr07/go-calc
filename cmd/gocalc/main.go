@@ -35,7 +35,11 @@ func main() {
 const startREPL = -1
 
 func styleFor(opts settings) format.Style {
-	return format.Style{Digits: format.Digits, Grouped: opts.grouped || opts.indian, Indian: opts.indian}
+	digits := format.Digits
+	if opts.digits > 0 {
+		digits = opts.digits
+	}
+	return format.Style{Digits: digits, Grouped: opts.grouped || opts.indian, Indian: opts.indian}
 }
 
 func dispatch(opts settings, args []string, style format.Style) (string, int, bool) {
@@ -74,9 +78,12 @@ type settings struct {
 	json    bool
 	indian  bool
 	grouped bool
+	digits  int
 }
 
-const usage = "usage: gocalc [--json] [--indian] [--group] \"expression\"\n" +
+const maxCLIDigits = 1000
+
+const usage = "usage: gocalc [--json] [--digits=N] [--indian] [--group] \"expression\"\n" +
 	"       gocalc repl\n" +
 	"       gocalc [--json] run sheet.calc\n" +
 	"       gocalc trace \"expression\"\n" +
@@ -108,7 +115,15 @@ func options(argv []string) (settings, []string, error) {
 		case "help":
 			return out, nil, errHelp
 		default:
-			return out, nil, errors.New("unknown option " + arg + "\n" + usage)
+			rest, isDigits := strings.CutPrefix(name, "digits=")
+			if !isDigits {
+				return out, nil, errors.New("unknown option " + arg + "\n" + usage)
+			}
+			n, err := strconv.Atoi(rest)
+			if err != nil || n < 1 || n > maxCLIDigits {
+				return out, nil, errors.New("--digits takes a whole number from 1 to " + strconv.Itoa(maxCLIDigits))
+			}
+			out.digits = n
 		}
 		argv = argv[1:]
 	}
@@ -140,8 +155,16 @@ func run(args []string, style format.Style, asJSON bool) (string, int) {
 }
 
 func evalLine(env *eval.Env, src string, style format.Style, asJSON bool) (string, int) {
-	out, _, code := evalWith(env, src, eval.DefaultCtx(), style, asJSON)
+	out, _, code := evalWith(env, src, contextFor(style), style, asJSON)
 	return out, code
+}
+
+func contextFor(style format.Style) *eval.Ctx {
+	ctx := eval.DefaultCtx()
+	if style.Digits > 0 {
+		ctx.Digits = style.Digits
+	}
+	return ctx
 }
 
 func evalWith(env *eval.Env, src string, ctx *eval.Ctx, style format.Style, asJSON bool) (string, eval.Explanation, int) {

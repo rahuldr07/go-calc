@@ -21,6 +21,7 @@ const (
 	WriteTimeout      = 30 * time.Second
 	IdleTimeout       = 60 * time.Second
 	ShutdownGrace     = 15 * time.Second
+	EngineHeadroom    = 10
 )
 
 const (
@@ -34,7 +35,7 @@ type Config struct {
 	CORSOrigin  string
 	Timeout     time.Duration
 	Concurrency int
-	Evaluate    func([]byte) []byte
+	Evaluate    func([]byte, time.Time) []byte
 }
 
 type handler struct {
@@ -71,7 +72,7 @@ func Handler(cfg Config) http.Handler {
 		cfg.Concurrency = runtime.NumCPU()
 	}
 	if cfg.Evaluate == nil {
-		cfg.Evaluate = doc.EvalRequest
+		cfg.Evaluate = doc.EvalRequestBefore
 	}
 	h := &handler{cfg: cfg, busy: make(chan struct{}, cfg.Concurrency)}
 	mux := http.NewServeMux()
@@ -165,10 +166,11 @@ func (h *handler) answer(w http.ResponseWriter, parent context.Context, body []b
 	}
 	ctx, cancel := context.WithTimeout(parent, h.cfg.Timeout)
 	defer cancel()
+	engineDeadline := time.Now().Add(h.cfg.Timeout - h.cfg.Timeout/EngineHeadroom)
 	done := make(chan []byte, 1)
 	go func() {
 		defer func() { <-h.busy }()
-		done <- h.cfg.Evaluate(body)
+		done <- h.cfg.Evaluate(body, engineDeadline)
 	}()
 	select {
 	case out := <-done:

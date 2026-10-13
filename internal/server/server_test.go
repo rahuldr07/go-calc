@@ -145,7 +145,7 @@ func TestRefusedLineIsStillOK(t *testing.T) {
 func TestSlowEvaluationTimesOut(t *testing.T) {
 	release := make(chan struct{})
 	defer close(release)
-	h := Handler(Config{Timeout: 20 * time.Millisecond, Evaluate: func([]byte) []byte {
+	h := Handler(Config{Timeout: 20 * time.Millisecond, Evaluate: func([]byte, time.Time) []byte {
 		<-release
 		return nil
 	}})
@@ -158,7 +158,7 @@ func TestSlowEvaluationTimesOut(t *testing.T) {
 func TestBusyServerRefusesWork(t *testing.T) {
 	release := make(chan struct{})
 	started := make(chan struct{})
-	h := Handler(Config{Concurrency: 1, Timeout: time.Minute, Evaluate: func([]byte) []byte {
+	h := Handler(Config{Concurrency: 1, Timeout: time.Minute, Evaluate: func([]byte, time.Time) []byte {
 		started <- struct{}{}
 		<-release
 		return []byte(`{}`)
@@ -198,5 +198,31 @@ func TestNewSetsEveryServerTimeout(t *testing.T) {
 	}
 	if s.WriteTimeout <= RequestTimeout {
 		t.Errorf("write timeout %v must outlast request timeout %v", s.WriteTimeout, RequestTimeout)
+	}
+}
+
+func TestEvaluationReceivesADeadlineInsideTheTimeout(t *testing.T) {
+	got := make(chan time.Time, 1)
+	h := Handler(Config{Timeout: time.Second, Evaluate: func(_ []byte, deadline time.Time) []byte {
+		got <- deadline
+		return []byte(`{}`)
+	}})
+	started := time.Now()
+	do(t, h, http.MethodPost, "/v1/sheet", `{"lines":["1"]}`)
+	deadline := <-got
+	if !deadline.After(started) || !deadline.Before(started.Add(time.Second)) {
+		t.Errorf("deadline %v not inside (%v, %v)", deadline, started, started.Add(time.Second))
+	}
+}
+
+func TestSlotIsFreedOnceEvaluationHonoursItsDeadline(t *testing.T) {
+	h := Handler(Config{Concurrency: 1, Timeout: 100 * time.Millisecond, Evaluate: func(_ []byte, deadline time.Time) []byte {
+		time.Sleep(time.Until(deadline))
+		return []byte(`{}`)
+	}})
+	for i := 0; i < 3; i++ {
+		if rec := do(t, h, http.MethodPost, "/v1/sheet", `{"lines":["1"]}`); rec.Code != http.StatusOK {
+			t.Fatalf("request %d: status %d", i, rec.Code)
+		}
 	}
 }

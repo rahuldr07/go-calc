@@ -631,7 +631,7 @@ func TestAPanicBecomesAnErrorLineInsteadOfKillingTheModule(t *testing.T) {
 		d := documentUnder(ctx)
 		d.evaluator = func(*eval.Env, parse.Node) (value.Value, error) { panic("the arena caught fire") }
 		return d
-	})
+	}, time.Time{})
 	var got wireSheet
 	if err := json.Unmarshal(out, &got); err != nil {
 		t.Fatalf("a panic returned invalid JSON %q: %v", out, err)
@@ -652,7 +652,7 @@ func TestAPanicWithAnErrorValueIsReportedToo(t *testing.T) {
 		d := documentUnder(ctx)
 		d.warner = func(*eval.Env, parse.Node, value.Value) string { panic(errCycle) }
 		return d
-	})
+	}, time.Time{})
 	var got wireSheet
 	if err := json.Unmarshal(out, &got); err != nil {
 		t.Fatalf("a panic returned invalid JSON %q: %v", out, err)

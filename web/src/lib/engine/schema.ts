@@ -35,6 +35,20 @@ export interface ValueDetail {
   capped?: boolean
 }
 
+export interface PartDetail {
+  exact?: string
+  ball?: string
+  decimal?: string
+}
+
+export interface ComplexDetail {
+  real: PartDetail
+  imaginary: PartDetail
+  exact: boolean
+  digits: number
+  text: string
+}
+
 export interface UnitDetail {
   symbol: string
   dims?: Record<string, number>
@@ -58,6 +72,7 @@ export interface Line {
   digits: number
   capped?: boolean
   value?: ValueDetail
+  complex?: ComplexDetail
   unit?: UnitDetail
   stopped?: string
   error?: string
