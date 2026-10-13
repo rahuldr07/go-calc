@@ -57,6 +57,7 @@ func (n *Binary) String() string { return "(" + n.L.String() + " " + n.Op + " " 
 
 const (
 	ListFn  = "[]"
+	IndexFn = "[i]"
 	RangeFn = lex.RangeOp
 )
 
@@ -79,6 +80,10 @@ func (n *Call) text(part func(Node) string) string {
 	switch n.Fn {
 	case ListFn:
 		return "[" + strings.Join(parts, ", ") + "]"
+	case IndexFn:
+		if len(parts) == 2 {
+			return parts[0] + "[" + parts[1] + "]"
+		}
 	case RangeFn:
 		return strings.Join(parts, RangeFn)
 	}

@@ -80,6 +80,7 @@ export interface Line {
   uncertainty?: Uncertainty
   notes?: Note[]
   warning?: string
+  float64?: { value: string; agrees: number }
   trace?: TraceNode[]
 }
 
@@ -92,6 +93,27 @@ export interface Request {
   lines: string[]
   digits: number
   angle: Angle
+}
+
+export interface Step {
+  n: number
+  expr: string
+  from?: string[]
+  result: string
+  rule?: string
+  source?: string
+}
+
+export interface Derivation {
+  input: string
+  steps: Step[]
+  answer?: string
+  status?: string
+  digits?: number
+  bound?: string
+  note?: string
+  truncated?: boolean
+  error?: string
 }
 
 export const SUPERSEDED = "superseded"

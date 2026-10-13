@@ -4,10 +4,11 @@ declare function goCalcEval(request: string): string
 
 interface Incoming {
   id: number
-  kind: "start" | "evaluate" | "vocabulary"
+  kind: "start" | "evaluate" | "vocabulary" | "steps"
   base?: string
   url?: string
   request?: string
+  input?: string
 }
 
 let running: Promise<void> | null = null
@@ -27,7 +28,7 @@ async function start(base: string, url?: string) {
 }
 
 self.onmessage = async (event: MessageEvent<Incoming>) => {
-  const { id, kind, base, url, request } = event.data
+  const { id, kind, base, url, request, input } = event.data
   try {
     if (kind === "start") {
       running = start(base ?? "/", url)
@@ -40,6 +41,11 @@ self.onmessage = async (event: MessageEvent<Incoming>) => {
     if (kind === "vocabulary") {
       const read = (self as unknown as { goCalcVocabulary?: () => string }).goCalcVocabulary
       self.postMessage({ id, ok: true, answer: read ? read() : "" })
+      return
+    }
+    if (kind === "steps") {
+      const work = (self as unknown as { goCalcSteps?: (input: string, line: string) => string }).goCalcSteps
+      self.postMessage({ id, ok: true, answer: work ? work(input ?? "", request ?? "") : "" })
       return
     }
     self.postMessage({ id, ok: true, answer: goCalcEval(request ?? "") })

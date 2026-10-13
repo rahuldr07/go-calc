@@ -51,6 +51,40 @@ func (e *Env) listLiteral(t *parse.Call, p *pass) (value.Value, error) {
 	return value.List(items), nil
 }
 
+func (e *Env) indexCall(t *parse.Call, p *pass) (value.Value, error) {
+	refuse := func(at lex.Pos, msg string) (value.Value, error) {
+		return value.Value{}, &lex.Error{Pos: at, Msg: msg}
+	}
+	list, err := e.eval(t.Args[0], p)
+	if err != nil {
+		return value.Value{}, err
+	}
+	if !list.IsList() {
+		return refuse(t.P, "only a list can be indexed: [1, 2, 3][0] is 1")
+	}
+	at, err := e.eval(t.Args[1], p)
+	if err != nil {
+		return value.Value{}, err
+	}
+	n, ok := smallWhole(at, -maxListLength, maxListLength)
+	if !ok || at.IsMeasured() {
+		return refuse(t.Args[1].Pos(), "an index is a whole number: 0 is the first item and -1 the last")
+	}
+	items := list.List.Items
+	size := int64(len(items))
+	if size == 0 {
+		return refuse(t.Args[1].Pos(), "the list is empty, so it has no items to pick")
+	}
+	pick := n
+	if pick < 0 {
+		pick += size
+	}
+	if pick < 0 || pick >= size {
+		return refuse(t.Args[1].Pos(), "index "+strconv.FormatInt(n, 10)+" is outside a list of "+strconv.FormatInt(size, 10)+": use 0 to "+strconv.FormatInt(size-1, 10)+", or -1 for the last")
+	}
+	return items[pick], nil
+}
+
 func unlistable(v value.Value) string {
 	switch {
 	case v.IsList():

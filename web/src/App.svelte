@@ -1,11 +1,14 @@
 <script lang="ts">
+  import Detail from "./lib/components/Detail.svelte"
   import Help from "./lib/components/Help.svelte"
   import Keypad from "./lib/components/Keypad.svelte"
   import Sheet from "./lib/components/Sheet.svelte"
   import Terminal from "./lib/components/Terminal.svelte"
   import TopBar from "./lib/components/TopBar.svelte"
   import { apply, theme } from "./lib/theme/theme.svelte"
-  import { setSource, sheet } from "./lib/state/sheet.svelte"
+  import { onMount } from "svelte"
+  import { openShared, setSource, sheet } from "./lib/state/sheet.svelte"
+  import { decodeSheet, sharedHash } from "./lib/state/share"
   import { setMode, toggleHelp, view } from "./lib/state/view.svelte"
 
   let sheetPane: Sheet | undefined = $state()
@@ -13,6 +16,15 @@
   $effect(() => {
     void theme.id
     apply()
+  })
+
+  onMount(() => {
+    const hash = sharedHash()
+    if (hash === "") return
+    void decodeSheet(hash).then((text) => {
+      history.replaceState(null, "", location.pathname + location.search)
+      if (text !== null) void openShared(text)
+    })
   })
 
   function tryIt(expression: string) {
@@ -47,6 +59,7 @@
       {:else}
         <Terminal />
       {/if}
+      {#if view.mode === "notepad"}<Detail />{/if}
       {#if view.keypad && view.mode === "notepad"}
         <Keypad insert={(t) => sheetPane?.insert(t)} press={(c) => sheetPane?.press(c)} />
       {/if}

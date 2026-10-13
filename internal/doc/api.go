@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -61,6 +62,7 @@ type lineOut struct {
 	Uncertainty *format.Uncertainty `json:"uncertainty,omitempty"`
 	Notes       []noteOut           `json:"notes,omitempty"`
 	Warning     string              `json:"warning,omitempty"`
+	Float64     *float64Out         `json:"float64,omitempty"`
 	Trace       []prov.NodeOut      `json:"trace,omitempty"`
 }
 
@@ -109,9 +111,9 @@ func documentUnder(ctx *eval.Ctx) *Doc {
 		each := *ctx
 		return env.EvalCtx(n, &each)
 	}
-	d.warner = func(env *eval.Env, n parse.Node, v value.Value) string {
+	d.warner = func(env *eval.Env, n parse.Node, v value.Value) eval.Explanation {
 		each := *ctx
-		return env.WhyCtx(n, v, &each).Warning
+		return env.WhyCtx(n, v, &each)
 	}
 	return d
 }
@@ -168,9 +170,29 @@ func (d *Doc) sheetLine(i int, e *entry, style format.Style) lineOut {
 		out.Stopped = whyStopped(e.value.Stopped)
 		out.Uncertainty = format.UncertaintyOf(e.value)
 		out.Trace = d.arena.Export(e.value.Prov).Nodes
+		out.Float64 = floatComparison(e)
 	}
 	return out
 }
+
+type float64Out struct {
+	Value  string  `json:"value"`
+	Agrees float64 `json:"agrees"`
+}
+
+func floatComparison(e *entry) *float64Out {
+	x := e.shadow
+	if !x.Modelled || e.value.Unit != "" || !e.value.Dim.IsNone() || e.value.IsMeasured() || e.value.IsBoolean() {
+		return nil
+	}
+	agrees := x.Digits
+	if math.IsNaN(agrees) || agrees > float64Digits {
+		agrees = float64Digits
+	}
+	return &float64Out{Value: strconv.FormatFloat(x.Shadow, 'g', -1, 64), Agrees: math.Round(agrees*10) / 10}
+}
+
+const float64Digits = 17
 
 func statusOfComplex(v value.Value) string {
 	if v.Cx.IsExact() {

@@ -305,3 +305,23 @@ func TestBracketsLeaveExistingReadingsAlone(t *testing.T) {
 		}
 	}
 }
+
+func TestIndexingIsAPostfixOnAnyPrimary(t *testing.T) {
+	for src, want := range map[string]string{
+		"xs[0]":         "xs[0]",
+		"[1, 2][-1]":    "[1, 2][(-1)]",
+		"xs[i + 1] * 2": "(xs[(i + 1)] * 2)",
+		"f(x)[2]":       "f(x)[2]",
+	} {
+		n, _, err := Parse(src)
+		if err != nil {
+			t.Fatalf("%s: %v", src, err)
+		}
+		if got := n.String(); got != want {
+			t.Errorf("%s parsed as %s, want %s", src, got, want)
+		}
+	}
+	if _, _, err := Parse("xs[0"); err == nil || !strings.Contains(err.Error(), "close the index") {
+		t.Errorf("an unclosed index gave %v", err)
+	}
+}

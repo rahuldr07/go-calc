@@ -1,4 +1,4 @@
-import { SUPERSEDED, type Request, type Sheet } from "./schema"
+import { SUPERSEDED, type Derivation, type Line, type Request, type Sheet } from "./schema"
 
 interface Reply {
   id: number
@@ -50,10 +50,24 @@ export class Engine {
   }
 
   vocabulary(): Promise<string> {
+    return this.raw({ kind: "vocabulary" })
+  }
+
+  async steps(input: string, line: Line): Promise<Derivation | null> {
+    const answer = await this.raw({ kind: "steps", input, request: JSON.stringify(line) })
+    if (answer === "") return null
+    try {
+      return JSON.parse(answer) as Derivation
+    } catch {
+      return null
+    }
+  }
+
+  private raw(message: { kind: "vocabulary" | "steps"; input?: string; request?: string }): Promise<string> {
     const id = ++this.issued
     return new Promise<string>((resolve) => {
       this.rawWaiting.set(id, resolve)
-      this.worker.postMessage({ id, kind: "vocabulary" })
+      this.worker.postMessage({ id, ...message })
     })
   }
 

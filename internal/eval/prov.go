@@ -105,6 +105,8 @@ func functionLabel(t *parse.Call) string {
 	switch t.Fn {
 	case parse.ListFn:
 		return "list"
+	case parse.IndexFn:
+		return "index"
 	case parse.RangeFn:
 		return "range"
 	}

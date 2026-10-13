@@ -38,6 +38,7 @@ type entry struct {
 	value    value.Value
 	err      error
 	warning  string
+	shadow   eval.Explanation
 }
 
 type Doc struct {
@@ -46,7 +47,7 @@ type Doc struct {
 	table     *unc.Table
 	arena     *prov.Arena
 	evaluator func(*eval.Env, parse.Node) (value.Value, error)
-	warner    func(*eval.Env, parse.Node, value.Value) string
+	warner    func(*eval.Env, parse.Node, value.Value) eval.Explanation
 }
 
 func New() *Doc {
@@ -57,7 +58,7 @@ func (d *Doc) Arena() *prov.Arena { return d.arena }
 
 func evalNode(env *eval.Env, n parse.Node) (value.Value, error) { return env.Eval(n) }
 
-func warnNode(env *eval.Env, n parse.Node, v value.Value) string { return env.Warning(n, v) }
+func warnNode(env *eval.Env, n parse.Node, v value.Value) eval.Explanation { return env.Why(n, v) }
 
 func (d *Doc) SetLines(src []string) []Line {
 	d.lines = make([]*entry, len(src))
@@ -153,7 +154,7 @@ func read(src string, line int) *entry {
 
 func (d *Doc) evaluate(i int) {
 	e := d.lines[i]
-	e.value, e.err, e.warning, e.notes = value.Value{}, nil, "", e.read
+	e.value, e.err, e.warning, e.shadow, e.notes = value.Value{}, nil, "", eval.Explanation{}, e.read
 	broken := d.brokenInputs(i)
 	switch {
 	case e.node == nil:
@@ -169,7 +170,8 @@ func (d *Doc) evaluate(i int) {
 		e.value, e.err = d.evaluator(env, e.node)
 		e.notes = append(append([]parse.Note{}, e.read...), env.Notes()...)
 		if e.err == nil {
-			e.warning = d.warner(env, e.node, e.value)
+			e.shadow = d.warner(env, e.node, e.value)
+			e.warning = e.shadow.Warning
 		}
 	}
 }

@@ -226,6 +226,19 @@ func (p *parser) parsePostfix() (Node, error) {
 			n = &Unary{Op: t.Text, X: n, P: t.Pos}
 			continue
 		}
+		if t.Kind == lex.LBracket {
+			p.next()
+			at, err := p.parseExpr(0)
+			if err != nil {
+				return nil, err
+			}
+			if p.peek().Kind != lex.RBracket {
+				return nil, p.errorAt(p.peek(), "expected ] to close the index")
+			}
+			p.next()
+			n = &Call{Fn: IndexFn, Args: []Node{n, at}, P: t.Pos}
+			continue
+		}
 		return n, nil
 	}
 }

@@ -57,12 +57,19 @@ func pretty(n parse.Node) (string, int) {
 		switch t.Fn {
 		case parse.ListFn:
 			return "[" + strings.Join(parts, ", ") + "]", levelAtom
+		case parse.IndexFn:
+			return wrapIndexed(t.Args[0]) + "[" + parts[1] + "]", levelAtom
 		case parse.RangeFn:
 			return strings.Join(parts, parse.RangeFn), levelSum
 		}
 		return t.Fn + "(" + strings.Join(parts, ", ") + ")", levelAtom
 	}
 	return n.String(), levelAtom
+}
+
+func wrapIndexed(n parse.Node) string {
+	text, at := pretty(n)
+	return wrap(text, at, levelAtom)
 }
 
 func binaryText(t *parse.Binary) (string, int) {

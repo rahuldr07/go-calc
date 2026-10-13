@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rahuldr07/go-calc/internal/doc"
 	"github.com/rahuldr07/go-calc/internal/prov"
 )
 
@@ -285,5 +286,29 @@ func TestStepValuesHonourTheRequestedDigits(t *testing.T) {
 	}
 	if got := d.Steps[0].Result; got != "1.41421356237309504880168872421" {
 		t.Errorf("sqrt step = %q", got)
+	}
+}
+
+func TestFromLineWorksFromASheetLine(t *testing.T) {
+	sheet := doc.EvalRequest([]byte(`{"lines":["r = 2","pi * r^2"],"digits":12}`))
+	var read struct {
+		Lines []json.RawMessage `json:"lines"`
+	}
+	if err := json.Unmarshal(sheet, &read); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := FromLine("pi * r^2", read.Lines[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d Derivation
+	if err := json.Unmarshal(raw, &d); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Steps) == 0 || d.Status != "proven" {
+		t.Fatalf("got %+v, want proven working", d)
+	}
+	if _, err := FromLine("x", []byte("not json")); err == nil {
+		t.Error("a malformed line was accepted")
 	}
 }

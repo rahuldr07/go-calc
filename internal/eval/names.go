@@ -11,7 +11,7 @@ import (
 	"github.com/rahuldr07/go-calc/internal/units"
 )
 
-var switchedFunctions = slices.Concat([]string{"abs", "sqrt", "root", "atan2", "expand", "floor", "ceil", "round", "gcd", "lcm", "isprime"}, statisticalFunctions)
+var switchedFunctions = slices.Concat([]string{"abs", "sqrt", "root", "atan2", "expand", "floor", "ceil", "round", "gcd", "lcm", "isprime", "nCr", "nPr"}, statisticalFunctions)
 
 var dispatchedFunctions = []string{"solve", "deriv"}
 

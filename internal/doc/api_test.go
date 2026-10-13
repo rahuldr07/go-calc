@@ -650,7 +650,7 @@ func TestAPanicBecomesAnErrorLineInsteadOfKillingTheModule(t *testing.T) {
 func TestAPanicWithAnErrorValueIsReportedToo(t *testing.T) {
 	out := evalSheet([]byte(`{"lines":["1+1"]}`), func(ctx *eval.Ctx) *Doc {
 		d := documentUnder(ctx)
-		d.warner = func(*eval.Env, parse.Node, value.Value) string { panic(errCycle) }
+		d.warner = func(*eval.Env, parse.Node, value.Value) eval.Explanation { panic(errCycle) }
 		return d
 	}, time.Time{})
 	var got wireSheet
@@ -804,5 +804,32 @@ func TestEveryPositionInASheetIsADocumentPosition(t *testing.T) {
 		if l.Warning != "" && strings.Contains(l.Warning, " at ") && !strings.Contains(l.Warning, " at "+at) {
 			t.Errorf("line %d warning %q does not point at %s", l.N+1, l.Warning, at)
 		}
+	}
+}
+
+func TestALineCarriesWhatFloat64WouldHaveSaid(t *testing.T) {
+	raw := EvalRequest([]byte(`{"lines":["0.1 + 0.2","412 km","1e16 + 1 - 1e16","42"]}`))
+	var got struct {
+		Lines []struct {
+			Float64 *struct {
+				Value  string  `json:"value"`
+				Agrees float64 `json:"agrees"`
+			} `json:"float64"`
+		} `json:"lines"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if f := got.Lines[0].Float64; f == nil || f.Value != "0.30000000000000004" {
+		t.Errorf("0.1 + 0.2 float64 = %+v", f)
+	}
+	if got.Lines[1].Float64 != nil {
+		t.Error("a value with a unit carried an SI float64 comparison")
+	}
+	if f := got.Lines[2].Float64; f == nil || f.Value != "0" || f.Agrees != 0 {
+		t.Errorf("1e16 + 1 - 1e16 float64 = %+v", f)
+	}
+	if f := got.Lines[3].Float64; f == nil || f.Agrees != 17 {
+		t.Errorf("an exact match should agree in every digit float64 has: %+v", f)
 	}
 }

@@ -123,3 +123,11 @@ func idleNote(root prov.NodeOut) string {
 	}
 	return noWorkingValue
 }
+
+func FromLine(input string, raw []byte) ([]byte, error) {
+	var line Line
+	if err := json.Unmarshal(raw, &line); err != nil {
+		return nil, err
+	}
+	return json.Marshal(Derive(input, line))
+}

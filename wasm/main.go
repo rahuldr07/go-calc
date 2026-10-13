@@ -11,6 +11,7 @@ import (
 func main() {
 	js.Global().Set("goCalcEval", js.FuncOf(sheet))
 	js.Global().Set("goCalcVocabulary", js.FuncOf(vocabulary))
+	js.Global().Set("goCalcSteps", js.FuncOf(working))
 	select {}
 }
 

@@ -6,6 +6,8 @@ const engine = new Engine()
 
 const DOCUMENT = "gocalc-document"
 const DIGITS = "gocalc-digits"
+const ANGLE = "gocalc-angle"
+const BEFORE_SHARE = "gocalc-document-before-share"
 
 function saved(key: string): string {
   try {
@@ -31,12 +33,44 @@ export const sheet = $state({
   source: restored(),
   lines: [] as Line[],
   digits: Number(saved(DIGITS)) || 12,
-  angle: "rad" as Angle,
+  angle: (saved(ANGLE) === "deg" ? "deg" : "rad") as Angle,
   engineStatus: "loading" as EngineStatus,
   failure: "",
   elapsed: 0,
   selected: null as number | null,
+  restorable: saved(BEFORE_SHARE) !== "",
 })
+
+function forget(key: string) {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    return
+  }
+}
+
+export async function openShared(text: string) {
+  if (text === sheet.source) return
+  if (sheet.source.trim() !== "") {
+    keep(BEFORE_SHARE, sheet.source)
+    sheet.restorable = true
+  }
+  sheet.selected = null
+  await setSource(text)
+}
+
+export async function restoreOwn() {
+  const own = saved(BEFORE_SHARE)
+  forget(BEFORE_SHARE)
+  sheet.restorable = false
+  sheet.selected = null
+  if (own !== "") await setSource(own)
+}
+
+export function dismissRestore() {
+  forget(BEFORE_SHARE)
+  sheet.restorable = false
+}
 
 engine.ready.then(
   () => {
@@ -72,11 +106,16 @@ export async function setDigits(digits: number) {
 
 export async function setAngle(angle: Angle) {
   sheet.angle = angle
+  keep(ANGLE, angle)
   await recompute()
 }
 
 export function select(n: number | null) {
   sheet.selected = n
+}
+
+export function workingFor(input: string, line: Line) {
+  return engine.steps(input, line)
 }
 
 async function recompute() {

@@ -7,7 +7,7 @@
   import { completion } from "../editor/complete"
   import { vocabulary } from "../state/vocabulary.svelte"
   import { caretLine, focused, lineField, selectedField, setFocused, setLines, setSelected, valueField } from "../editor/notepad"
-  import { select, setSource, sheet } from "../state/sheet.svelte"
+  import { dismissRestore, restoreOwn, select, setSource, sheet } from "../state/sheet.svelte"
 
   let host: HTMLDivElement
 
@@ -46,7 +46,7 @@
 
   function inspect(event: Event) {
     const at = (event as CustomEvent<number>).detail
-    if (typeof at === "number") select(at)
+    if (typeof at === "number") select(sheet.selected === at ? null : at)
   }
 
   onMount(() => {
@@ -102,7 +102,13 @@
 
 <div class="sheet-head">
   <h2>Lab notes</h2>
-  <span class="pin">{sheet.selected === null ? "" : `line ${sheet.selected + 1} selected`}</span>
+  {#if sheet.restorable}
+    <span class="restore">
+      opened from a link
+      <button type="button" class="chip" onclick={() => void restoreOwn()}>restore my sheet</button>
+      <button type="button" class="chip" onclick={dismissRestore} aria-label="Keep this sheet">keep</button>
+    </span>
+  {/if}
   <span class="tally">{tally}</span>
 </div>
 <div class="colheads" aria-hidden="true">

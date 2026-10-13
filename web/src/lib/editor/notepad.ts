@@ -27,7 +27,27 @@ export function located(message: string): string {
   return message.replace(/^\d+:\d+:\s*/, "")
 }
 
+const LONG_INTEGER = 22
+const MANTISSA = 12
+
+export function scientific(text: string): string | null {
+  const match = /^(-?)(\d+)((?:\s.*)?)$/.exec(text)
+  if (!match || match[2].length <= LONG_INTEGER) return null
+  const [, sign, digits, tail] = match
+  const body = digits.replace(/^0+/, "")
+  let lead = (BigInt(body.slice(0, MANTISSA)) + (body[MANTISSA] >= "5" ? 1n : 0n)).toString()
+  let exponent = body.length - 1
+  if (lead.length > MANTISSA) {
+    lead = lead.slice(0, MANTISSA)
+    exponent += 1
+  }
+  const mantissa = `${lead[0]}.${lead.slice(1).replace(/0+$/, "")}`.replace(/\.$/, "")
+  return `≈ ${sign}${mantissa} × 10^${exponent}${tail} · ${body.length} digits`
+}
+
 function readable(text: string): { shown: string; full: boolean } {
+  const huge = scientific(text)
+  if (huge) return { shown: huge, full: false }
   const pair = /^(-?\d+\/\d+)\s+≈\s+(.+)$/.exec(text)
   if (pair && pair[1].length > SHORT_FRACTION) return { shown: `≈ ${pair[2]}`, full: false }
   return clip(text)

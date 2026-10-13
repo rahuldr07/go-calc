@@ -298,10 +298,10 @@ func TestIntegerFunctionsRefuseAUnitCarryingOperand(t *testing.T) {
 	for _, c := range [][2]string{
 		{"gcd(48, 18)", "6"},
 		{"lcm(4, 6)", "12"},
-		{"isprime(7)", "1"},
+		{"isprime(7)", "true"},
 		{"200000 mod 7", "3"},
 		{"gcd(2 lakh, 4)", "4"},
-		{"isprime(2 lakh)", "0"},
+		{"isprime(2 lakh)", "false"},
 		{"(2 lakh) mod 7", "3"},
 	} {
 		if got := format.Text(mustEval(t, env, c[0]), nil); got != c[1] {

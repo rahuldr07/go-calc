@@ -184,6 +184,8 @@ func (e *Env) evalCall(t *parse.Call, p *pass) (value.Value, error) {
 	switch t.Fn {
 	case parse.ListFn:
 		return e.listLiteral(t, p)
+	case parse.IndexFn:
+		return e.indexCall(t, p)
 	case parse.RangeFn:
 		return e.rangeCall(t, p)
 	}
@@ -393,18 +395,39 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		v, err := e.expand(t, args, p)
 		return v, err, true
 	case "floor", "ceil", "round":
-		if len(args) != 1 {
-			return fail(t.Fn + " takes one argument")
+		if len(args) != 1 && len(args) != 2 {
+			return fail(t.Fn + " takes a value and an optional number of decimal places")
 		}
-		if args[0].IsMeasured() {
+		if measured(args...) {
 			return value.Value{}, cannotPropagate(t.P, t.Fn), true
 		}
-		if !args[0].Num.IsExact() {
-			return fail(t.Fn + " needs an exact value")
+		if args[0].IsComplex() {
+			return fail(t.Fn + " needs a real number")
+		}
+		var places int64
+		if len(args) == 2 {
+			n, ok := smallWhole(args[1], -maxRoundPlaces, maxRoundPlaces)
+			if !ok {
+				return fail(t.Fn + " takes a whole number of decimal places from -" + strconv.Itoa(maxRoundPlaces) + " to " + strconv.Itoa(maxRoundPlaces))
+			}
+			places = n
+		}
+		rounded, err := roundNumber(args[0].Num, t.Fn, places, prec)
+		if err != nil {
+			return fail(t.Fn + ": " + err.Error())
 		}
 		out := args[0]
-		out.Num = num.NumExact(roundTo(args[0].Num.Exact(), t.Fn))
+		out.Num = num.NumExact(rounded)
 		return out.WithJet(unc.Jet{}), nil, true
+	case "nCr", "nPr":
+		if len(args) != 2 {
+			return fail(t.Fn + " takes two whole numbers, n and k")
+		}
+		v, err := combinatoric(t.Fn, args[0], args[1])
+		if err != nil {
+			return fail(err.Error())
+		}
+		return v, nil, true
 	case "gcd", "lcm":
 		if measured(args...) {
 			return value.Value{}, cannotPropagate(t.P, t.Fn), true
@@ -442,13 +465,20 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		if !isWhole(args[0]) {
 			return fail("isprime takes a whole number")
 		}
-		if args[0].Num.Exact().Rat().Num().ProbablyPrime(40) {
-			return value.Scalar(num.FromInt(1)), nil, true
+		return value.Boolean(args[0].Num.Exact().Rat().Num().ProbablyPrime(40)), nil, true
+	}
+	if t.Fn == "log" && len(args) == 2 {
+		v, err := logBase(args[0], args[1], prec)
+		if err != nil {
+			return fail("log: " + err.Error())
 		}
-		return value.Scalar(num.FromInt(0)), nil, true
+		return v, nil, true
 	}
 	if f, ok := plainElem[t.Fn]; ok {
 		if len(args) != 1 {
+			if t.Fn == "log" {
+				return fail("log takes a value and an optional base")
+			}
 			return fail(t.Fn + " takes one argument")
 		}
 		x, err := ball()

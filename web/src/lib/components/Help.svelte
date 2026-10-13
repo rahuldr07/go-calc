@@ -33,6 +33,10 @@
         ["2^10000", "a 3011-digit integer, exactly"],
         ["2^0.5", "1.41421356237, proven"],
         ["5!", "120"],
+        ["log(8, 2)", "3, a logarithm in any base"],
+        ["round(pi, 3)", "3.142, rounded and proven"],
+        ["nCr(52, 5)", "2598960 ways to choose"],
+        ["nPr(5, 2)", "20 ordered arrangements"],
         ["5 mod 3", "2"],
         ["0x1F + 0b101", "36"],
       ],
@@ -99,6 +103,8 @@
         ["sum(1..10)", "55"],
         ["mean(1,2)", "1.5, held exactly as 3/2"],
         ["median(1,2,3,4)", "2.5"],
+        ["[10, 20, 30][0]", "10, the first item"],
+        ["[10, 20, 30][-1]", "30, the last item"],
         ["variance(1..4)", "5/3  ≈ 1.66666666667"],
         ["stdev  stdevp", "sample (n-1) and population (n)"],
         ["sum(1 m, 2 s)", "refused: cannot mix length with time"],
@@ -133,6 +139,7 @@
         ["# a heading", "a line starting with # is a comment"],
         ["ans", "the answer on the nearest line above"],
         ["ans * 2", "carry it forward"],
+        ["0.1 + 0.2", "click its answer to see float64 get 0.30000000000000004"],
       ],
     },
     {
@@ -142,8 +149,8 @@
         ["f(x) = x^2", "define a function"],
         ["gcd(12,18)   lcm(4,6)", "6   12"],
         ["root(27,3)", "3"],
-        ["isprime(97)", "1"],
-        ["floor  ceil  round  abs", "rounding and sign"],
+        ["isprime(97)", "true"],
+        ["floor  ceil  round  abs", "rounding and sign; add places: floor(e, 4)"],
       ],
     },
   ]
@@ -245,11 +252,12 @@
     <section class="help-block">
       <h3>Keys</h3>
       <dl class="help-rows wide">
+        <dt>click</dt><dd>an answer to see why it can be trusted, and the working</dd>
         <dt>Ctrl .</dt><dd>switch between notepad and terminal</dd>
         <dt>Shift ?</dt><dd>open this page</dd>
         <dt>Tab</dt><dd>accept a suggestion while typing</dd>
         <dt>↑ ↓</dt><dd>recall earlier lines in the terminal</dd>
-        <dt>Esc</dt><dd>close this page</dd>
+        <dt>Esc</dt><dd>close this page or the explanation</dd>
       </dl>
     </section>
   </div>

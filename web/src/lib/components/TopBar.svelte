@@ -1,5 +1,22 @@
 <script lang="ts">
   import { setAngle, setDigits, sheet } from "../state/sheet.svelte"
+  import { encodeSheet, linkFor } from "../state/share"
+
+  let shareWord = $state("share")
+  let resetShare: ReturnType<typeof setTimeout> | undefined
+
+  async function share() {
+    const hash = await encodeSheet(sheet.source)
+    try {
+      await navigator.clipboard.writeText(linkFor(hash))
+      shareWord = "link copied"
+    } catch {
+      history.replaceState(null, "", hash)
+      shareWord = "link in address bar"
+    }
+    clearTimeout(resetShare)
+    resetShare = setTimeout(() => (shareWord = "share"), 2400)
+  }
   import { setMode, toggleHelp, toggleKeypad, view } from "../state/view.svelte"
   import { current, setTheme } from "../theme/theme.svelte"
   import { THEME_LIST } from "../theme/themes"
@@ -32,6 +49,8 @@
     </span>
     <button class="chip angle" type="button" title="Angle unit for trigonometry" onclick={() => void setAngle(sheet.angle === "rad" ? "deg" : "rad")}>{sheet.angle}</button>
     <button class="chip keypad" type="button" aria-pressed={view.keypad} onclick={toggleKeypad}>keypad</button>
+    <button class="chip share" type="button" title="Copy a link that opens this sheet" disabled={sheet.source.trim() === ""}
+      onclick={() => void share()}>{shareWord}</button>
     <button class="chip help-chip" type="button" aria-pressed={view.help} title="Help (Shift + ?)" onclick={toggleHelp}>help</button>
     <span class="swatches" role="group" aria-label="Theme">
       {#each THEME_LIST as entry (entry.id)}

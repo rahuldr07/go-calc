@@ -15,8 +15,8 @@ export const PAD_GROUPS: Record<string, readonly Key[]> = {
     ["ln", "ln(", "live"], ["log", "log10(", "live"], ["log₂", "log2(", "live"], ["exp", "exp(", "live"],
     ["√", "sqrt(", "live"], ["ⁿ√", "root(", "live"], ["x²", "^2", "live"], ["xʸ", "^", "live"],
     ["1/x", "1/", "live"], ["|x|", "abs(", "live"], ["n!", "!", "live"], ["mod", " mod ", "live"],
-    ["π", "pi", "live"], ["e", "e", "live"], ["i", "i", "live"], ["atan2", "atan2(", "live"],
-    ["EXP", "e", "live"], ["±", " +- ", "live"], ["sinh", "sinh(", "live"], ["atan", "atan(", "live"],
+    ["π", "pi", "live"], ["e", "e", "live"], ["nCr", "nCr(", "live"], ["nPr", "nPr(", "live"],
+    ["i", "i", "live"], ["±", " +- ", "live"], ["logₓ", "log(", "live"], ["atan", "atan(", "live"],
   ],
   calc: [
     ["d/dx", "deriv(", "live"], ["x", "x", "live"], [",", ", ", "live"], ["solve", "solve(", "live"],
@@ -32,7 +32,7 @@ export const PAD_GROUPS: Record<string, readonly Key[]> = {
     ["[", "[", "live"], ["]", "]", "live"], [",", ", ", "live"], ["..", "..", "live"],
     ["sum", "sum(", "live"], ["mean", "mean(", "live"], ["median", "median(", "live"], ["count", "count(", "live"],
     ["min", "min(", "live"], ["max", "max(", "live"], ["stdev", "stdev(", "live"], ["variance", "variance(", "live"],
-    ["stdevp", "stdevp(", "live"], ["product", "product(", "live"], ["±", " +- ", "live"], ["k=2", "expand(ans, k=2)", "live"],
+    ["stdevp", "stdevp(", "live"], ["product", "product(", "live"], ["[0]", "[0]", "live"], ["k=2", "expand(ans, k=2)", "live"],
   ],
   unit: [
     ["in", " in ", "live"], ["m", " m", "live"], ["km", " km", "live"], ["mile", " mile", "live"],
