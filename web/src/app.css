@@ -6,7 +6,7 @@
   --ease: cubic-bezier(.32, .72, 0, 1);
   --spine-w: 28px;
   --status-w: 72px;
-  --answer-w: clamp(180px, 38cqi, 300px);
+  --answer-w: clamp(180px, 34cqi, 280px);
 }
 
 * { box-sizing: border-box; }
@@ -43,6 +43,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 }
 .outer {
   height: 100%;
+  max-width: 920px;
+  margin: 0 auto;
   padding: 6px;
   border-radius: var(--outer-radius);
   background: var(--shell);
