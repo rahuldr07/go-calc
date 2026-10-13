@@ -79,12 +79,23 @@ func init() {
 	}
 	base["litre"] = Unit{"litre", volume, rat("1/1000"), rat("0"), Absolute}
 	base["liter"] = Unit{"liter", volume, rat("1/1000"), rat("0"), Absolute}
+	base["L"] = Unit{"L", volume, rat("1/1000"), rat("0"), Absolute}
 	base["tonne"] = Unit{"tonne", mass, rat("1000"), rat("0"), Absolute}
 	for written, symbol := range spelledOut {
 		u := base[symbol]
 		u.Symbol = written
 		base[written] = u
 	}
+	for _, singular := range pluralised {
+		u := base[singular]
+		u.Symbol = singular + "s"
+		base[u.Symbol] = u
+	}
+}
+
+var pluralised = []string{
+	"metre", "meter", "gram", "second", "minute", "hour", "day", "week", "year",
+	"mile", "litre", "liter", "tonne",
 }
 
 var spelledOut = map[string]string{

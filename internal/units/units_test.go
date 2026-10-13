@@ -227,3 +227,15 @@ func TestALongFormNameIsTheUnitItSpells(t *testing.T) {
 		}
 	}
 }
+
+func TestLitreSymbolAndPluralNames(t *testing.T) {
+	for sym, want := range map[string]string{"L": "1/1000", "mL": "1/1000000", "hours": "3600", "miles": "201168/125", "days": "86400"} {
+		u, ok := Lookup(sym)
+		if !ok {
+			t.Fatalf("%s not found", sym)
+		}
+		if u.Factor.String() != want {
+			t.Errorf("%s factor %s, want %s", sym, u.Factor, want)
+		}
+	}
+}

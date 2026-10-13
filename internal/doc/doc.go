@@ -194,6 +194,9 @@ func (d *Doc) env(i int) *eval.Env {
 	for _, j := range d.lines[i].deps {
 		bind(env, d.lines[j])
 	}
+	if at, ok := d.previousAnswer(i); ok && d.lines[at].err == nil {
+		env.Set(AnswerName, d.lines[at].value)
+	}
 	return env
 }
 

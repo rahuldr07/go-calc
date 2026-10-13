@@ -1,8 +1,27 @@
 <script lang="ts">
+  import { vocabulary } from "../state/vocabulary.svelte"
+
   interface Props {
     close: () => void
+    tryIt: (expression: string) => void
   }
-  const { close }: Props = $props()
+  const { close, tryIt }: Props = $props()
+
+  const DESCRIBED = new Set([
+    "< > <= >= == !=",
+    "solve(eq, x, lo, hi)",
+    "[1, 2, 3]   1..10   1..10..2",
+    "stdev  stdevp",
+    "sqr…",
+    "floor  ceil  round  abs",
+    "gcd(12,18)   lcm(4,6)",
+    "expand(x, k=2)",
+    "# a heading",
+  ])
+
+  function parts(note: string): { code: boolean; text: string }[] {
+    return note.split("`").map((text, i) => ({ code: i % 2 === 1, text }))
+  }
 
   const SECTIONS: { title: string; note?: string; rows: [string, string][] }[] = [
     {
@@ -24,6 +43,8 @@
       rows: [
         ["9.81 m/s^2 * 2 s", "19.62 (m/s^2)·s"],
         ["10 km in mile", "≈ 6.21371192237 mile"],
+        ["6.8 L/100km * 412 km in L", "28.016 L"],
+        ["2 hours + 45 min in min", "165 min"],
         ["1 ft in m", "0.3048 m"],
         ["100 degF in degC", "≈ 37.7777777778 degC"],
         ["2 KiB in B", "2048 B"],
@@ -64,8 +85,8 @@
       title: "Derivatives",
       note: "Symbolic with two arguments, evaluated at a point with three.",
       rows: [
-        ["deriv(x^2, x)", "(2 * x)"],
-        ["deriv(sin(x^2), x)", "(cos((x ^ 2)) * (2 * x))"],
+        ["deriv(x^2, x)", "2 * x"],
+        ["deriv(sin(x^2), x)", "cos(x^2) * 2 * x"],
         ["deriv(x^2, x, 3)", "6"],
         ["deriv(sqrt(x), x, 4)", "0.25"],
       ],
@@ -106,6 +127,15 @@
       ],
     },
     {
+      title: "The sheet",
+      note: "Every line is live. Change one and everything that uses it updates.",
+      rows: [
+        ["# a heading", "a line starting with # is a comment"],
+        ["ans", "the answer on the nearest line above"],
+        ["ans * 2", "carry it forward"],
+      ],
+    },
+    {
       title: "Names and functions",
       rows: [
         ["x = 3", "define a value"],
@@ -118,14 +148,7 @@
     },
   ]
 
-  const FUNCTIONS = [
-    "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
-    "sinh", "cosh", "tanh", "exp", "ln", "log", "log2", "log10",
-    "sqrt", "root", "abs", "floor", "ceil", "round", "mod",
-    "gcd", "lcm", "isprime", "expand", "solve", "deriv",
-    "sum", "product", "mean", "median", "min", "max", "count",
-    "stdev", "stdevp", "variance", "variancep",
-  ]
+  const functions = $derived([...vocabulary.words.functions].sort())
 
   const CONSTANTS: [string, string][] = [
     ["c", "speed of light in vacuum"],
@@ -146,7 +169,7 @@
     ["exact", "held as an exact number or ratio — no approximation anywhere"],
     ["proven", "bounded by a verified interval; every digit shown is guaranteed"],
     ["estimate", "came from measured input, reported with its uncertainty"],
-    ["held", "a definition, not a value"],
+    ["held", "a definition or a symbolic result, not a number"],
     ["error", "refused, with the reason and the column"],
   ]
 
@@ -162,7 +185,7 @@
   <header class="help-head">
     <div>
       <h2>What go-calc can do</h2>
-      <p>Every answer is exact or proven. Press <kbd>Esc</kbd> to close.</p>
+      <p>Every answer is exact or proven. Click an example to add it to your sheet. <kbd>Esc</kbd> closes.</p>
     </div>
     <button type="button" class="chip" onclick={close}>close</button>
   </header>
@@ -171,10 +194,20 @@
     {#each SECTIONS as section (section.title)}
       <section class="help-block">
         <h3>{section.title}</h3>
-        {#if section.note}<p class="help-note">{section.note}</p>{/if}
+        {#if section.note}
+          <p class="help-note">
+            {#each parts(section.note) as part}{#if part.code}<code>{part.text}</code>{:else}{part.text}{/if}{/each}
+          </p>
+        {/if}
         <dl class="help-rows">
           {#each section.rows as [input, result] (input)}
-            <dt>{input}</dt>
+            <dt>
+              {#if DESCRIBED.has(input)}
+                <span class="help-plain">{input}</span>
+              {:else}
+                <button type="button" class="help-try" title="Add to the sheet" onclick={() => tryIt(input)}>{input}</button>
+              {/if}
+            </dt>
             <dd>{result}</dd>
           {/each}
         </dl>
@@ -205,7 +238,7 @@
     <section class="help-block">
       <h3>Functions</h3>
       <ul class="help-funcs">
-        {#each FUNCTIONS as fn (fn)}<li>{fn}</li>{/each}
+        {#each functions as fn (fn)}<li><button type="button" class="help-try" onclick={() => tryIt(`${fn}(`)}>{fn}</button></li>{/each}
       </ul>
     </section>
 
@@ -213,6 +246,9 @@
       <h3>Keys</h3>
       <dl class="help-rows wide">
         <dt>Ctrl .</dt><dd>switch between notepad and terminal</dd>
+        <dt>Shift ?</dt><dd>open this page</dd>
+        <dt>Tab</dt><dd>accept a suggestion while typing</dd>
+        <dt>↑ ↓</dt><dd>recall earlier lines in the terminal</dd>
         <dt>Esc</dt><dd>close this page</dd>
       </dl>
     </section>

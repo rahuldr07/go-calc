@@ -811,3 +811,35 @@ func TestBothReadingsAfterADivisionAreAnnounced(t *testing.T) {
 		}
 	}
 }
+
+func TestAnsIsTheNearestAnswerAbove(t *testing.T) {
+	d := New()
+	got := numbers(d.SetLines([]string{"ans", "2 + 3", "# skip", "", "ans * 2", "1/0", "ans"}))
+	want := []string{
+		"error: 1:1: unknown name ans",
+		"5",
+		"",
+		"",
+		"10",
+		"error: 6:2: division by zero",
+		"error: uses ans, which failed on line 6",
+	}
+	for i := range want {
+		if i == 2 || i == 3 {
+			continue
+		}
+		if got[i] != want[i] {
+			t.Errorf("line %d = %q, want %q", i+1, got[i], want[i])
+		}
+	}
+	if got := numbers(d.Edit(1, "4")); got[len(got)-1] != "8" {
+		t.Errorf("editing the answer above did not reach ans: %v", got)
+	}
+}
+
+func TestADefinedAnsWins(t *testing.T) {
+	got := numbers(New().SetLines([]string{"ans = 7", "1 + 1", "ans"}))
+	if got[2] != "7" {
+		t.Errorf("ans = %q, want the defined 7", got[2])
+	}
+}

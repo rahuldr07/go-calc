@@ -25,18 +25,19 @@
   </div>
 
   <div class="tools">
-    <span class="chip">
+    <span class="chip digits" title="Significant digits shown">
       <button class="step" type="button" aria-label="Fewer digits" onclick={() => void setDigits(sheet.digits - 1)}>−</button>
       <b>{sheet.digits}</b> digits
       <button class="step" type="button" aria-label="More digits" onclick={() => void setDigits(sheet.digits + 1)}>+</button>
     </span>
-    <button class="chip" type="button" onclick={() => void setAngle(sheet.angle === "rad" ? "deg" : "rad")}>{sheet.angle}</button>
-    <button class="chip" type="button" aria-pressed={view.keypad} onclick={toggleKeypad}>keypad</button>
-    <button class="chip" type="button" aria-pressed={view.help} onclick={toggleHelp}>help</button>
-    <span class="chip theme">
+    <button class="chip angle" type="button" title="Angle unit for trigonometry" onclick={() => void setAngle(sheet.angle === "rad" ? "deg" : "rad")}>{sheet.angle}</button>
+    <button class="chip keypad" type="button" aria-pressed={view.keypad} onclick={toggleKeypad}>keypad</button>
+    <button class="chip help-chip" type="button" aria-pressed={view.help} title="Help (Shift + ?)" onclick={toggleHelp}>help</button>
+    <span class="swatches" role="group" aria-label="Theme">
       {#each THEME_LIST as entry (entry.id)}
-        <button type="button" aria-pressed={current().id === entry.id} title={entry.note} onclick={() => setTheme(entry.id)}
-          >{current().id === entry.id ? entry.label : entry.label.slice(0, 1)}</button>
+        <button type="button" class="swatch" aria-pressed={current().id === entry.id} aria-label={`${entry.label} theme`}
+          title={`${entry.label} — ${entry.note}`} style={`--a:${entry.colors.paper};--b:${entry.colors.accent}`}
+          onclick={() => setTheme(entry.id)}></button>
       {/each}
     </span>
   </div>

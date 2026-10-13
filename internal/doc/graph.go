@@ -139,6 +139,9 @@ func (d *Doc) depsOf(from int) ([]int, []string) {
 		}
 	}
 	expand(d.lines[from].refs)
+	if at, ok := d.previousAnswer(from); ok {
+		reached[at] = true
+	}
 	for _, name := range d.lines[from].units {
 		if at, ok := d.resolve(name, from); ok && at < from {
 			expand([]string{name})
@@ -158,6 +161,31 @@ func (d *Doc) depsOf(from int) ([]int, []string) {
 	}
 	sortInts(deps)
 	return deps, fwd
+}
+
+const AnswerName = "ans"
+
+func (d *Doc) previousAnswer(from int) (int, bool) {
+	if _, defined := d.defs[AnswerName]; defined || !refersTo(d.lines[from].refs, AnswerName) {
+		return 0, false
+	}
+	for j := from - 1; j >= 0; j-- {
+		e := d.lines[j]
+		if Blank(e.src) || len(e.params) > 0 || len(e.corr) == 2 {
+			continue
+		}
+		return j, true
+	}
+	return 0, false
+}
+
+func refersTo(names []string, want string) bool {
+	for _, n := range names {
+		if n == want {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *Doc) schedule() []int {
@@ -228,7 +256,7 @@ func (e *entry) label(n int) string {
 	case len(e.corr) == 2:
 		return "corr(" + strings.Join(e.corr, ", ") + ")"
 	}
-	return "the expression on line " + strconv.Itoa(n)
+	return AnswerName
 }
 
 func usedBeforeDefined(names []string) error {

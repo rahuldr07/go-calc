@@ -5,6 +5,7 @@
   import Terminal from "./lib/components/Terminal.svelte"
   import TopBar from "./lib/components/TopBar.svelte"
   import { apply, theme } from "./lib/theme/theme.svelte"
+  import { setSource, sheet } from "./lib/state/sheet.svelte"
   import { setMode, toggleHelp, view } from "./lib/state/view.svelte"
 
   let sheetPane: Sheet | undefined = $state()
@@ -13,6 +14,13 @@
     void theme.id
     apply()
   })
+
+  function tryIt(expression: string) {
+    const kept = sheet.source.replace(/\n+$/, "")
+    void setSource(kept === "" ? expression : `${kept}\n${expression}`)
+    setMode("notepad")
+    toggleHelp()
+  }
 
   function shortcuts(event: KeyboardEvent) {
     if ((event.metaKey || event.ctrlKey) && event.key === ".") {
@@ -46,5 +54,5 @@
   </div>
   </div>
  </div>
- {#if view.help}<Help close={toggleHelp} />{/if}
+ {#if view.help}<Help close={toggleHelp} {tryIt} />{/if}
 </div>

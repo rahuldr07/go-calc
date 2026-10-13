@@ -5,41 +5,40 @@ export const GROUP_NAMES = [
   ["sci", "sci"],
   ["calc", "calculus"],
   ["alg", "algebra"],
-  ["mat", "matrix"],
   ["stat", "stats"],
-  ["trust", "trust"],
+  ["unit", "units"],
 ] as const
 
 export const PAD_GROUPS: Record<string, readonly Key[]> = {
   sci: [
     ["sin", "sin(", "live"], ["cos", "cos(", "live"], ["tan", "tan(", "live"], ["asin", "asin(", "live"],
-    ["ln", "log(", "live"], ["log", "log10(", "live"], ["log₂", "log2(", "live"], ["exp", "exp(", "live"],
+    ["ln", "ln(", "live"], ["log", "log10(", "live"], ["log₂", "log2(", "live"], ["exp", "exp(", "live"],
     ["√", "sqrt(", "live"], ["ⁿ√", "root(", "live"], ["x²", "^2", "live"], ["xʸ", "^", "live"],
     ["1/x", "1/", "live"], ["|x|", "abs(", "live"], ["n!", "!", "live"], ["mod", " mod ", "live"],
-    ["π", "pi", "live"], ["e", "e", "live"], ["nCr", "binomial(", "held"], ["nPr", "perm(", "held"],
-    ["EXP", "e", "live"], ["±", "±", "live"], ["sinh", "sinh(", "live"], ["atan", "atan(", "live"],
+    ["π", "pi", "live"], ["e", "e", "live"], ["i", "i", "live"], ["atan2", "atan2(", "live"],
+    ["EXP", "e", "live"], ["±", " +- ", "live"], ["sinh", "sinh(", "live"], ["atan", "atan(", "live"],
   ],
   calc: [
-    ["d/dx", "diff(", "held"], ["d²/dx²", "diff2(", "held"], ["∂/∂x", "pdiff(", "held"], ["∇", "grad(", "held"],
-    ["∫ dx", "integrate(", "held"], ["∫ᵇₐ", "integrate(", "held"], ["lim", "limit(", "held"], ["series", "series(", "held"],
-    ["Σ", "sum(", "held"], ["Π", "prod(", "held"], ["taylor", "taylor(", "held"], ["ode", "ode(", "held"],
+    ["d/dx", "deriv(", "live"], ["x", "x", "live"], [",", ", ", "live"], ["solve", "solve(", "live"],
+    ["Σ", "sum(", "live"], ["Π", "product(", "live"], ["∫ᵇₐ", "integrate(", "held"], ["lim", "limit(", "held"],
   ],
   alg: [
-    ["solve", "solve(", "held"], ["roots", "roots(", "held"], ["factor", "factor(", "held"], ["expand", "expand(", "live"],
-    ["simplify", "simplify(", "held"], ["collect", "collect(", "held"], ["apart", "apart(", "held"], ["subs", "subs(", "held"],
-    ["gcd", "gcd(", "live"], ["lcm", "lcm(", "live"], ["isprime", "isprime(", "live"], ["divmod", "divmod(", "held"],
-  ],
-  mat: [
-    ["[ ]", "[", "held"], ["det", "det(", "held"], ["inv", "inv(", "held"], ["Aᵀ", "transpose(", "held"],
-    ["rank", "rank(", "held"], ["trace", "tr(", "held"], ["eig", "eigen(", "held"], ["A\\b", "lsolve(", "held"],
+    ["solve", "solve(", "live"], ["x", "x", "live"], ["=", " = ", "live"], [",", ", ", "live"],
+    ["<", " < ", "live"], [">", " > ", "live"], ["≤", " <= ", "live"], ["≥", " >= ", "live"],
+    ["==", " == ", "live"], ["≠", " != ", "live"], ["gcd", "gcd(", "live"], ["lcm", "lcm(", "live"],
+    ["isprime", "isprime(", "live"], ["floor", "floor(", "live"], ["ceil", "ceil(", "live"], ["round", "round(", "live"],
   ],
   stat: [
-    ["mean", "mean(", "held"], ["median", "median(", "held"], ["sd", "sd(", "held"], ["var", "var(", "held"],
-    ["sum", "total(", "held"], ["norm", "normal(", "held"], ["fit", "fit(", "held"], ["corr", "corr(", "held"],
+    ["[", "[", "live"], ["]", "]", "live"], [",", ", ", "live"], ["..", "..", "live"],
+    ["sum", "sum(", "live"], ["mean", "mean(", "live"], ["median", "median(", "live"], ["count", "count(", "live"],
+    ["min", "min(", "live"], ["max", "max(", "live"], ["stdev", "stdev(", "live"], ["variance", "variance(", "live"],
+    ["stdevp", "stdevp(", "live"], ["product", "product(", "live"], ["±", " +- ", "live"], ["k=2", "expand(ans, k=2)", "live"],
   ],
-  trust: [
-    ["±", "±", "live"], ["corr", "corr(", "held"], ["k=2", "expand(ans, k=2)", "live"], ["digits", "digits ", "held"],
-    ["trace", "trace ", "held"], ["why", "why", "held"], ["plot", "plot(", "held"], ["to", " to ", "live"],
+  unit: [
+    ["in", " in ", "live"], ["m", " m", "live"], ["km", " km", "live"], ["mile", " mile", "live"],
+    ["kg", " kg", "live"], ["lb", " lb", "live"], ["s", " s", "live"], ["h", " h", "live"],
+    ["L", " L", "live"], ["degC", " degC", "live"], ["degF", " degF", "live"], ["J", " J", "live"],
+    ["c", "c", "live"], ["g0", "g0", "live"], ["N_A", "N_A", "live"], ["k_B", "k_B", "live"],
   ],
 }
 
@@ -49,7 +48,7 @@ export const CORE: readonly Key[] = [
   ["4", "4", "live"], ["5", "5", "live"], ["6", "6", "live"], ["×", "*", "live"],
   ["1", "1", "live"], ["2", "2", "live"], ["3", "3", "live"], ["−", "-", "live"],
   ["0", "0", "live"], [".", ".", "live"], ["%", "%", "live"], ["+", "+", "live"],
-  ["ans", "ans", "live"], ["unit", " m", "live"], ["const", "pi", "live"], ["=", "EQ", "act"],
+  ["ans", "ans", "live"], ["in", " in ", "live"], ["^", "^", "live"], ["=", "EQ", "act"],
 ]
 
-export const HELD_NOTE = "that engine is not built yet — phase 1 is the trust core"
+export const HELD_NOTE = "not built yet"

@@ -3,13 +3,21 @@
   import { EditorState } from "@codemirror/state"
   import { EditorView, keymap, placeholder } from "@codemirror/view"
   import { onMount } from "svelte"
-  import { completionKeymap } from "@codemirror/autocomplete"
+  import { acceptCompletion, completionKeymap } from "@codemirror/autocomplete"
   import { completion } from "../editor/complete"
   import { vocabulary } from "../state/vocabulary.svelte"
   import { caretLine, focused, lineField, selectedField, setFocused, setLines, setSelected, valueField } from "../editor/notepad"
   import { select, setSource, sheet } from "../state/sheet.svelte"
 
   let host: HTMLDivElement
+
+  const tally = $derived.by(() => {
+    const counted = sheet.lines.filter((l) => l.text !== "" || l.status === "error")
+    const refused = counted.filter((l) => l.status === "error").length
+    if (counted.length === 0) return ""
+    const answers = `${counted.length} ${counted.length === 1 ? "line" : "lines"}`
+    return refused === 0 ? answers : `${answers} · ${refused} refused`
+  })
   let editor: EditorView | undefined = $state()
 
   export function insert(text: string) {
@@ -48,7 +56,7 @@
         doc: sheet.source,
         extensions: [
           history(),
-          keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap]),
+          keymap.of([{ key: "Tab", run: acceptCompletion }, ...completionKeymap, ...defaultKeymap, ...historyKeymap]),
           completion(() => vocabulary.words),
           caretLine,
           focused,
@@ -72,6 +80,16 @@
   })
 
   $effect(() => {
+    const source = sheet.source
+    if (!editor || editor.state.doc.toString() === source) return
+    editor.dispatch({
+      changes: { from: 0, to: editor.state.doc.length, insert: source },
+      selection: { anchor: source.length },
+      scrollIntoView: true,
+    })
+  })
+
+  $effect(() => {
     const lines = sheet.lines
     editor?.dispatch({ effects: setLines.of(lines) })
   })
@@ -85,6 +103,7 @@
 <div class="sheet-head">
   <h2>Lab notes</h2>
   <span class="pin">{sheet.selected === null ? "" : `line ${sheet.selected + 1} selected`}</span>
+  <span class="tally">{tally}</span>
 </div>
 <div class="colheads" aria-hidden="true">
   <span></span><span>expression</span><span>result</span><span>trust</span>

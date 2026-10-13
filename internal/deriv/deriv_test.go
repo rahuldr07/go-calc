@@ -446,3 +446,27 @@ func TestPositionsAreCarriedOver(t *testing.T) {
 		t.Errorf("the derivative has position %v, want one from the source", got)
 	}
 }
+
+func TestPrettyDropsOnlyRedundantParentheses(t *testing.T) {
+	cases := map[string]string{
+		"sin(x^2)":    "cos(x^2) * 2 * x",
+		"x^3":         "3 * x^2",
+		"1/x":         "-1 / x^2",
+		"(x+1)*(x-1)": "x - 1 + x + 1",
+		"exp(-x)":     "-exp(-x)",
+		"x/(x+1)":     "(x + 1 - x) / (x + 1)^2",
+	}
+	for src, want := range cases {
+		node, _, err := parse.Parse(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := deriv.Differentiate(node, "x")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if text := deriv.Pretty(deriv.Simplify(got)); text != want {
+			t.Errorf("deriv %s = %s, want %s", src, text, want)
+		}
+	}
+}

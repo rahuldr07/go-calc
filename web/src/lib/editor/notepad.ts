@@ -16,9 +16,21 @@ const WORD: Record<Status, string> = {
   error: "error",
 }
 
+const SHORT_FRACTION = 9
+
 function clip(text: string): { shown: string; full: boolean } {
   if (text.length <= VALUE_CHARS) return { shown: text, full: true }
   return { shown: `${text.slice(0, VALUE_CHARS - 1)}…`, full: false }
+}
+
+export function located(message: string): string {
+  return message.replace(/^\d+:\d+:\s*/, "")
+}
+
+function readable(text: string): { shown: string; full: boolean } {
+  const pair = /^(-?\d+\/\d+)\s+≈\s+(.+)$/.exec(text)
+  if (pair && pair[1].length > SHORT_FRACTION) return { shown: `≈ ${pair[2]}`, full: false }
+  return clip(text)
 }
 
 class AnswerWidget extends WidgetType {
@@ -60,12 +72,13 @@ class AnswerWidget extends WidgetType {
     result.className = refused ? "result refused" : "result"
     const value = document.createElement("span")
     value.className = "value"
-    const body = refused ? (this.line.error ?? "refused") : this.line.text
-    const shown = clip(body)
+    const body = refused ? located(this.line.error ?? "refused") : this.line.text
+    const shown = refused ? { shown: body, full: true } : readable(body)
     value.textContent = refused && this.editing ? "" : shown.shown
+    if (refused) result.title = body
     if (!shown.full) {
       result.classList.add("clipped")
-      result.title = `${body.length} characters — open the line to read it in full`
+      result.title = body
     }
     result.append(value)
 
@@ -121,11 +134,17 @@ function annotations(line: Line) {
     items.push({ kind: "note", label: "read as", text: note.text.replace(/^read as /, "") })
   }
   for (const qualifier of line.qualifiers ?? []) {
-    items.push({ kind: "qual", label: "digits", text: qualifier })
+    items.push({ kind: "qual", label: qualifierLabel(qualifier), text: qualifier })
   }
   if (line.warning) items.push({ kind: "warn", label: "float64", text: line.warning })
   if (line.stopped) items.push({ kind: "qual", label: "stopped", text: line.stopped })
   return items
+}
+
+function qualifierLabel(text: string): string {
+  if (/formula|solution|bisection|searched/.test(text)) return "method"
+  if (/^\d+ values$/.test(text)) return "list"
+  return "note"
 }
 
 export const focused = StateField.define<boolean>({
@@ -160,24 +179,32 @@ export const lineField = StateField.define<readonly Line[]>({
   },
 })
 
+function kindOf(text: string): string {
+  const trimmed = text.trim()
+  if (trimmed === "") return "blank"
+  if (trimmed.startsWith("#")) return "comment"
+  return ""
+}
+
 function build(
   lines: readonly Line[],
   caret: number,
   editable: boolean,
   selected: number | null,
-  doc: { lines: number; line(n: number): { from: number; to: number } },
+  doc: { lines: number; line(n: number): { from: number; to: number; text: string } },
 ) {
   const marks = []
   for (let n = 0; n < doc.lines; n++) {
     const at = doc.line(n + 1)
     const attributes: Record<string, string> = { "data-n": String(n + 1) }
-    if (n === selected) attributes.class = "sel"
+    const kinds = [kindOf(at.text), n === selected ? "sel" : ""].filter(Boolean)
+    if (kinds.length > 0) attributes.class = kinds.join(" ")
     marks.push(Decoration.line({ attributes }).range(at.from))
   }
   for (const line of lines) {
     if (line.n < 0 || line.n >= doc.lines) continue
     const at = doc.line(line.n + 1)
-    if (at.from === at.to) continue
+    if (at.from === at.to || kindOf(at.text) !== "") continue
     const editing = editable && line.n === caret
     marks.push(Decoration.widget({ widget: new AnswerWidget(line, editing), side: 1 }).range(at.to))
     if (editing) continue
