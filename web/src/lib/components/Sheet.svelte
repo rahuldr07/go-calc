@@ -50,8 +50,11 @@
     select(sheet.selected === at ? null : at)
     if (!editor || at >= editor.state.doc.lines) return
     const line = editor.state.doc.line(at + 1)
-    editor.dispatch({ selection: { anchor: line.to }, scrollIntoView: true })
+    editor.dispatch({ selection: { anchor: line.to } })
     editor.focus()
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => editor?.dispatch({ effects: EditorView.scrollIntoView(line.from, { y: "nearest", yMargin: 24 }) })),
+    )
   }
 
   onMount(() => {

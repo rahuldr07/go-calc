@@ -103,7 +103,7 @@ class AnswerWidget extends WidgetType {
     result.append(value)
 
     const status = document.createElement("span")
-    status.className = refused ? "status error" : "status"
+    status.className = `status ${this.line.status}`
     status.textContent = refused && this.editing ? "" : WORD[this.line.status]
 
     frag.append(spine, result, status)
