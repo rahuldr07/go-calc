@@ -114,6 +114,10 @@ export function select(n: number | null) {
   sheet.selected = n
 }
 
+export function evaluateAside(lines: string[]) {
+  return engine.evaluateAside({ lines, digits: sheet.digits, angle: sheet.angle })
+}
+
 export function workingFor(input: string, line: Line) {
   return engine.steps(input, line)
 }

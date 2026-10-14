@@ -10,6 +10,8 @@ export function adopt(raw: string) {
       functions: read.functions ?? [],
       constants: read.constants ?? {},
       units: read.units ?? [],
+      docs: read.docs ?? {},
+      categories: read.categories ?? [],
     }
   } catch {
     return

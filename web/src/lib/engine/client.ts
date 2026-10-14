@@ -27,6 +27,7 @@ export class Engine {
   private readonly rawWaiting = new Map<number, (answer: string) => void>()
   private issued = 0
   private newest = 0
+  private readonly aside = new Set<number>()
 
   constructor(options: { url?: string; base?: string; worker?: Worker } = {}) {
     this.worker = options.worker ?? new Worker(new URL("./worker.ts", import.meta.url))
@@ -47,6 +48,10 @@ export class Engine {
 
   evaluate(request: Request): Promise<Sheet> {
     return this.dispatch({ kind: "evaluate", request: JSON.stringify(request) }, true)
+  }
+
+  evaluateAside(request: Request): Promise<Sheet> {
+    return this.dispatch({ kind: "evaluate", request: JSON.stringify(request) }, false)
   }
 
   vocabulary(): Promise<string> {
@@ -81,6 +86,7 @@ export class Engine {
   ): Promise<Sheet> {
     const id = ++this.issued
     if (ordered) this.newest = id
+    else this.aside.add(id)
     return new Promise<Sheet>((resolve, reject) => {
       this.waiting.set(id, { resolve, reject })
       this.worker.postMessage({ id, ...message })
@@ -97,9 +103,10 @@ export class Engine {
     const pending = this.waiting.get(reply.id)
     if (!pending) return
     this.waiting.delete(reply.id)
+    const sideRequest = this.aside.delete(reply.id)
     if (!reply.ok) return pending.reject(new Error(reply.error ?? "the engine failed"))
     if (reply.answer === undefined) return pending.resolve({ schema: "", lines: [] })
-    if (reply.id < this.newest) return pending.reject(new Error(SUPERSEDED))
+    if (!sideRequest && reply.id < this.newest) return pending.reject(new Error(SUPERSEDED))
     try {
       pending.resolve(JSON.parse(reply.answer) as Sheet)
     } catch {

@@ -1,13 +1,22 @@
 import { autocompletion, type Completion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete"
 import type { Extension } from "@codemirror/state"
 
+export interface FunctionDoc {
+  signature: string
+  summary: string
+  category: string
+  example: string
+}
+
 export interface Vocabulary {
   functions: string[]
   constants: Record<string, string>
   units: string[]
+  docs: Record<string, FunctionDoc>
+  categories: string[]
 }
 
-export const EMPTY_VOCABULARY: Vocabulary = { functions: [], constants: {}, units: [] }
+export const EMPTY_VOCABULARY: Vocabulary = { functions: [], constants: {}, units: [], docs: {}, categories: [] }
 
 function distance(a: string, b: string): number {
   const rows = a.length + 1
@@ -45,7 +54,7 @@ function score(word: string, candidate: string): number | null {
 function entries(vocab: Vocabulary): Completion[] {
   const out: Completion[] = []
   for (const name of vocab.functions) {
-    out.push({ label: name, type: "function", apply: `${name}(`, detail: "function" })
+    out.push({ label: name, type: "function", apply: `${name}(`, detail: vocab.docs[name]?.signature ?? "function", info: vocab.docs[name]?.summary })
   }
   for (const [symbol, meaning] of Object.entries(vocab.constants)) {
     out.push({ label: symbol, type: "constant", detail: meaning })

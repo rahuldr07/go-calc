@@ -11,16 +11,20 @@ import (
 )
 
 type vocabularyOut struct {
-	Functions []string          `json:"functions"`
-	Constants map[string]string `json:"constants"`
-	Units     []string          `json:"units"`
+	Functions  []string                    `json:"functions"`
+	Constants  map[string]string           `json:"constants"`
+	Units      []string                    `json:"units"`
+	Docs       map[string]eval.FunctionDoc `json:"docs"`
+	Categories []string                    `json:"categories"`
 }
 
 func vocabulary(_ js.Value, _ []js.Value) any {
 	out := vocabularyOut{
-		Functions: eval.Functions(),
-		Constants: map[string]string{},
-		Units:     eval.Units(),
+		Functions:  eval.Functions(),
+		Constants:  map[string]string{},
+		Units:      eval.Units(),
+		Docs:       eval.Docs(),
+		Categories: eval.CategoryOrder,
 	}
 	for _, symbol := range eval.Constants() {
 		if c, ok := consts.Lookup(symbol); ok && c.Name != "" {
