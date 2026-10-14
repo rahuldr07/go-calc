@@ -39,8 +39,9 @@ type Bound struct {
 }
 
 type Step struct {
-	N      int      `json:"n"`
-	Expr   string   `json:"expr"`
+	N       int      `json:"n"`
+	Explain string   `json:"explain,omitempty"`
+	Expr    string   `json:"expr"`
 	From   []string `json:"from,omitempty"`
 	Result string   `json:"result"`
 	Rule   string   `json:"rule,omitempty"`
@@ -57,6 +58,7 @@ type Derivation struct {
 	Bound      string   `json:"bound,omitempty"`
 	Qualifiers []string `json:"qualifiers,omitempty"`
 	Note       string   `json:"note,omitempty"`
+	Summary    []string `json:"summary,omitempty"`
 	Truncated  bool     `json:"truncated,omitempty"`
 	Error      string   `json:"error,omitempty"`
 }
@@ -106,6 +108,7 @@ func Derive(input string, line Line) Derivation {
 	w := newWalker(input, line)
 	w.visit(line.Trace[0].ID, 0)
 	out.Steps, out.Truncated = w.steps, w.truncated
+	out.Summary = summaryOf(line, w)
 	switch {
 	case w.truncated:
 		out.Note = cutOff

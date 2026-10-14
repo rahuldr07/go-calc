@@ -41,12 +41,17 @@ func stepsText(d steps.Derivation) string {
 		b.WriteString("\n")
 	}
 	for _, s := range d.Steps {
-		b.WriteString(strconv.Itoa(s.N) + ". " + s.Expr + "\n")
-		if len(s.From) > 0 {
-			b.WriteString(stepIndent + "uses " + joinAnd(s.From) + "\n")
+		if s.Explain != "" {
+			b.WriteString(strconv.Itoa(s.N) + ". " + s.Explain + "\n")
+			b.WriteString(stepIndent + s.Expr + " = " + s.Result + "\n")
+		} else {
+			b.WriteString(strconv.Itoa(s.N) + ". " + s.Expr + "\n")
+			if len(s.From) > 0 {
+				b.WriteString(stepIndent + "uses " + joinAnd(s.From) + "\n")
+			}
+			b.WriteString(stepIndent + "= " + s.Result + "\n")
 		}
-		b.WriteString(stepIndent + "= " + s.Result + "\n")
-		if s.Rule != "" {
+		if s.Rule != "" && !(s.Explain != "" && (strings.HasPrefix(s.Rule, "unit:") || strings.HasPrefix(s.Rule, "conversion"))) {
 			b.WriteString(stepIndent + "rule: " + s.Rule + "\n")
 		}
 		if s.Source != "" {
@@ -55,6 +60,9 @@ func stepsText(d steps.Derivation) string {
 	}
 	if d.Note != "" {
 		b.WriteString("\n" + d.Note + "\n")
+	}
+	for _, line := range d.Summary {
+		b.WriteString("\n" + line + "\n")
 	}
 	b.WriteString("\nanswer: " + strings.ReplaceAll(d.Answer, "\n", "\n"+stepIndent) + "\n")
 	b.WriteString(trustLine(d))

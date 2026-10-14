@@ -85,9 +85,16 @@ func (w *walker) visit(id prov.NodeID, depth int) {
 func (w *walker) stepOf(n prov.NodeOut) (Step, bool) {
 	switch n.Kind {
 	case kindConstant:
-		return Step{Expr: n.Label, Result: n.Value, Source: n.Detail}, true
-	case kindUnit, kindFunction, "operation":
-		return Step{Expr: w.expression(n), From: w.operands(n), Result: w.result(n), Rule: w.rule(n)}, true
+		return Step{Explain: w.explain(n), Expr: n.Label, Result: n.Value, Source: n.Detail}, true
+	case kindVariable:
+		return Step{Explain: w.explain(n), Expr: n.Label, Result: n.Value}, true
+	case kindUnit:
+		if len(n.Children) == 0 {
+			return Step{}, false
+		}
+		return Step{Explain: w.explain(n), Expr: w.expression(n), From: w.operands(n), Result: w.result(n), Rule: w.rule(n)}, true
+	case kindFunction, kindOperation:
+		return Step{Explain: w.explain(n), Expr: w.expression(n), From: w.operands(n), Result: w.result(n), Rule: w.rule(n)}, true
 	}
 	return Step{}, false
 }

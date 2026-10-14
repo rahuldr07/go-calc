@@ -97,6 +97,7 @@ export interface Request {
 
 export interface Step {
   n: number
+  explain?: string
   expr: string
   from?: string[]
   result: string
@@ -112,6 +113,7 @@ export interface Derivation {
   digits?: number
   bound?: string
   note?: string
+  summary?: string[]
   truncated?: boolean
   error?: string
 }

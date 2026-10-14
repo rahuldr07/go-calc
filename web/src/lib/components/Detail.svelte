@@ -109,17 +109,27 @@
         <ol class="detail-steps">
           {#each working.steps as step (step.n)}
             <li>
-              <code>{step.expr}</code>
-              <span class="eq">=</span>
-              <b>{step.result}</b>
-              {#if step.rule}<span class="detail-aside">{step.rule}</span>{/if}
-              {#if step.source}<span class="detail-aside">{step.source}</span>{/if}
+              {#if step.explain}<p class="step-explain">{step.explain}</p>{/if}
+              <p class="step-maths">
+                <code>{step.expr}</code>
+                <span class="eq">=</span>
+                <b>{step.result}</b>
+              </p>
+              {#if step.rule && !step.rule.startsWith("unit:") && !step.rule.startsWith("conversion")}
+                <p class="step-rule">{step.rule}</p>
+              {/if}
+              {#if step.source}<p class="step-rule">{step.source}</p>{/if}
             </li>
           {/each}
         </ol>
         {#if working.truncated}<p class="detail-aside">{working.note}</p>{/if}
       {:else if working?.note}
         <p class="detail-aside">{working.note}</p>
+      {/if}
+
+      {#if working?.summary?.length}
+        <h4>Why you can trust this</h4>
+        {#each working.summary as line}<p class="detail-summary">{line}</p>{/each}
       {/if}
     </div>
   </section>

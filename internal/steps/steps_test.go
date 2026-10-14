@@ -312,3 +312,49 @@ func TestFromLineWorksFromASheetLine(t *testing.T) {
 		t.Error("a malformed line was accepted")
 	}
 }
+
+func TestEveryStepExplainsItselfInWords(t *testing.T) {
+	for input, want := range map[string][]string{
+		"(1+2)*(3+4)":   {"Add 1 and 2", "Add 3 and 4", "Multiply 3 by 7"},
+		"sqrt(16) + 3!": {"Take the square root of 16: it is 4, because 4 × 4 = 16", "3! = 3 × 2 × 1 = 6", "Add 4 and 6"},
+		"18% of 500":    {"18% means 18 ÷ 100", "Take 0.18 of 500, which means 0.18 × 500"},
+		"100 km / 2 h":  {"Read 100 km. In SI base units that is 100000 m, because 1 km = 1000 m", "Divide 100 km by 2", "Express 50000 m per h (1 h = 3600 s)"},
+		"10 km in mile": {"Read 10 km. In SI base units that is 10000 m, because 1 km = 1000 m", "Convert the result to mile, using 1 mile = 201168/125 m"},
+		"mean(1..10)":   {"List the whole numbers from 1 to 10", "Average 1..10: add the values and divide by how many there are"},
+		"2^0.5":         {"Raise 2 to the power 1/2, which is its square root"},
+		"sin(pi/6)":     {"Use the constant pi = 3.14159265359", "Divide 3.14159265359 by 6", "Take the sine of 0.523598775598"},
+	} {
+		d := derive(t, input)
+		if len(d.Steps) != len(want) {
+			t.Errorf("%s: %d steps, want %d: %+v", input, len(d.Steps), len(want), d.Steps)
+			continue
+		}
+		for i, w := range want {
+			if d.Steps[i].Explain != w {
+				t.Errorf("%s step %d explains %q, want %q", input, i+1, d.Steps[i].Explain, w)
+			}
+		}
+	}
+}
+
+func TestTheSummarySaysWhyTheAnswerCanBeTrusted(t *testing.T) {
+	for input, want := range map[string]string{
+		"1/3 + 1/6":                          "exact arithmetic",
+		"2^0.5":                              "every digit shown is certain",
+		"(12.4 +- 0.2 cm) * (7.1 +- 0.1 cm)": "standard uncertainty, not a guaranteed bound",
+		"10 km in mile":                      "turns the answer back into the unit you asked for",
+	} {
+		d := derive(t, input)
+		if !strings.Contains(strings.Join(d.Summary, " "), want) {
+			t.Errorf("%s summary %q does not mention %q", input, d.Summary, want)
+		}
+	}
+}
+
+func TestABareUnitIsNotItsOwnStep(t *testing.T) {
+	for _, s := range derive(t, "100 km / 2 h").Steps {
+		if strings.Contains(s.Expr, "(…)") {
+			t.Errorf("step %d renders a bare unit as a call: %q", s.N, s.Expr)
+		}
+	}
+}

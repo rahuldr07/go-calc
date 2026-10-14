@@ -65,6 +65,9 @@ func (r *renderer) children(n prov.NodeOut, depth int) []child {
 }
 
 func (r *renderer) unit(n prov.NodeOut, kids []child) (string, int) {
+	if len(kids) == 0 {
+		return n.Label, precAtom
+	}
 	if len(kids) != 1 {
 		return call(n.Label, kids), precAtom
 	}
@@ -98,8 +101,13 @@ func binary(op string, left, right child) (string, int) {
 	if !known {
 		leftNeeds, rightNeeds = p+1, p+1
 	}
+	if wordOperators[op] {
+		return wrap(left, leftNeeds) + " " + op + " " + wrap(right, rightNeeds), p
+	}
 	return wrap(left, leftNeeds) + op + wrap(right, rightNeeds), p
 }
+
+var wordOperators = map[string]bool{"of": true, "mod": true}
 
 func wrap(c child, needs int) string {
 	if c.prec < needs {
