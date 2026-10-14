@@ -210,10 +210,11 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .cm-editor { height: 100%; background: transparent; }
 .cm-editor.cm-focused { outline: none; }
 .cm-editor .cm-scroller { font-family: var(--mono); overflow: auto; }
-.cm-content { padding: 0 0 36vh; caret-color: var(--accent); }
+.cm-content { padding: 0 0 36vh; }
+.cm-editor .cm-content { caret-color: var(--accent); }
 .cm-gutters { display: none; }
-.cm-cursor { border-left-color: var(--accent); border-left-width: 2px; }
-.cm-selectionBackground, .cm-editor ::selection { background: var(--accent-soft) !important; }
+.cm-editor .cm-cursor, .cm-editor .cm-dropCursor { border-left: 2px solid var(--accent); margin-left: -1px; }
+.cm-editor .cm-selectionBackground, .cm-editor.cm-focused .cm-selectionBackground, .cm-editor ::selection { background: var(--accent-soft) !important; }
 
 .cm-editor .cm-line {
   position: relative;

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { defaultKeymap, history, historyKeymap } from "@codemirror/commands"
   import { EditorState } from "@codemirror/state"
-  import { EditorView, keymap, placeholder } from "@codemirror/view"
+  import { EditorView, drawSelection, keymap, placeholder } from "@codemirror/view"
   import { onMount } from "svelte"
   import { acceptCompletion, completionKeymap } from "@codemirror/autocomplete"
   import { completion } from "../editor/complete"
@@ -46,7 +46,12 @@
 
   function inspect(event: Event) {
     const at = (event as CustomEvent<number>).detail
-    if (typeof at === "number") select(sheet.selected === at ? null : at)
+    if (typeof at !== "number") return
+    select(sheet.selected === at ? null : at)
+    if (!editor || at >= editor.state.doc.lines) return
+    const line = editor.state.doc.line(at + 1)
+    editor.dispatch({ selection: { anchor: line.to }, scrollIntoView: true })
+    editor.focus()
   }
 
   onMount(() => {
@@ -56,6 +61,7 @@
         doc: sheet.source,
         extensions: [
           history(),
+          drawSelection({ cursorBlinkRate: 1100 }),
           keymap.of([{ key: "Tab", run: acceptCompletion }, ...completionKeymap, ...defaultKeymap, ...historyKeymap]),
           completion(() => vocabulary.words),
           caretLine,
