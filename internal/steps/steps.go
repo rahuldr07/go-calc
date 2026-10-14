@@ -42,10 +42,10 @@ type Step struct {
 	N       int      `json:"n"`
 	Explain string   `json:"explain,omitempty"`
 	Expr    string   `json:"expr"`
-	From   []string `json:"from,omitempty"`
-	Result string   `json:"result"`
-	Rule   string   `json:"rule,omitempty"`
-	Source string   `json:"source,omitempty"`
+	From    []string `json:"from,omitempty"`
+	Result  string   `json:"result"`
+	Rule    string   `json:"rule,omitempty"`
+	Source  string   `json:"source,omitempty"`
 }
 
 type Derivation struct {
