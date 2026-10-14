@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/rahuldr07/go-calc/internal/doc"
+	"github.com/rahuldr07/go-calc/internal/eval"
 	"github.com/rahuldr07/go-calc/internal/prov"
 )
 
@@ -355,6 +356,89 @@ func TestABareUnitIsNotItsOwnStep(t *testing.T) {
 	for _, s := range derive(t, "100 km / 2 h").Steps {
 		if strings.Contains(s.Expr, "(…)") {
 			t.Errorf("step %d renders a bare unit as a call: %q", s.N, s.Expr)
+		}
+	}
+}
+
+func TestEveryFunctionHasItsOwnExplanation(t *testing.T) {
+	for _, input := range []string{
+		"abs(-3)", "sqrt(2)", "cbrt(27)", "root(32, 5)", "exp(1)", "ln(2)", "log(100)", "log(8, 2)", "log2(8)", "log10(1000)",
+		"sin(1)", "cos(1)", "tan(1)", "asin(1)", "acos(0)", "atan(1)", "atan2(1, 1)", "sinh(1)", "cosh(1)", "tanh(1)",
+		"asinh(1)", "acosh(2)", "atanh(0.5)", "sec(1)", "csc(1)", "cot(1)", "deg(1)", "rad(1)",
+		"floor(2.7)", "ceil(2.1)", "round(2.5)", "round(2.345, 2)", "trunc(-2.7)", "frac(2.75)", "sign(-4)", "clamp(5, 0, 3)",
+		"hypot(3, 4)", "exp2(10)", "gamma(5)", "erf(1)", "erfc(1)", "gcd(12, 18)", "lcm(4, 6)", "isprime(97)", "nCr(5, 2)",
+		"nPr(5, 2)", "fib(10)", "mod(17, 5)", "modpow(2, 10, 1000)", "modinv(3, 11)", "factor(360)", "divisors(12)",
+		"totient(36)", "nextprime(100)", "prevprime(100)", "primes(20)", "primes(10, 20)", "primes(1..20)", "digitsum(123)",
+		"tobase(255, 16)", "hex(255)", "bin(5)", "oct(8)", "sum(1..5)", "product(1..5)", "mean([2, 4, 9])", "median([3, 1, 2])",
+		"min(4, 2, 8)", "max(4, 2, 8)", "count([1, 2])", "len([1, 2])", "stdev([1, 2, 3])", "stdevp([1, 2, 3])",
+		"variance([1, 2, 3])", "variancep([1, 2, 3])", "sort([3, 1, 2])", "reverse([1, 2])", "unique([1, 1, 2])",
+		"mode([1, 2, 2])", "percentile([10, 20, 30], 50)", "cumsum([1, 2])", "diff([1, 4])", "[10, 20][1]", "1..10..2",
+		"deriv(x^2, x)", "deriv(x^3, x, 2)", "solve(2x + 4 = 0, x)", "solve(cos(x) = x, x)", "expand(2 +- 0.1, k=2)",
+		"7 mod 3", "5!", "50% of 80", "200 + 10%", "100 - 25%", "3 < 5", "2^10", "(1+2i)*(3+4i)", "100 degF in degC", "2 lakh in crore",
+	} {
+		d := derive(t, input)
+		if d.Error != "" || len(d.Steps) == 0 {
+			t.Errorf("%s: no working (%s %s)", input, d.Error, d.Note)
+			continue
+		}
+		for _, s := range d.Steps {
+			if s.Explain == "" || strings.HasPrefix(s.Explain, "Apply ") || strings.HasPrefix(s.Explain, "Combine ") {
+				t.Errorf("%s step %d has no specific explanation: %q", input, s.N, s.Explain)
+			}
+		}
+	}
+}
+
+func TestExplanationsThatOnceMisledStayCorrect(t *testing.T) {
+	for input, want := range map[string]string{
+		"200 + 10%":            "Add 10% of 200 to 200, which means 200 × (1 + 0.1)",
+		"100 - 25%":            "Take 25% off 100, which means 100 × (1 - 0.25)",
+		"(1+2i)*(3+4i)":        "Multiply 1+2i by 3+4i",
+		"sqrt(-4)":             "a negative number has no real square root",
+		"log(100)":             "Take the natural logarithm of 100",
+		"log(8, 2)":            "Take the base-2 logarithm of 8",
+		"round(pi, 3)":         "Round 3.14159265359 to 3 decimal places",
+		"round(1234, -2)":      "Round 1234 to the nearest 100",
+		"100 degF in degC":     "where K = degF × 5/9 + 45967/180",
+		"2 lakh in crore":      "Read 2 lakh: since 1 lakh = 100000, that is 200000",
+		"1/3 + 1/6":            "Add 1/3 and 1/6",
+		"deriv(x^3, x, 2)":     "Differentiate x^3 with respect to x: the derivative is 3 * x^2, then evaluate it at x = 2",
+		"300 m + 1 km":         "Read 300 m, already in SI base units",
+		"solve(2x + 4 = 0, x)": "Solve the equation for x by rearranging the linear equation exactly",
+	} {
+		var said []string
+		for _, s := range derive(t, input).Steps {
+			said = append(said, s.Explain)
+		}
+		if !strings.Contains(strings.Join(said, " | "), want) {
+			t.Errorf("%s explains itself as %q, want it to contain %q", input, said, want)
+		}
+	}
+	if r := derive(t, "3 < 5").Steps[0].Result; r != "true" {
+		t.Errorf("a comparison step shows %q, want true", r)
+	}
+	if r := derive(t, "(2 +- 0.1) * 3").Steps[0].Result; strings.Contains(r, "± 0") {
+		t.Errorf("a measured step claims no uncertainty: %q", r)
+	}
+	for _, s := range derive(t, "-5 + 2").Steps {
+		if strings.HasPrefix(s.Explain, "Negate") {
+			t.Errorf("a negative number became its own step: %q", s.Explain)
+		}
+	}
+}
+
+func TestEveryEngineFunctionIsExplained(t *testing.T) {
+	for _, name := range eval.Functions() {
+		explained := false
+		for _, args := range [][]string{{"a"}, {"a", "b"}, {"a", "b", "c"}} {
+			text := functionExplanation(prov.NodeOut{Label: name, Value: "v", Detail: "d/dx a = b"}, args)
+			if !strings.HasPrefix(text, "Apply ") {
+				explained = true
+				break
+			}
+		}
+		if !explained {
+			t.Errorf("%s has no explanation; add one to explain.go", name)
 		}
 	}
 }

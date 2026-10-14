@@ -93,10 +93,26 @@ func (w *walker) stepOf(n prov.NodeOut) (Step, bool) {
 			return Step{}, false
 		}
 		return Step{Explain: w.explain(n), Expr: w.expression(n), From: w.operands(n), Result: w.result(n), Rule: w.rule(n)}, true
-	case kindFunction, kindOperation:
+	case kindOperation:
+		if w.signOfLiteral(n) {
+			return Step{}, false
+		}
+		return Step{Explain: w.explain(n), Expr: w.expression(n), From: w.operands(n), Result: w.result(n), Rule: w.rule(n)}, true
+	case kindFunction:
+		if n.Label == "list" {
+			return Step{}, false
+		}
 		return Step{Explain: w.explain(n), Expr: w.expression(n), From: w.operands(n), Result: w.result(n), Rule: w.rule(n)}, true
 	}
 	return Step{}, false
+}
+
+func (w *walker) signOfLiteral(n prov.NodeOut) bool {
+	if n.Label != "-" || len(n.Children) != 1 {
+		return false
+	}
+	child, ok := w.nodes[n.Children[0]]
+	return ok && child.Kind == kindLiteral
 }
 
 func (w *walker) expression(n prov.NodeOut) string {

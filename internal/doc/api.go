@@ -165,9 +165,13 @@ func (d *Doc) sheetLine(i int, e *entry, style format.Style) lineOut {
 			out.Status = StatusEstimate
 		}
 		out.Text, out.Qualifiers = answer(style, e.value)
+		out.Trace = d.arena.Export(e.value.Prov).Nodes
 	case e.value.IsDefinition() || e.value.IsSymbolic() || e.value.IsList():
 		out.Status = StatusHeld
 		out.Text, out.Qualifiers = answer(style, e.value)
+		if !e.value.IsDefinition() {
+			out.Trace = d.arena.Export(e.value.Prov).Nodes
+		}
 	default:
 		out.Status = statusOf(e.value)
 		out.Text, out.Qualifiers = answer(style, e.value)

@@ -2,6 +2,7 @@ package eval
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/rahuldr07/go-calc/internal/consts"
 	"github.com/rahuldr07/go-calc/internal/format"
@@ -39,14 +40,59 @@ func briefValue(v value.Value, digits int) (text string) {
 		}
 	}()
 	if v.IsList() {
+		if len(v.List.Items) <= shownListItems {
+			head, _, _ := strings.Cut(format.Style{Digits: digits}.Text(v, nil), "\n")
+			return clipped(head, briefLimit(digits)*3)
+		}
 		return "list of " + strconv.Itoa(len(v.List.Items))
 	}
-	text, _ = format.Style{Digits: digits}.Decimal(v)
+	if v.IsBoolean() {
+		return format.TruthWord(v)
+	}
+	if v.IsSymbolic() {
+		return clipped(v.Sym, briefLimit(digits)*2)
+	}
+	if v.IsComplex() {
+		return clipped(v.Cx.String(), briefLimit(digits)*2)
+	}
+	style := format.Style{Digits: digits}
+	if mid, u, ok := style.Uncertain(v); ok && u != "0" {
+		text = mid + " ± " + u
+		if v.Unit != "" {
+			text += " " + v.Unit
+		}
+		return text
+	}
+	if v.IsMeasured() {
+		text, _ = style.Decimal(v)
+		if v.Unit != "" {
+			text += " " + v.Unit
+		}
+		return text + " (measured)"
+	}
+	text, complete := style.Decimal(v)
+	if !complete && v.Num.IsExact() {
+		if fraction := v.Num.Exact().Rat().RatString(); len(fraction) <= shortFraction {
+			text = fraction
+		}
+	}
 	if limit := briefLimit(digits); len([]rune(text)) > limit {
 		text = string([]rune(text)[:limit-1]) + "…"
 	}
 	if v.Unit != "" {
 		text += " " + v.Unit
+	}
+	return text
+}
+
+const (
+	shownListItems = 8
+	shortFraction  = 9
+)
+
+func clipped(text string, limit int) string {
+	if len([]rune(text)) > limit {
+		return string([]rune(text)[:limit-1]) + "…"
 	}
 	return text
 }

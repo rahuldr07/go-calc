@@ -39,7 +39,7 @@ func (e *Env) derivCall(t *parse.Call, p *pass) (value.Value, error) {
 	if err != nil {
 		return value.Value{}, err
 	}
-	e.record(t, p, prov.Node{Kind: prov.Function, Label: "deriv", Detail: "d/d" + variable.Text + " " + deriv.Pretty(simplified)})
+	e.record(t, p, prov.Node{Kind: prov.Function, Label: "deriv", Detail: "d/d" + variable.Text + " " + deriv.Pretty(t.Args[0]) + " = " + deriv.Pretty(simplified) + ", at " + variable.Text + " = " + briefValue(at, p.ctx.Digits)})
 	out.Prov = p.idOf(t)
 	return out, nil
 }
@@ -48,7 +48,7 @@ func (e *Env) symbolicDeriv(t *parse.Call, p *pass, derived parse.Node, variable
 	if derived == nil {
 		return value.Value{}, errors.New("the derivative could not be formed")
 	}
-	e.record(t, p, prov.Node{Kind: prov.Function, Label: "deriv", Detail: "d/d" + variable})
+	e.record(t, p, prov.Node{Kind: prov.Function, Label: "deriv", Detail: "d/d" + variable + " " + deriv.Pretty(t.Args[0]) + " = " + deriv.Pretty(derived)})
 	v := value.Symbolic(deriv.Pretty(derived))
 	v.Prov = p.idOf(t)
 	return v, nil

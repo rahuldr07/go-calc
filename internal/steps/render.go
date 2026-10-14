@@ -126,6 +126,10 @@ func call(label string, kids []child) string {
 			}
 			return strings.Join(parts, "..")
 		}
+	case "index":
+		if len(kids) == 2 {
+			return wrap(kids[0], precAtom) + "[" + kids[1].text + "]"
+		}
 	case "list":
 		parts := make([]string, len(kids))
 		for i, k := range kids {
