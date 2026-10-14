@@ -19,6 +19,7 @@ export interface Roles {
   series2Soft: string
   error: string
   warning: string
+  ok: string
   track: string
 }
 
@@ -68,6 +69,7 @@ export const THEMES: Record<ThemeId, Theme> = {
       series2Soft: "#d7e6e2",
       error: "#a43d34",
       warning: "#99601f",
+      ok: "#2f6664",
       track: "#d9ded9",
     },
     shape: {
@@ -103,6 +105,7 @@ export const THEMES: Record<ThemeId, Theme> = {
       series2Soft: "#263f3c",
       error: "#ed887f",
       warning: "#e4ad68",
+      ok: "#67b8b7",
       track: "#353d38",
     },
     shape: {
@@ -138,6 +141,7 @@ export const THEMES: Record<ThemeId, Theme> = {
       series2Soft: "#f1dcd8",
       error: "#a53343",
       warning: "#76551c",
+      ok: "#2f7d5b",
       track: "#cbd8ed",
     },
     shape: {
@@ -174,6 +178,7 @@ export const THEMES: Record<ThemeId, Theme> = {
       series2Soft: "#f3dfeb",
       error: "#9f1717",
       warning: "#7b4b00",
+      ok: "#1b7a3a",
       track: "#c9ceca",
     },
     shape: {
@@ -209,6 +214,7 @@ export function cssFor(theme: Theme): string {
     `--seam:${c.seam}`,
     `--seam-strong:${c.seamStrong}`,
     `--accent:${c.accent}`,
+    `--ok:${c.ok}`,
     `--accent-soft:${c.accentSoft}`,
     `--series-1:${c.series1}`,
     `--series-2:${c.series2}`,

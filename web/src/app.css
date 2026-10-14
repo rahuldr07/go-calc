@@ -75,7 +75,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .brand b { font-size: 15px; font-weight: 600; letter-spacing: -.02em; white-space: nowrap; }
 .brand .state { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted); }
 .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
-.brand[data-state="ready"] .dot { background: var(--series-2); }
+.brand[data-state="ready"] .dot { background: var(--ok); }
 .brand[data-state="loading"] .dot { background: var(--warning); }
 .brand[data-state="failed"] .dot { background: var(--error); }
 .brand[data-state="failed"] .state { color: var(--error); font-weight: 600; }
