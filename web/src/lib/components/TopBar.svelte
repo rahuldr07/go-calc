@@ -21,6 +21,11 @@
   import { current, setTheme } from "../theme/theme.svelte"
   import { THEME_LIST } from "../theme/themes"
 
+  function nextTheme() {
+    const at = THEME_LIST.findIndex((t) => t.id === current().id)
+    setTheme(THEME_LIST[(at + 1) % THEME_LIST.length].id)
+  }
+
   const engineWord = $derived(
     sheet.engineStatus === "ready"
       ? "engine ready"
@@ -48,10 +53,15 @@
       <button class="step" type="button" aria-label="More digits" onclick={() => void setDigits(sheet.digits + 1)}>+</button>
     </span>
     <button class="chip angle" type="button" title="Angle unit for trigonometry" onclick={() => void setAngle(sheet.angle === "rad" ? "deg" : "rad")}>{sheet.angle}</button>
+    <span class="tool-gap" aria-hidden="true"></span>
     <button class="chip keypad" type="button" aria-pressed={view.keypad} onclick={toggleKeypad}>keypad</button>
     <button class="chip share" type="button" title="Copy a link that opens this sheet" disabled={sheet.source.trim() === ""}
       onclick={() => void share()}>{shareWord}</button>
     <button class="chip help-chip" type="button" aria-pressed={view.help} title="Help (Shift + ?)" onclick={toggleHelp}>help</button>
+    <button type="button" class="swatch swatch-cycle" aria-label={`Theme: ${current().label}. Switch theme`}
+      title={`${current().label} — tap for the next theme`} style={`--a:${current().colors.paper};--b:${current().colors.accent}`}
+      onclick={nextTheme}></button>
+    <span class="tool-gap" aria-hidden="true"></span>
     <span class="swatches" role="group" aria-label="Theme">
       {#each THEME_LIST as entry (entry.id)}
         <button type="button" class="swatch" aria-pressed={current().id === entry.id} aria-label={`${entry.label} theme`}
