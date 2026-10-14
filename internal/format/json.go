@@ -75,6 +75,8 @@ type result struct {
 	Schema      string       `json:"schema"`
 	Input       string       `json:"input"`
 	Definition  string       `json:"definition,omitempty"`
+	Truth       string       `json:"truth,omitempty"`
+	Caveat      string       `json:"caveat,omitempty"`
 	Value       *ValueOut    `json:"value,omitempty"`
 	Unit        *UnitOut     `json:"unit,omitempty"`
 	List        *ListOut     `json:"list,omitempty"`
@@ -103,6 +105,14 @@ func JSONDetail(input string, v value.Value, notes []parse.Note, d Detail) ([]by
 	if v.IsDefinition() {
 		return json.MarshalIndent(result{Schema: Schema, Input: input, Definition: v.Def, Notes: msgs}, "", "  ")
 	}
+	if v.IsBoolean() {
+		r := result{Schema: Schema, Input: input, Truth: TruthWord(v), Caveat: v.Caveat, Notes: msgs}
+		if d.Arena != nil && d.Arena.Has(v.Prov) {
+			trace := d.Arena.Export(v.Prov)
+			r.Provenance = &trace
+		}
+		return json.MarshalIndent(r, "", "  ")
+	}
 	if v.IsList() {
 		r := result{Schema: Schema, Input: input, List: Default.listOut(v.List.Items), Notes: msgs, Warning: d.Warning}
 		if d.Arena != nil && d.Arena.Has(v.Prov) {
@@ -118,6 +128,16 @@ func JSONDetail(input string, v value.Value, notes []parse.Note, d Detail) ([]by
 		r.Provenance = &trace
 	}
 	return json.MarshalIndent(r, "", "  ")
+}
+
+func TruthWord(v value.Value) string {
+	switch {
+	case v.Truth == value.Likely:
+		return "probably true"
+	case v.Holds():
+		return "true"
+	}
+	return "false"
 }
 
 func (s Style) listOut(items []value.Value) *ListOut {

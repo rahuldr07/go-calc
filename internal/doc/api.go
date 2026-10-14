@@ -203,7 +203,7 @@ func statusOfComplex(v value.Value) string {
 
 func statusOf(v value.Value) string {
 	switch {
-	case v.IsMeasured():
+	case v.IsMeasured(), v.Truth == value.Likely:
 		return StatusEstimate
 	case v.Num.IsExact():
 		return StatusExact

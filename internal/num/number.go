@@ -38,6 +38,16 @@ func (n Number) IsExact() bool { return n.kind == KindExact }
 
 func (n Number) Exact() Exact { return n.ex }
 
+func (n Number) Bounds() (lo, hi Exact, ok bool) {
+	switch n.kind {
+	case KindExact:
+		return n.ex, n.ex, true
+	case KindInterval:
+		return n.lo, n.hi, true
+	}
+	return Exact{}, Exact{}, false
+}
+
 func magFromExact(e Exact) Mag {
 	return Mag{newMag().SetRat(new(big.Rat).Abs(e.Rat()))}
 }

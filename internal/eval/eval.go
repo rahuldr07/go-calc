@@ -465,7 +465,7 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		if !isWhole(args[0]) {
 			return fail("isprime takes a whole number")
 		}
-		return value.Boolean(args[0].Num.Exact().Rat().Num().ProbablyPrime(40)), nil, true
+		return primality(args[0].Num.Exact().Rat().Num()), nil, true
 	}
 	if t.Fn == "log" && len(args) == 2 {
 		v, err := logBase(args[0], args[1], prec)

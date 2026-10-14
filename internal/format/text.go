@@ -46,10 +46,9 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 	}
 	if v.IsBoolean() {
 		var b strings.Builder
-		if v.Holds() {
-			b.WriteString("true")
-		} else {
-			b.WriteString("false")
+		b.WriteString(TruthWord(v))
+		if v.Caveat != "" {
+			b.WriteString("\n  " + v.Caveat)
 		}
 		writeReadings(&b, notes)
 		return b.String()
@@ -71,6 +70,9 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 		}
 		if v.Solved.Searched != "" {
 			b.WriteString("\n  searched " + v.Solved.Searched)
+		}
+		for _, c := range v.Solved.Caveats {
+			b.WriteString("\n  " + c)
 		}
 		writeReadings(&b, notes)
 		return b.String()
@@ -409,12 +411,15 @@ func covarianceNote(v value.Value) string {
 }
 
 func (s Style) roots(sol value.Solution) string {
-	if len(sol.Roots) == 0 {
+	if len(sol.Roots) == 0 && len(sol.Spans) == 0 {
 		return "no root"
 	}
-	parts := make([]string, len(sol.Roots))
-	for i, r := range sol.Roots {
-		parts[i] = sol.Var + " = " + s.Number(value.ScalarNum(r))
+	parts := make([]string, 0, len(sol.Roots)+len(sol.Spans))
+	for _, span := range sol.Spans {
+		parts = append(parts, sol.Var+" in ["+s.Number(value.Scalar(span.Lo))+", "+s.Number(value.Scalar(span.Hi))+"]")
+	}
+	for _, r := range sol.Roots {
+		parts = append(parts, sol.Var+" = "+s.Number(value.ScalarNum(r)))
 	}
 	return strings.Join(parts, ",  ")
 }

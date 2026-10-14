@@ -23,27 +23,48 @@ func (f Found) Exact() bool { return f.Lo.Cmp(f.Hi) == 0 }
 
 type Scan struct {
 	Exact    []num.Exact
+	Runs     []Run
 	Brackets []Bracket
 	Decided  int
+	Step     num.Exact
+}
+
+type Run struct {
+	Lo, Hi num.Exact
 }
 
 func Grid(sign Sign, lo, hi num.Exact, steps int) Scan {
 	var out Scan
 	width, _ := hi.Sub(lo).Div(num.FromInt(int64(steps)))
+	out.Step = width
 	var prevSign int
 	var prevAt num.Exact
 	havePrev := false
+	var zeros []num.Exact
+	settle := func() {
+		switch {
+		case len(zeros) == 1:
+			out.Exact = append(out.Exact, zeros[0])
+		case len(zeros) > 1:
+			out.Runs = append(out.Runs, Run{Lo: zeros[0], Hi: zeros[len(zeros)-1]})
+		}
+		zeros = nil
+	}
 	for i := 0; i <= steps; i++ {
 		x := lo.Add(width.Mul(num.FromInt(int64(i))))
 		s, ok := sign(x)
 		if !ok {
+			settle()
 			havePrev = false
 			continue
 		}
 		out.Decided++
+		if s != 0 {
+			settle()
+		}
 		switch {
 		case s == 0:
-			out.Exact = append(out.Exact, x)
+			zeros = append(zeros, x)
 			havePrev = false
 		default:
 			if havePrev && s != prevSign {
@@ -52,6 +73,7 @@ func Grid(sign Sign, lo, hi num.Exact, steps int) Scan {
 			prevSign, prevAt, havePrev = s, x, true
 		}
 	}
+	settle()
 	return out
 }
 

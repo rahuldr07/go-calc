@@ -64,11 +64,15 @@ func roundNumber(n num.Number, mode string, places int64, prec uint) (num.Exact,
 	if n.IsExact() {
 		return roundExactTo(n.Exact(), mode, places), nil
 	}
-	b := n.Ball(prec)
-	lo, _ := b.Lo().Rat(nil)
-	hi, _ := b.Hi().Rat(nil)
-	low := roundExactTo(num.FromRat(lo), mode, places)
-	high := roundExactTo(num.FromRat(hi), mode, places)
+	lo, hi, exactEnds := n.Bounds()
+	if !exactEnds {
+		b := n.Ball(prec)
+		loRat, _ := b.Lo().Rat(nil)
+		hiRat, _ := b.Hi().Rat(nil)
+		lo, hi = num.FromRat(loRat), num.FromRat(hiRat)
+	}
+	low := roundExactTo(lo, mode, places)
+	high := roundExactTo(hi, mode, places)
 	if low.Cmp(high) != 0 {
 		return num.Exact{}, errBoundary
 	}
@@ -137,6 +141,72 @@ func exactLog(x, base num.Number) (int64, bool) {
 		}
 	}
 	return 0, false
+}
+
+var (
+	millerRabinBases = []int64{2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41}
+	provenPrimeBound = mustBig("3317044064679887385961981")
+)
+
+const probablePrimeCaveat = "a probable prime: it passes Miller-Rabin and Baillie-PSW, which no known number fools, but above 3.3 × 10^24 that is not a proof"
+
+func mustBig(s string) *big.Int {
+	n, ok := new(big.Int).SetString(s, 10)
+	if !ok {
+		panic("bad constant " + s)
+	}
+	return n
+}
+
+func primality(n *big.Int) value.Value {
+	if n.Cmp(big.NewInt(2)) < 0 {
+		return value.Boolean(false)
+	}
+	if n.Cmp(provenPrimeBound) >= 0 {
+		if !n.ProbablyPrime(20) {
+			return value.Boolean(false)
+		}
+		return value.Probable(probablePrimeCaveat)
+	}
+	return value.Boolean(millerRabin(n))
+}
+
+func millerRabin(n *big.Int) bool {
+	one := big.NewInt(1)
+	for _, p := range millerRabinBases {
+		bp := big.NewInt(p)
+		if n.Cmp(bp) == 0 {
+			return true
+		}
+		if new(big.Int).Mod(n, bp).Sign() == 0 {
+			return false
+		}
+	}
+	minusOne := new(big.Int).Sub(n, one)
+	d := new(big.Int).Set(minusOne)
+	shifts := 0
+	for d.Bit(0) == 0 {
+		d.Rsh(d, 1)
+		shifts++
+	}
+	for _, p := range millerRabinBases {
+		x := new(big.Int).Exp(big.NewInt(p), d, n)
+		if x.Cmp(one) == 0 || x.Cmp(minusOne) == 0 {
+			continue
+		}
+		witness := true
+		for r := 1; r < shifts; r++ {
+			x.Mul(x, x).Mod(x, n)
+			if x.Cmp(minusOne) == 0 {
+				witness = false
+				break
+			}
+		}
+		if witness {
+			return false
+		}
+	}
+	return true
 }
 
 func combinatoric(fn string, nv, kv value.Value) (value.Value, error) {

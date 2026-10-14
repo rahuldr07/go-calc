@@ -1,11 +1,13 @@
 package eval
 
 import (
+	"math/big"
 	"strings"
 	"testing"
 
 	"github.com/rahuldr07/go-calc/internal/format"
 	"github.com/rahuldr07/go-calc/internal/parse"
+	"github.com/rahuldr07/go-calc/internal/value"
 )
 
 func firstLineOf(t *testing.T, src string) (string, string) {
@@ -109,5 +111,91 @@ func TestListsIndexFromZeroAndFromTheEnd(t *testing.T) {
 		if _, err := firstLineOf(t, src); !strings.Contains(err, why) {
 			t.Errorf("%s refused with %q, want it to mention %q", src, err, why)
 		}
+	}
+}
+
+func solvedText(t *testing.T, src string) (string, string) {
+	t.Helper()
+	node, _, err := parse.Parse(src)
+	if err != nil {
+		t.Fatalf("%s: %v", src, err)
+	}
+	v, err := NewEnv().Eval(node)
+	if err != nil {
+		return "", err.Error()
+	}
+	return format.Text(v, nil), ""
+}
+
+func TestASolutionThatFillsAStretchIsReportedAsOne(t *testing.T) {
+	for src, want := range map[string]string{
+		"solve(floor(x) = 0, x)":        "x in [0, 0.9]",
+		"solve(round(x) = 3, x)":        "x in [2.5, 3.4]",
+		"solve(ceil(x) = 2, x, 0, 4)":   "x in [1.002, 2]",
+		"solve(floor(x) = 0, x, -5, 5)": "x in [0, 0.995]",
+	} {
+		got, err := solvedText(t, src)
+		if err != "" {
+			t.Fatalf("%s refused: %s", src, err)
+		}
+		head, rest, _ := strings.Cut(got, "\n")
+		if head != want {
+			t.Errorf("%s = %q, want %q", src, head, want)
+		}
+		if !strings.Contains(rest, "proven over the whole stretch") || strings.Contains(rest, "bisection") {
+			t.Errorf("%s explained itself as %q", src, rest)
+		}
+	}
+}
+
+func TestAStretchThatCannotBeProvenIsNotCalledARoot(t *testing.T) {
+	_, err := solvedText(t, "solve(abs(x) - abs(x) = 0, x, 0, 1)")
+	if !strings.Contains(err, "could not be proven for the values between them") {
+		t.Errorf("an unprovable stretch gave %q", err)
+	}
+}
+
+func TestAGridSearchSaysWhatItCanMiss(t *testing.T) {
+	got, err := solvedText(t, "solve(cos(x) = x, x)")
+	if err != "" {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "roots closer together than the grid step of 0.1") {
+		t.Errorf("the search did not admit its blind spots: %q", got)
+	}
+	exact, _ := solvedText(t, "solve(x^2 - 2 = 0, x)")
+	if strings.Contains(exact, "can be missed") {
+		t.Errorf("a closed-form solution claimed it could miss roots: %q", exact)
+	}
+}
+
+func TestPrimalityIsProvenBelowTheBoundAndProbableAbove(t *testing.T) {
+	const limit = 200000
+	composite := make([]bool, limit)
+	for i := 2; i*i < limit; i++ {
+		if !composite[i] {
+			for j := i * i; j < limit; j += i {
+				composite[j] = true
+			}
+		}
+	}
+	for n := 0; n < limit; n++ {
+		want := n >= 2 && !composite[n]
+		if got := primality(big.NewInt(int64(n))); got.Holds() != want || got.Truth == value.Likely {
+			t.Fatalf("isprime(%d) = %v, want %v", n, got.Truth, want)
+		}
+	}
+	for _, fooler := range []string{"561", "3215031751", "3825123056546413051", "318665857834031151167461"} {
+		n, _ := new(big.Int).SetString(fooler, 10)
+		if primality(n).Holds() {
+			t.Errorf("%s is composite but was called prime", fooler)
+		}
+	}
+	mersenne := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 89), big.NewInt(1))
+	if got := primality(mersenne); got.Truth != value.Likely || got.Caveat == "" {
+		t.Errorf("2^89 - 1 lies above the proven bound and must be marked probable, got %+v", got.Truth)
+	}
+	if got, _ := firstLineOf(t, "isprime(2^89 - 1)"); got != "probably true" {
+		t.Errorf("isprime(2^89 - 1) printed %q", got)
 	}
 }

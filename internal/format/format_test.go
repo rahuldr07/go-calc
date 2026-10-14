@@ -490,3 +490,26 @@ func TestValueDetailOfAListIsEmptyButPresent(t *testing.T) {
 		t.Errorf("ValueDetail = %+v, %+v, want an empty value and no unit", out, unit)
 	}
 }
+
+func TestJSONStatesTruthInsteadOfANumber(t *testing.T) {
+	for _, c := range []struct {
+		v     value.Value
+		truth string
+	}{
+		{value.Boolean(true), `"truth": "true"`},
+		{value.Boolean(false), `"truth": "false"`},
+		{value.Probable("not a proof"), `"truth": "probably true"`},
+	} {
+		b, err := JSON("x", c.v, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(b), c.truth) || strings.Contains(string(b), `"value"`) {
+			t.Errorf("JSON = %s, want %s and no numeric value", b, c.truth)
+		}
+	}
+	b, _ := JSON("x", value.Probable("not a proof"), nil)
+	if !strings.Contains(string(b), `"caveat": "not a proof"`) {
+		t.Errorf("a probable answer lost its caveat: %s", b)
+	}
+}

@@ -27,6 +27,7 @@ type Value struct {
 	Solved  *Solution
 	Cx      *cplx.Complex
 	List    *Listing
+	Caveat  string
 }
 
 type Truth int
@@ -35,13 +36,27 @@ const (
 	NotLogical Truth = iota
 	False
 	True
+	Likely
 )
+
+func Probable(reason string) Value {
+	v := Scalar(num.FromInt(1))
+	v.Truth = Likely
+	v.Caveat = reason
+	return v
+}
 
 type Solution struct {
 	Var      string
 	Roots    []num.Number
+	Spans    []Span
 	Method   string
 	Searched string
+	Caveats  []string
+}
+
+type Span struct {
+	Lo, Hi num.Exact
 }
 
 type Listing struct {
@@ -78,7 +93,14 @@ func Symbolic(text string) Value {
 func (v Value) Holds() bool { return v.Truth == True }
 
 func Solved(s Solution) Value {
-	v := ScalarNum(s.Roots[0])
+	first := num.Number{}
+	switch {
+	case len(s.Roots) > 0:
+		first = s.Roots[0]
+	case len(s.Spans) > 0:
+		first = num.NumExact(s.Spans[0].Lo)
+	}
+	v := ScalarNum(first)
 	v.Solved = &s
 	return v
 }

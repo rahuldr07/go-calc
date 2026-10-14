@@ -20,6 +20,7 @@ const (
 	methodLinear      = "exact linear solution"
 	methodQuadratic   = "quadratic formula"
 	methodBisection   = "bisection on proven sign-change brackets"
+	methodStretch     = "interval evaluation over each stretch of the search grid"
 
 	termVariable     = "variable"
 	termDiscriminant = "discriminant"
@@ -27,6 +28,7 @@ const (
 	termExact        = "exact root"
 	termBracket      = "bracket"
 	termBisections   = "bisections"
+	termStretch      = "proven stretch"
 	bracketDigits    = 24
 )
 
@@ -191,6 +193,11 @@ func (r *residualProbe) sign(x num.Exact) (int, bool) {
 	return v.Num.Ball(r.pass.prec()).Sign()
 }
 
+func (r *residualProbe) zeroThroughout(lo, hi num.Exact) bool {
+	v, err := r.at(value.ScalarNum(num.NumInterval(lo, hi)))
+	return err == nil && v.Num.IsExact() && v.Num.Exact().Sign() == 0
+}
+
 func (r *residualProbe) continuousOn(lo, hi num.Exact) bool {
 	_, err := r.at(value.ScalarNum(num.NumInterval(lo, hi)))
 	return err == nil
@@ -212,6 +219,17 @@ func (e *Env) bisect(t *parse.Call, residual parse.Node, variable string, span s
 		roots = append(roots, num.NumExact(x))
 		terms = append(terms, prov.Term{Name: termExact, Value: exactText(x)})
 	}
+	var spans []value.Span
+	var caveats []string
+	for _, run := range scan.Runs {
+		if probe.zeroThroughout(run.Lo, run.Hi) {
+			spans = append(spans, value.Span{Lo: run.Lo, Hi: run.Hi})
+			terms = append(terms, prov.Term{Name: termStretch, Value: "[" + exactText(run.Lo) + ", " + exactText(run.Hi) + "]"})
+			caveats = append(caveats, "every "+variable+" in ["+exactText(run.Lo)+", "+exactText(run.Hi)+"] is a solution, proven over the whole stretch; it may reach further, toward "+exactText(run.Lo.Sub(scan.Step))+" and "+exactText(run.Hi.Add(scan.Step))+", the nearest grid points checked")
+			continue
+		}
+		caveats = append(caveats, "the equation was exactly zero at every grid point in ["+exactText(run.Lo)+", "+exactText(run.Hi)+"], but that could not be proven for the values between them, so they are not reported")
+	}
 	rejected := 0
 	for _, b := range scan.Brackets {
 		found, ok := solve.Refine(probe.sign, probe.continuousOn, b, p.prec()/2)
@@ -222,12 +240,21 @@ func (e *Env) bisect(t *parse.Call, residual parse.Node, variable string, span s
 		roots = append(roots, rootNumber(found, p.prec()))
 		terms = append(terms, bracketTerms(found)...)
 	}
-	if len(roots) == 0 {
-		return value.Solution{}, nil, &lex.Error{Pos: t.P, Msg: noRootMessage(variable, searched, rejected)}
+	if len(roots) == 0 && len(spans) == 0 {
+		msg := noRootMessage(variable, searched, rejected)
+		for _, c := range caveats {
+			msg += "; " + c
+		}
+		return value.Solution{}, nil, &lex.Error{Pos: t.P, Msg: msg}
 	}
 	prec := p.prec()
 	sort.Slice(roots, func(i, j int) bool { return roots[i].Ball(prec).Mid.Cmp(roots[j].Ball(prec).Mid) < 0 })
-	return value.Solution{Var: variable, Roots: roots, Method: methodBisection, Searched: searched}, terms, nil
+	caveats = append(caveats, "roots closer together than the grid step of "+exactText(scan.Step)+", and roots where the curve only touches zero, can be missed")
+	method := methodBisection
+	if len(roots) == 0 {
+		method = methodStretch
+	}
+	return value.Solution{Var: variable, Roots: roots, Spans: spans, Method: method, Searched: searched, Caveats: caveats}, terms, nil
 }
 
 func exactText(x num.Exact) string {
