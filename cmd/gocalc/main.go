@@ -52,6 +52,10 @@ func dispatch(opts settings, args []string, style format.Style) (string, int, bo
 	if len(args) > 0 && args[0] == "serve" {
 		return serve(args[1:])
 	}
+	if len(args) > 0 && args[0] == "check" {
+		out, code := check(args[1:], opts)
+		return out, code, true
+	}
 	if len(args) > 1 {
 		switch args[0] {
 		case "run":
@@ -90,6 +94,7 @@ const usage = "usage: gocalc [--json] [--digits=N] [--indian] [--group] \"expres
 	"       gocalc why \"expression\"\n" +
 	"       gocalc [--json] steps \"expression\"\n" +
 	"       gocalc serve [--addr :8080] [--cors-origin origin]\n" +
+	"       gocalc check [--require=exact|proven|estimate] [--update] [--github] file.calc...\n" +
 	"options start with two dashes, so a leading - begins an expression: gocalc \"-2^2\""
 
 var errHelp = errors.New(usage)

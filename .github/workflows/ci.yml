@@ -13,6 +13,8 @@ jobs:
           go-version: '1.26'
       - run: go vet ./...
       - run: go test -race ./...
+      - name: example sheets still give their recorded answers
+        run: go run ./cmd/gocalc check examples/*.calc
 
   web:
     runs-on: ubuntu-latest

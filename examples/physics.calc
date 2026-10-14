@@ -1,0 +1,12 @@
+# projectile, no drag
+g = 9.80665 m/s^2
+v = 20 m/s
+angle = pi / 6
+range = v^2 * sin(2 angle) / g
+height = (v * sin(angle))^2 / (2 g)
+range in m
+
+# a measured plate
+side_a = 12.4 +- 0.2 cm
+side_b = 7.1 +- 0.1 cm
+side_a * side_b

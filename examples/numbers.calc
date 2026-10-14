@@ -1,0 +1,11 @@
+# exact where it can be, proven where it cannot
+1/3 + 1/6
+0.1 + 0.2 == 0.3
+2^100
+nCr(52, 5)
+log(1024, 2)
+round(pi, 6)
+isprime(2^61 - 1)
+solve(x^2 - 5x + 6 = 0, x)
+solve(floor(x) = 3, x, 0, 10)
+mean([4, 8, 15, 16, 23, 42])
