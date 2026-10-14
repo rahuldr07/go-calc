@@ -833,3 +833,21 @@ func TestALineCarriesWhatFloat64WouldHaveSaid(t *testing.T) {
 		t.Errorf("an exact match should agree in every digit float64 has: %+v", f)
 	}
 }
+
+func TestAWorkedTextAnswerIsExactUnlessItRestsOnAProbablePrime(t *testing.T) {
+	raw := EvalRequest([]byte(`{"lines":["factor(360)","hex(255)","factor(2^89-1)","deriv(x^2, x)"]}`))
+	var got struct {
+		Lines []struct {
+			Text   string `json:"text"`
+			Status string `json:"status"`
+		} `json:"lines"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []string{StatusExact, StatusExact, StatusEstimate, StatusHeld} {
+		if got.Lines[i].Status != want {
+			t.Errorf("line %d %q is %s, want %s", i+1, got.Lines[i].Text, got.Lines[i].Status, want)
+		}
+	}
+}

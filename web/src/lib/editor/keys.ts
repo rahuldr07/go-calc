@@ -5,6 +5,7 @@ export const GROUP_NAMES = [
   ["sci", "sci"],
   ["calc", "calculus"],
   ["alg", "algebra"],
+  ["int", "numbers"],
   ["stat", "stats"],
   ["unit", "units"],
 ] as const
@@ -28,11 +29,21 @@ export const PAD_GROUPS: Record<string, readonly Key[]> = {
     ["==", " == ", "live"], ["≠", " != ", "live"], ["gcd", "gcd(", "live"], ["lcm", "lcm(", "live"],
     ["isprime", "isprime(", "live"], ["floor", "floor(", "live"], ["ceil", "ceil(", "live"], ["round", "round(", "live"],
   ],
+  int: [
+    ["fib", "fib(", "live"], ["mod", "mod(", "live"], ["modpow", "modpow(", "live"], ["modinv", "modinv(", "live"],
+    ["factor", "factor(", "live"], ["divisors", "divisors(", "live"], ["totient", "totient(", "live"], ["isprime", "isprime(", "live"],
+    ["nextprime", "nextprime(", "live"], ["prevprime", "prevprime(", "live"], ["primes", "primes(", "live"], ["digitsum", "digitsum(", "live"],
+    ["gcd", "gcd(", "live"], ["lcm", "lcm(", "live"], ["hex", "hex(", "live"], ["bin", "bin(", "live"],
+    ["trunc", "trunc(", "live"], ["frac", "frac(", "live"], ["sign", "sign(", "live"], ["clamp", "clamp(", "live"],
+    ["Γ", "gamma(", "live"], ["erf", "erf(", "live"], ["cbrt", "cbrt(", "live"], ["hypot", "hypot(", "live"],
+  ],
   stat: [
     ["[", "[", "live"], ["]", "]", "live"], [",", ", ", "live"], ["..", "..", "live"],
     ["sum", "sum(", "live"], ["mean", "mean(", "live"], ["median", "median(", "live"], ["count", "count(", "live"],
     ["min", "min(", "live"], ["max", "max(", "live"], ["stdev", "stdev(", "live"], ["variance", "variance(", "live"],
     ["stdevp", "stdevp(", "live"], ["product", "product(", "live"], ["[0]", "[0]", "live"], ["k=2", "expand(ans, k=2)", "live"],
+    ["sort", "sort(", "live"], ["reverse", "reverse(", "live"], ["unique", "unique(", "live"], ["mode", "mode(", "live"],
+    ["pctl", "percentile(", "live"], ["cumsum", "cumsum(", "live"], ["diff", "diff(", "live"], ["len", "len(", "live"],
   ],
   unit: [
     ["in", " in ", "live"], ["m", " m", "live"], ["km", " km", "live"], ["mile", " mile", "live"],

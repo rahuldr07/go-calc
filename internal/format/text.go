@@ -41,6 +41,9 @@ func (s Style) Text(v value.Value, notes []parse.Note) string {
 	if v.IsSymbolic() {
 		var b strings.Builder
 		b.WriteString(v.Sym)
+		if v.Caveat != "" {
+			b.WriteString("\n  " + v.Caveat)
+		}
 		writeReadings(&b, notes)
 		return b.String()
 	}

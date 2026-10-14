@@ -31,7 +31,9 @@ var spreadDescriptions = map[string]string{
 	"variancep": "the population variance: it divides by n, and variance divides by n - 1",
 }
 
-func acceptsLists(name string) bool { return slices.Contains(statisticalFunctions, name) }
+func acceptsLists(name string) bool {
+	return slices.Contains(statisticalFunctions, name) || name == "gcd" || name == "lcm"
+}
 
 func (e *Env) listLiteral(t *parse.Call, p *pass) (value.Value, error) {
 	items := make([]value.Value, len(t.Args))

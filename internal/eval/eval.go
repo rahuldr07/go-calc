@@ -269,6 +269,13 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		}
 		return args[0].Num.Ball(prec), nil
 	}
+	if f, ok := registered[t.Fn]; ok {
+		v, err := f.invoke(t.Fn, args, prec, p.ctx.Degrees)
+		if err != nil {
+			return fail(err.Error())
+		}
+		return v, nil, true
+	}
 	if !acceptsLists(t.Fn) {
 		for _, a := range args {
 			if a.IsList() {
@@ -394,7 +401,7 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 	case "expand":
 		v, err := e.expand(t, args, p)
 		return v, err, true
-	case "floor", "ceil", "round":
+	case "floor", "ceil", "round", "trunc":
 		if len(args) != 1 && len(args) != 2 {
 			return fail(t.Fn + " takes a value and an optional number of decimal places")
 		}
@@ -432,26 +439,32 @@ func (e *Env) builtin(t *parse.Call, p *pass) (value.Value, error, bool) {
 		if measured(args...) {
 			return value.Value{}, cannotPropagate(t.P, t.Fn), true
 		}
-		if len(args) != 2 {
-			return fail(t.Fn + " takes two whole numbers")
+		whole := flatten(args)
+		if len(whole) < 2 {
+			return fail(t.Fn + " takes two or more whole numbers")
 		}
-		if !plainNumber(args[0]) || !plainNumber(args[1]) {
-			return fail(t.Fn + " needs plain numbers")
+		acc := new(big.Int)
+		for i, w := range whole {
+			if !plainNumber(w) {
+				return fail(t.Fn + " needs plain numbers")
+			}
+			if !isWhole(w) {
+				return fail(t.Fn + " takes whole numbers")
+			}
+			n := new(big.Int).Abs(w.Num.Exact().Rat().Num())
+			switch {
+			case i == 0:
+				acc.Set(n)
+			case t.Fn == "gcd":
+				acc.GCD(nil, nil, acc, n)
+			case acc.Sign() == 0 || n.Sign() == 0:
+				acc.SetInt64(0)
+			default:
+				g := new(big.Int).GCD(nil, nil, acc, n)
+				acc.Mul(acc, n).Quo(acc, g)
+			}
 		}
-		if !isWhole(args[0]) || !isWhole(args[1]) {
-			return fail(t.Fn + " takes two whole numbers")
-		}
-		a := args[0].Num.Exact().Rat().Num()
-		b := args[1].Num.Exact().Rat().Num()
-		g := new(big.Int).GCD(nil, nil, new(big.Int).Abs(a), new(big.Int).Abs(b))
-		if t.Fn == "gcd" {
-			return value.Scalar(num.FromRat(new(big.Rat).SetInt(g))), nil, true
-		}
-		if g.Sign() == 0 {
-			return value.Scalar(num.FromInt(0)), nil, true
-		}
-		l := new(big.Int).Div(new(big.Int).Abs(new(big.Int).Mul(a, b)), g)
-		return value.Scalar(num.FromRat(new(big.Rat).SetInt(l))), nil, true
+		return value.Scalar(num.FromRat(new(big.Rat).SetInt(acc))), nil, true
 	case "isprime":
 		if measured(args...) {
 			return value.Value{}, cannotPropagate(t.P, t.Fn), true
@@ -606,6 +619,7 @@ func roundTo(x num.Exact, mode string) num.Exact {
 		return num.FromRat(new(big.Rat).SetInt(q))
 	}
 	switch mode {
+	case "trunc":
 	case "floor":
 		if r.Sign() < 0 {
 			q.Sub(q, big.NewInt(1))

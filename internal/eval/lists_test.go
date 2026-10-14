@@ -406,6 +406,9 @@ func TestListsCanBeNamedAndReused(t *testing.T) {
 	if got := run(t, env, "total(1..4)"); got != "10" {
 		t.Errorf("total(1..4) = %s, want 10", got)
 	}
+	if got := run(t, NewEnv(), "gcd([12, 18], 24)"); got != "6" {
+		t.Errorf("gcd([12, 18], 24) = %s, want 6", got)
+	}
 	if got := run(t, env, "sum(xs, 2)"); got != "110" {
 		t.Errorf("sum(xs, 2) = %s, want 110", got)
 	}
@@ -419,7 +422,7 @@ func TestListsRefuseArithmeticInsteadOfReadingZero(t *testing.T) {
 			t.Errorf("%s: got %q", src, got)
 		}
 	}
-	for _, src := range []string{"sin(xs)", "sqrt(xs)", "abs(xs)", "gcd(xs, 2)", "floor(xs)", "ln(xs)", "isprime(xs)", "root(xs, 2)", "atan2(xs, 1)"} {
+	for _, src := range []string{"sin(xs)", "sqrt(xs)", "abs(xs)", "floor(xs)", "ln(xs)", "isprime(xs)", "root(xs, 2)", "atan2(xs, 1)"} {
 		if got := evalError(t, env, src); !strings.Contains(got, "takes a number, not a list") {
 			t.Errorf("%s: got %q", src, got)
 		}

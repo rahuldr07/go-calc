@@ -159,6 +159,12 @@ func (d *Doc) sheetLine(i int, e *entry, style format.Style) lineOut {
 		out.Complex = style.ComplexDetail(e.value)
 		out.Digits = out.Complex.Digits
 		out.Trace = d.arena.Export(e.value.Prov).Nodes
+	case e.value.IsSymbolic() && e.value.Settled:
+		out.Status = StatusExact
+		if e.value.Caveat != "" {
+			out.Status = StatusEstimate
+		}
+		out.Text, out.Qualifiers = answer(style, e.value)
 	case e.value.IsDefinition() || e.value.IsSymbolic() || e.value.IsList():
 		out.Status = StatusHeld
 		out.Text, out.Qualifiers = answer(style, e.value)

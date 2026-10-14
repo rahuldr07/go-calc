@@ -28,6 +28,13 @@ type Value struct {
 	Cx      *cplx.Complex
 	List    *Listing
 	Caveat  string
+	Settled bool
+}
+
+func Worked(text string) Value {
+	v := Symbolic(text)
+	v.Settled = true
+	return v
 }
 
 type Truth int
