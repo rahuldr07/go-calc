@@ -44,6 +44,9 @@ func stepsText(d steps.Derivation) string {
 		if s.Explain != "" {
 			b.WriteString(strconv.Itoa(s.N) + ". " + s.Explain + "\n")
 			b.WriteString(stepIndent + s.Expr + " = " + s.Result + "\n")
+			for _, line := range s.Work {
+				b.WriteString(stepIndent + "  " + line + "\n")
+			}
 		} else {
 			b.WriteString(strconv.Itoa(s.N) + ". " + s.Expr + "\n")
 			if len(s.From) > 0 {
@@ -51,7 +54,7 @@ func stepsText(d steps.Derivation) string {
 			}
 			b.WriteString(stepIndent + "= " + s.Result + "\n")
 		}
-		if s.Rule != "" && !(s.Explain != "" && (strings.HasPrefix(s.Rule, "unit:") || strings.HasPrefix(s.Rule, "conversion"))) {
+		if s.Rule != "" && len(s.Work) == 0 && !(s.Explain != "" && (strings.HasPrefix(s.Rule, "unit:") || strings.HasPrefix(s.Rule, "conversion"))) {
 			b.WriteString(stepIndent + "rule: " + s.Rule + "\n")
 		}
 		if s.Source != "" {

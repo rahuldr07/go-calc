@@ -116,6 +116,8 @@ func (w *walker) values(n prov.NodeOut) []string {
 
 func (w *walker) spoken(child prov.NodeOut) string {
 	switch {
+	case !isBareUnit(child) && w.isUnitExpression(child):
+		return w.expression(child)
 	case isBareUnit(child):
 		if definition := definitionOf(child.Detail); !trivialDefinition(definition) && !strings.Contains(definition, " + ") {
 			return child.Label + " (" + definition + ")"
@@ -124,10 +126,31 @@ func (w *walker) spoken(child prov.NodeOut) string {
 	case strings.HasPrefix(child.Value, "list of "):
 		return w.expression(child)
 	}
-	return child.Value
+	return w.shownValue(child)
 }
 
 func isBareUnit(n prov.NodeOut) bool { return n.Kind == kindUnit && len(n.Children) == 0 }
+
+func (w *walker) isUnitExpression(n prov.NodeOut) bool {
+	if isBareUnit(n) {
+		return true
+	}
+	if n.Kind != kindOperation || len(n.Children) != 2 {
+		return false
+	}
+	left, okL := w.nodes[n.Children[0]]
+	right, okR := w.nodes[n.Children[1]]
+	if !okL || !okR {
+		return false
+	}
+	switch n.Label {
+	case "^":
+		return w.isUnitExpression(left) && right.Kind == kindLiteral
+	case "*", "·", "/":
+		return w.isUnitExpression(left) && w.isUnitExpression(right)
+	}
+	return false
+}
 
 func definitionOf(detail string) string {
 	text, _, _ := strings.Cut(detail, " (")
@@ -211,7 +234,7 @@ func (w *walker) explain(n prov.NodeOut) string {
 	case kindUnit:
 		return unitExplanation(n, args)
 	case kindOperation:
-		return operationExplanation(n, args, w.kids(n))
+		return w.operationExplanation(n, args, w.kids(n))
 	case kindFunction:
 		return functionExplanation(n, args)
 	}
@@ -238,9 +261,6 @@ func unitExplanation(n prov.NodeOut, args []string) string {
 	if !strings.Contains(n.Value, " ") {
 		return "Read " + quantity + ": since " + definition + ", that is " + n.Value
 	}
-	if si, ok := siReading(n.Value, n.Detail); ok {
-		return "Read " + quantity + ". In SI base units that is " + si + ", because " + definition
-	}
 	return "Read " + quantity + ", where " + definition
 }
 
@@ -254,7 +274,7 @@ func conversionExplanation(target, definition string) string {
 	return "Convert the result to " + target + ", using " + definition
 }
 
-func operationExplanation(n prov.NodeOut, args []string, kids []prov.NodeOut) string {
+func (w *walker) operationExplanation(n prov.NodeOut, args []string, kids []prov.NodeOut) string {
 	op := n.Label
 	if len(args) == 1 {
 		a := args[0]
@@ -287,7 +307,7 @@ func operationExplanation(n prov.NodeOut, args []string, kids []prov.NodeOut) st
 	case "*", "·", "×":
 		return "Multiply " + a + " by " + b
 	case "/", "÷":
-		if isBareUnit(kids[1]) {
+		if isBareUnit(kids[1]) || w.isUnitExpression(kids[1]) {
 			return "Express " + a + " per " + b
 		}
 		return "Divide " + a + " by " + b
@@ -557,11 +577,11 @@ func summaryOf(line Line, w *walker) []string {
 		out = append(out, "The answer depends on measured values. Each input's ± is carried through to first order, the standard GUM method, so the ± on the answer is a standard uncertainty, not a guaranteed bound.")
 	}
 	if w != nil && w.usesUnits() {
-		if w.converts() {
-			out = append(out, "Quantities with units are worked in SI base units (metres, kilograms, seconds), which is why some steps show m or m^3; the conversion at the end turns the answer back into the unit you asked for.")
-		} else {
-			out = append(out, "Quantities with units are worked in SI base units (metres, kilograms, seconds), which is why some steps show m or m^3.")
+		text := "Each step is shown in the units you used. Underneath, go-calc converts every quantity to SI base units (metres, kilograms, seconds) so that mixed units always agree."
+		if w.rawSI {
+			text = "Where a step mixes units that do not simplify, it is shown in SI base units (metres, kilograms, seconds), which go-calc uses underneath so that mixed units always agree."
 		}
+		out = append(out, text)
 	}
 	return out
 }

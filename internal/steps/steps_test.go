@@ -319,8 +319,8 @@ func TestEveryStepExplainsItselfInWords(t *testing.T) {
 		"(1+2)*(3+4)":   {"Add 1 and 2", "Add 3 and 4", "Multiply 3 by 7"},
 		"sqrt(16) + 3!": {"Take the square root of 16: it is 4, because 4 × 4 = 16", "3! = 3 × 2 × 1 = 6", "Add 4 and 6"},
 		"18% of 500":    {"18% means 18 ÷ 100", "Take 0.18 of 500, which means 0.18 × 500"},
-		"100 km / 2 h":  {"Read 100 km. In SI base units that is 100000 m, because 1 km = 1000 m", "Divide 100 km by 2", "Express 50000 m per h (1 h = 3600 s)"},
-		"10 km in mile": {"Read 10 km. In SI base units that is 10000 m, because 1 km = 1000 m", "Convert the result to mile, using 1 mile = 201168/125 m"},
+		"100 km / 2 h":  {"Read 100 km, where 1 km = 1000 m", "Divide 100 km by 2", "Express 50 km per h (1 h = 3600 s)"},
+		"10 km in mile": {"Read 10 km, where 1 km = 1000 m", "Convert the result to mile, using 1 mile = 201168/125 m"},
 		"mean(1..10)":   {"List the whole numbers from 1 to 10", "Average 1..10: add the values and divide by how many there are"},
 		"2^0.5":         {"Raise 2 to the power 1/2, which is its square root"},
 		"sin(pi/6)":     {"Use the constant pi = 3.14159265359", "Divide 3.14159265359 by 6", "Take the sine of 0.523598775598"},
@@ -343,7 +343,7 @@ func TestTheSummarySaysWhyTheAnswerCanBeTrusted(t *testing.T) {
 		"1/3 + 1/6":                          "exact arithmetic",
 		"2^0.5":                              "every digit shown is certain",
 		"(12.4 +- 0.2 cm) * (7.1 +- 0.1 cm)": "standard uncertainty, not a guaranteed bound",
-		"10 km in mile":                      "turns the answer back into the unit you asked for",
+		"10 km in mile":                      "Each step is shown in the units you used",
 	} {
 		d := derive(t, input)
 		if !strings.Contains(strings.Join(d.Summary, " "), want) {
@@ -439,6 +439,63 @@ func TestEveryEngineFunctionIsExplained(t *testing.T) {
 		}
 		if !explained {
 			t.Errorf("%s has no explanation; add one to explain.go", name)
+		}
+	}
+}
+
+func TestStepsShowTheArithmeticInsideThem(t *testing.T) {
+	for input, want := range map[string][]string{
+		"mean([2, 4, 9])":                  {"(2 + 4 + 9) ÷ 3 = 15 ÷ 3 = 5"},
+		"gcd(48, 18)":                      {"48 = 2 × 18 + 12", "18 = 1 × 12 + 6", "12 = 2 × 6 + 0", "the last non-zero remainder is 6"},
+		"hex(255)":                         {"255 ÷ 16 = 15 remainder 15 (f)", "15 ÷ 16 = 0 remainder 15 (f)", "read the remainders from last to first: ff"},
+		"nCr(5, 2)":                        {"5! ÷ (2! × 3!) = 120 ÷ (2 × 6) = 10"},
+		"10 / 4":                           {"10 ÷ 4 = 5/2 = 2.5"},
+		"2^5":                              {"2^5 = 2 × 2 × 2 × 2 × 2 = 32"},
+		"-7 mod 3":                         {"-7 = (-3) × 3 + 2, so the remainder is 2"},
+		"hypot(3, 4)":                      {"√(3² + 4²) = √(9 + 16) = √25 = 5"},
+		"percentile([10, 20, 30, 40], 50)": {"sorted: 10, 20, 30, 40", "position = 50% × (4 - 1) = 1.5, counting from 0", "between 20 and 30: 20 + 0.5 × (30 - 20) = 25"},
+		"median(1..6)":                     {"sorted: 1, 2, 3, 4, 5, 6", "an even count has two middle values: (3 + 4) ÷ 2 = 3.5"},
+		"totient(36)":                      {"the prime factors of 36 are 2 and 3", "36 × (1 - 1/2) × (1 - 1/3) = 12"},
+		"isprime(91)":                      {"91 = 7 × 13, so it is not prime"},
+		"stdev([1, 2, 3, 4])":              {"mean = 10 ÷ 4 = 2.5", "squared distances from the mean: (1 - 2.5)² + (2 - 2.5)² + (3 - 2.5)² + (4 - 2.5)² = 5", "divide by n - 1 = 3: 5 ÷ 3 = 5/3", "take the square root: √(5/3) = 1.29099444874"},
+		"solve(x^2 - 5x + 6 = 0, x)":       {"write it as a·x² + b·x + c = 0 with a = 1, b = -5, c = 6", "discriminant b² - 4ac = (-5)² - 4·1·6 = 1", "x = (-b ± √discriminant) ÷ 2a = (5 ± √1) ÷ 2, giving x = 2 or x = 3"},
+		"200 + 10%":                        {"200 × (1 + 0.1) = 200 × 1.1 = 220"},
+	} {
+		var got []string
+		for _, s := range derive(t, input).Steps {
+			got = append(got, s.Work...)
+		}
+		if strings.Join(got, "\n") != strings.Join(want, "\n") {
+			t.Errorf("%s works as\n%s\nwant\n%s", input, strings.Join(got, "\n"), strings.Join(want, "\n"))
+		}
+	}
+}
+
+func TestApproximateValuesAreNeverWorkedAsFractions(t *testing.T) {
+	for _, input := range []string{"pi / 2", "sqrt(2) / 2", "pi * 2", "e^2"} {
+		for _, s := range derive(t, input).Steps {
+			for _, line := range s.Work {
+				if strings.Contains(line, "/") && strings.Contains(line, "0000") {
+					t.Errorf("%s works an approximate value as a fraction: %q", input, line)
+				}
+			}
+		}
+	}
+}
+
+func TestStepsStayInTheUnitsThatWereTyped(t *testing.T) {
+	for input, want := range map[string][]string{
+		"6.8 L/100km * 412 km in L": {"6.8 L", "0.068 L", "0.068 L/km", "28.016 L/km", "28.016 L", "28.016 L"},
+		"60 km/h * 30 min":          {"60 km", "60 km/h", "1800 km/h", "30 km"},
+		"100 km / 2 h":              {"100 km", "50 km", "50 km/h"},
+		"g0 * 2 s":                  {"9.80665 m/s^2", "19.6133 m/s^2", "19.6133 m/s"},
+	} {
+		var got []string
+		for _, s := range derive(t, input).Steps {
+			got = append(got, s.Result)
+		}
+		if strings.Join(got, " | ") != strings.Join(want, " | ") {
+			t.Errorf("%s shows %q, want %q", input, got, want)
 		}
 	}
 }

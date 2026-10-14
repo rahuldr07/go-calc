@@ -27,6 +27,8 @@ type walker struct {
 	truncated bool
 	broken    bool
 	rootID    prov.NodeID
+	shown     map[prov.NodeID]display
+	rawSI     bool
 }
 
 func newWalker(input string, line Line) *walker {
@@ -44,6 +46,7 @@ func newWalker(input string, line Line) *walker {
 		active: map[prov.NodeID]bool{},
 		steps:  []Step{},
 		rootID: line.Trace[0].ID,
+		shown:  map[prov.NodeID]display{},
 	}
 }
 
@@ -85,24 +88,24 @@ func (w *walker) visit(id prov.NodeID, depth int) {
 func (w *walker) stepOf(n prov.NodeOut) (Step, bool) {
 	switch n.Kind {
 	case kindConstant:
-		return Step{Explain: w.explain(n), Expr: n.Label, Result: n.Value, Source: n.Detail}, true
+		return Step{Explain: w.explain(n), Work: w.work(n), Expr: n.Label, Result: n.Value, Source: n.Detail}, true
 	case kindVariable:
-		return Step{Explain: w.explain(n), Expr: n.Label, Result: n.Value}, true
+		return Step{Explain: w.explain(n), Work: w.work(n), Expr: n.Label, Result: n.Value}, true
 	case kindUnit:
 		if len(n.Children) == 0 {
 			return Step{}, false
 		}
-		return Step{Explain: w.explain(n), Expr: w.expression(n), From: w.operands(n), Result: w.result(n), Rule: w.rule(n)}, true
+		return Step{Explain: w.explain(n), Work: w.work(n), Expr: w.expression(n), From: w.operands(n), Result: w.result(n), Rule: w.rule(n)}, true
 	case kindOperation:
-		if w.signOfLiteral(n) {
+		if w.signOfLiteral(n) || w.isUnitExpression(n) {
 			return Step{}, false
 		}
-		return Step{Explain: w.explain(n), Expr: w.expression(n), From: w.operands(n), Result: w.result(n), Rule: w.rule(n)}, true
+		return Step{Explain: w.explain(n), Work: w.work(n), Expr: w.expression(n), From: w.operands(n), Result: w.result(n), Rule: w.rule(n)}, true
 	case kindFunction:
 		if n.Label == "list" {
 			return Step{}, false
 		}
-		return Step{Explain: w.explain(n), Expr: w.expression(n), From: w.operands(n), Result: w.result(n), Rule: w.rule(n)}, true
+		return Step{Explain: w.explain(n), Work: w.work(n), Expr: w.expression(n), From: w.operands(n), Result: w.result(n), Rule: w.rule(n)}, true
 	}
 	return Step{}, false
 }
@@ -128,7 +131,7 @@ func (w *walker) result(n prov.NodeOut) string {
 	if n.Kind == kindFunction && len(n.Children) == 0 && n.ID == w.rootID && w.line.Text != "" {
 		return w.line.Text
 	}
-	return n.Value
+	return w.shownValue(n)
 }
 
 func (w *walker) operands(n prov.NodeOut) []string {
@@ -141,7 +144,7 @@ func (w *walker) operands(n prov.NodeOut) []string {
 		if child.Kind == kindLiteral && child.Label == child.Value {
 			continue
 		}
-		out = append(out, child.Value)
+		out = append(out, w.shownValue(child))
 	}
 	return out
 }

@@ -33,7 +33,9 @@
 
   const TRUTHS = ["true", "false", "probably true"]
   const logical = $derived(TRUTHS.includes(line?.text ?? ""))
-  const exact = $derived(!logical && line?.value?.exact && line.value.exact !== line.text ? line.value.exact : "")
+  const exact = $derived(
+    !logical && !line?.text.includes(" = ") && line?.value?.exact && line.value.exact !== line.text ? line.value.exact : "",
+  )
   const meaning = $derived(
     line?.status === "estimate" && !line.uncertainty
       ? "Not proven. It rests on a test that is very reliable but is not a proof; the caution under the line says why."
@@ -49,6 +51,14 @@
     if (digits >= 17) return "agrees in every digit float64 has"
     if (digits < 1) return "agrees in no significant digit"
     return `agrees to ${Math.floor(digits)} significant ${Math.floor(digits) === 1 ? "digit" : "digits"}`
+  }
+
+  function maths(text: string): string {
+    return text
+      .replace(/\^2(?![0-9])/g, "²")
+      .replace(/\^3(?![0-9])/g, "³")
+      .replace(/\bsqrt\(/g, "√(")
+      .replace(/\s*\*\s*/g, " × ")
   }
 
   function onKey(event: KeyboardEvent) {
@@ -105,31 +115,46 @@
       {/if}
 
       {#if working && working.steps.length > 0}
-        <h4>Working</h4>
-        <ol class="detail-steps">
+        <h4>Working <span class="step-count">{working.steps.length} {working.steps.length === 1 ? "step" : "steps"}</span></h4>
+        <ol class="timeline">
           {#each working.steps as step (step.n)}
-            <li>
-              {#if step.explain}<p class="step-explain">{step.explain}</p>{/if}
-              <p class="step-maths">
-                <code>{step.expr}</code>
-                <span class="eq">=</span>
-                <b>{step.result}</b>
-              </p>
-              {#if step.rule && !step.rule.startsWith("unit:") && !step.rule.startsWith("conversion")}
-                <p class="step-rule">{step.rule}</p>
-              {/if}
-              {#if step.source}<p class="step-rule">{step.source}</p>{/if}
+            <li class="timeline-step">
+              <span class="timeline-n" aria-hidden="true">{step.n}</span>
+              <div class="timeline-body">
+                {#if step.explain}<p class="step-explain">{maths(step.explain)}</p>{/if}
+                {#if step.work?.length}
+                  <div class="step-work" role="group" aria-label="Arithmetic">
+                    {#each step.work as line}<p>{maths(line)}</p>{/each}
+                  </div>
+                {/if}
+                <p class="step-result">
+                  <code>{maths(step.expr)}</code>
+                  <span class="eq">=</span>
+                  <b>{maths(step.result)}</b>
+                </p>
+                {#if step.rule && !step.work?.length && !step.rule.startsWith("unit:") && !step.rule.startsWith("conversion")}
+                  <p class="step-rule">{step.rule}</p>
+                {/if}
+                {#if step.source}<p class="step-rule">{step.source}</p>{/if}
+              </div>
             </li>
           {/each}
         </ol>
+        <div class="final-answer">
+          <span>Answer</span>
+          <b>{maths(line.text)}</b>
+          <em data-status={line.status}>{line.status}</em>
+        </div>
         {#if working.truncated}<p class="detail-aside">{working.note}</p>{/if}
       {:else if working?.note}
         <p class="detail-aside">{working.note}</p>
       {/if}
 
       {#if working?.summary?.length}
-        <h4>Why you can trust this</h4>
-        {#each working.summary as line}<p class="detail-summary">{line}</p>{/each}
+        <div class="trust-note">
+          <h4>Why you can trust this</h4>
+          {#each working.summary as reason}<p>{reason}</p>{/each}
+        </div>
       {/if}
     </div>
   </section>

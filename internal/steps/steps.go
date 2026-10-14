@@ -41,6 +41,7 @@ type Bound struct {
 type Step struct {
 	N       int      `json:"n"`
 	Explain string   `json:"explain,omitempty"`
+	Work    []string `json:"work,omitempty"`
 	Expr    string   `json:"expr"`
 	From    []string `json:"from,omitempty"`
 	Result  string   `json:"result"`

@@ -98,6 +98,7 @@ export interface Request {
 export interface Step {
   n: number
   explain?: string
+  work?: string[]
   expr: string
   from?: string[]
   result: string
