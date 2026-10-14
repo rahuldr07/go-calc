@@ -161,9 +161,19 @@ function annotations(line: Line) {
   return items
 }
 
+const METHODS = [
+  "exact linear solution",
+  "quadratic formula",
+  "bisection on proven sign-change brackets",
+  "interval evaluation over each stretch of the search grid",
+]
+
 function qualifierLabel(text: string): string {
-  if (/formula|solution|bisection|searched/.test(text)) return "method"
+  if (METHODS.includes(text)) return "method"
+  if (text.startsWith("searched ")) return "searched"
   if (/^\d+ values$/.test(text)) return "list"
+  if (text.includes("proven over the whole stretch")) return "proven"
+  if (text.startsWith("a probable prime")) return "caution"
   return "note"
 }
 

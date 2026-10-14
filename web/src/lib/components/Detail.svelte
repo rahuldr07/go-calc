@@ -31,7 +31,14 @@
     }
   })
 
-  const exact = $derived(line?.value?.exact && line.value.exact !== line.text ? line.value.exact : "")
+  const TRUTHS = ["true", "false", "probably true"]
+  const logical = $derived(TRUTHS.includes(line?.text ?? ""))
+  const exact = $derived(!logical && line?.value?.exact && line.value.exact !== line.text ? line.value.exact : "")
+  const meaning = $derived(
+    line?.status === "estimate" && !line.uncertainty
+      ? "Not proven. It rests on a test that is very reliable but is not a proof; the caution under the line says why."
+      : MEANING[line?.status ?? "held"],
+  )
   const budget = $derived(line?.uncertainty?.budget ?? [])
 
   function percent(share: number) {
@@ -61,7 +68,7 @@
     </header>
 
     <div class="detail-body">
-      <p class="detail-meaning">{MEANING[line.status]}</p>
+      <p class="detail-meaning">{meaning}</p>
 
       <dl class="detail-facts">
         {#if line.status === "error"}
@@ -70,7 +77,7 @@
           <dt>answer</dt><dd>{line.text}</dd>
         {/if}
         {#if exact}<dt>{line.status === "estimate" ? "midpoint" : "exact"}</dt><dd>{exact}</dd>{/if}
-        {#if line.value?.ball}<dt>bounds</dt><dd>{line.value.ball}</dd>{/if}
+        {#if line.value?.ball && !logical}<dt>bounds</dt><dd>{line.value.ball}</dd>{/if}
         {#if line.status === "proven"}
           <dt>digits</dt><dd>{line.digits} shown, all guaranteed{line.capped ? " (capped)" : ""}</dd>
         {/if}
