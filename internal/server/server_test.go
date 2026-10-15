@@ -226,3 +226,42 @@ func TestSlotIsFreedOnceEvaluationHonoursItsDeadline(t *testing.T) {
 		}
 	}
 }
+
+func TestIndexDescribesTheAPI(t *testing.T) {
+	h := Handler(Config{})
+	rec := do(t, h, http.MethodGet, "/", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	var index struct {
+		Name      string            `json:"name"`
+		Endpoints map[string]string `json:"endpoints"`
+		Try       string            `json:"try"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &index); err != nil {
+		t.Fatalf("invalid JSON %q: %v", rec.Body.String(), err)
+	}
+	for _, e := range []string{"GET " + pathEval, "POST " + pathSheet, "GET " + pathHealth} {
+		if index.Endpoints[e] == "" {
+			t.Errorf("the index does not describe %s", e)
+		}
+	}
+	try := do(t, h, http.MethodGet, index.Try, "")
+	if try.Code != http.StatusOK || decodeSheet(t, try).Lines[0].Status != "exact" {
+		t.Errorf("the example %q answered %d %q", index.Try, try.Code, try.Body)
+	}
+}
+
+func TestIndexIsOnlyTheRoot(t *testing.T) {
+	h := Handler(Config{})
+	if rec := do(t, h, http.MethodGet, "/nowhere", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("GET /nowhere: status %d", rec.Code)
+	}
+	rec := do(t, h, http.MethodPost, "/", "")
+	if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != http.MethodGet {
+		t.Errorf("POST /: status %d Allow %q", rec.Code, rec.Header().Get("Allow"))
+	}
+}

@@ -25,10 +25,31 @@ const (
 )
 
 const (
+	pathIndex  = "/{$}"
 	pathSheet  = "/v1/sheet"
 	pathEval   = "/v1/eval"
 	pathHealth = "/healthz"
 )
+
+type apiIndex struct {
+	Name      string            `json:"name"`
+	About     string            `json:"about"`
+	Endpoints map[string]string `json:"endpoints"`
+	Try       string            `json:"try"`
+	Source    string            `json:"source"`
+}
+
+var index = apiIndex{
+	Name:  "go-calc",
+	About: "A calculator that shows how far to trust its answers: exact, proven, an estimate with its uncertainty, or refused with the reason.",
+	Endpoints: map[string]string{
+		"GET " + pathEval:   "evaluate one expression: ?expr=…&digits=12&angle=rad",
+		"POST " + pathSheet: `evaluate a sheet: {"lines": [...], "digits": 12, "angle": "rad"}`,
+		"GET " + pathHealth: "liveness",
+	},
+	Try:    pathEval + "?expr=0.1%2B0.2",
+	Source: "https://github.com/rahuldr07/go-calc",
+}
 
 type Config struct {
 	Addr        string
@@ -76,6 +97,7 @@ func Handler(cfg Config) http.Handler {
 	}
 	h := &handler{cfg: cfg, busy: make(chan struct{}, cfg.Concurrency)}
 	mux := http.NewServeMux()
+	mux.HandleFunc(pathIndex, h.guarded(http.MethodGet, h.index))
 	mux.HandleFunc(pathSheet, h.guarded(http.MethodPost, h.sheet))
 	mux.HandleFunc(pathEval, h.guarded(http.MethodGet, h.eval))
 	mux.HandleFunc(pathHealth, h.guarded(http.MethodGet, h.health))
@@ -106,6 +128,14 @@ func (h *handler) allowOrigin(w http.ResponseWriter) {
 	}
 	w.Header().Set("Access-Control-Allow-Origin", h.cfg.CORSOrigin)
 	w.Header().Add("Vary", "Origin")
+}
+
+func (h *handler) index(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	enc.Encode(index)
 }
 
 func (h *handler) health(w http.ResponseWriter, r *http.Request) {

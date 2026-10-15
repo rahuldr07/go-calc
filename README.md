@@ -82,7 +82,7 @@ go build -o gocalc ./cmd/gocalc
 ./gocalc repl
 ```
 
-**As an HTTP API.**
+**As an HTTP API.** A public instance runs at **[go-calc.onrender.com](https://go-calc.onrender.com/)**. Try [`/v1/eval?expr=0.1%2B0.2`](https://go-calc.onrender.com/v1/eval?expr=0.1%2B0.2). It is on a free plan that sleeps when idle, so the first request after a quiet spell can take about a minute. To run your own:
 
 ```bash
 ./gocalc serve --addr :8080
@@ -335,6 +335,7 @@ gocalc serve --addr :8080 [--cors-origin https://example.com]
 | `GET /v1/eval?expr=…` | Evaluate one expression |
 | `POST /v1/sheet` | Evaluate a whole sheet: `{"lines": [...], "digits": 12, "angle": "rad"}` |
 | `GET /healthz` | Liveness |
+| `GET /` | A description of these endpoints, with a working example |
 
 ```json
 {
