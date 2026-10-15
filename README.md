@@ -15,6 +15,7 @@
 </p>
 
 <p align="center">
+  <a href="https://rahuldr07.github.io/go-calc/"><b>Try it in your browser</b></a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#a-tour">A tour</a> ·
   <a href="#the-web-app">Web app</a> ·
@@ -55,7 +56,7 @@ Every answer carries one of five trust labels, in the app, the CLI and the JSON:
 
 ## Quick start
 
-**In the browser.** The whole engine runs locally as WebAssembly.
+**In the browser.** Open **[rahuldr07.github.io/go-calc](https://rahuldr07.github.io/go-calc/)**. Nothing to install, and the whole engine runs on your machine as WebAssembly, so nothing you type is sent anywhere. To run it yourself:
 
 ```bash
 cd web
@@ -65,6 +66,14 @@ npm run dev
 ```
 
 **On the command line.**
+
+```bash
+go install github.com/rahuldr07/go-calc/cmd/gocalc@latest
+gocalc "0.1 + 0.2"
+gocalc repl
+```
+
+Or from a clone:
 
 ```bash
 go build -o gocalc ./cmd/gocalc
