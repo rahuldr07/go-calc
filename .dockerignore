@@ -1,0 +1,8 @@
+.git
+.github
+.playwright-mcp
+brag-output*
+docs
+web
+examples
+*.md

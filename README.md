@@ -12,6 +12,7 @@
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26">
   <img src="https://img.shields.io/badge/runs%20in-browser%20%C2%B7%20CLI%20%C2%B7%20HTTP%20%C2%B7%20Go-ffb800" alt="Runs in the browser, the command line, over HTTP and as a Go package">
   <img src="https://img.shields.io/badge/dependencies-standard%20library%20only-8fcf9a" alt="Standard library only">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-e6e2d6" alt="MIT license"></a>
 </p>
 
 <p align="center">
@@ -353,6 +354,19 @@ gocalc serve --addr :8080 [--cors-origin https://example.com]
 
 Built on `net/http` alone, with read, write and idle timeouts, a 1 MiB body limit, a deadline that stops the engine mid-calculation, and a concurrency cap at the CPU count that answers `503` rather than queueing forever.
 
+### Deploy the API
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/rahuldr07/go-calc)
+
+The repository carries a `Dockerfile` and a Render blueprint, `render.yaml`. The button creates a free web service that builds the image, serves the API on port 10000 and checks `/healthz`. Any host that runs containers works the same way:
+
+```bash
+docker build -t gocalc-api .
+docker run -p 10000:10000 gocalc-api
+```
+
+The image is about 18 MB: a static binary on a distroless base, running as a non-root user.
+
 ## How it works
 
 ```mermaid
@@ -449,4 +463,4 @@ go-calc does not claim firsts. [Qalculate!](https://qalculate.github.io/) has of
 
 ## License
 
-No license has been chosen yet, so all rights are reserved by the author.
+[MIT](LICENSE).
