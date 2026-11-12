@@ -30,7 +30,7 @@ jobs:
       - run: npm run build
         working-directory: web
         env:
-          BASE_PATH: /go-calc/
+          BASE_PATH: /
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
