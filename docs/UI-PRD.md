@@ -2,7 +2,7 @@
 
 For whoever designs the web interface. Everything here is true of the shipped engine: every example was produced by running it, not invented. Where I am unsure, it says so.
 
-Companion documents: `PRODUCT.md` (product truth), `docs/superpowers/specs/2026-09-24-go-calc-design.md` (engineering spec). This document supersedes `DESIGN.md`, which records a visual world that did not survive contact with real content.
+Companion documents: `PRODUCT.md` (product truth), `docs/design/2026-09-24-go-calc-design.md` (engineering spec). This document supersedes `DESIGN.md`, which records a visual world that did not survive contact with real content.
 
 ---
 
