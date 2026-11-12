@@ -10,3 +10,12 @@ web/public/gocalc.wasm
 web/public/wasm_exec.js
 .playwright-mcp/
 brag-output*/
+
+# Local editor and assistant config
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.claude/
+.agents/
+.cursor/
+.github/copilot-instructions.md
