@@ -82,7 +82,7 @@ go build -o gocalc ./cmd/gocalc
 ./gocalc repl
 ```
 
-**As an HTTP API.** A public instance runs at **[go-calc.onrender.com](https://go-calc.onrender.com/)**. Try [`/v1/eval?expr=0.1%2B0.2`](https://go-calc.onrender.com/v1/eval?expr=0.1%2B0.2). It is on a free plan that sleeps when idle, so the first request after a quiet spell can take about a minute. To run your own:
+**As an HTTP API.** A public instance runs at **[calc-api.dileeshrahul.dev](https://calc-api.dileeshrahul.dev/)**. Try [`/v1/eval?expr=0.1%2B0.2`](https://calc-api.dileeshrahul.dev/v1/eval?expr=0.1%2B0.2). It is on a free plan that sleeps when idle, so the first request after a quiet spell can take about a minute. To run your own:
 
 ```bash
 ./gocalc serve --addr :8080
